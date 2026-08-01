@@ -1,0 +1,93 @@
+# ---------------------------------------------------------------
+# Lumina Code — .gitignore
+# Objetivo: versionar codigo y config, nunca artefactos regenerables.
+# El repo anterior llego a 232 MB por no tener estas reglas.
+# ---------------------------------------------------------------
+
+# --- Dependencias ---
+node_modules/
+.pnpm-store/
+.yarn/
+vendor/
+
+# --- Salida de build ---
+dist/
+out/
+build/
+target/
+.next/
+.turbo/
+coverage/
+*.tsbuildinfo
+*.vsix
+
+# --- Sourcemaps (71 MB en este arbol; se regeneran al compilar) ---
+*.js.map
+*.css.map
+
+# --- Binarios nativos y compilados ---
+*.exe
+*.dll
+*.so
+*.dylib
+*.node
+*.a
+*.lib
+*.pdb
+
+# --- Modelos de ML ---
+*.onnx
+*.safetensors
+*.gguf
+*.pt
+*.bin
+
+# --- Media pesada (152 MB en GIFs de docs upstream) ---
+*.gif
+*.mp4
+*.mov
+*.webm
+*.avi
+
+# --- Comprimidos ---
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.rar
+
+# --- Secretos y entorno ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# --- Estado local de IDE / herramientas ---
+.claude/settings.local.json
+.vscode-test/
+.idea/
+.continue/
+.lumina/
+
+# --- Logs y temporales ---
+*.log
+logs/
+npm-debug.log*
+tmp/
+_tmp/
+
+# --- Sistema operativo ---
+.DS_Store
+Thumbs.db
+desktop.ini

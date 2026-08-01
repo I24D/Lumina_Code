@@ -1,0 +1,1 @@
+{"name":"openclaw-phone-link","version":"0.1.0","description":"Windows Phone Link (Enlace Móvil) automation for WhatsApp notifications","type":"module","main":"dist/index.js","scripts":{"build":"tsc -b","test":"vitest run"},"dependencies":{"typebox":"^0.32.0"},"devDependencies":{"@types/node":"^20.0.0","typescript":"^5.4.0"}}
