@@ -1,0 +1,33 @@
+node_modules/
+dist/
+*.local
+.env
+.DS_Store
+Thumbs.db
+
+# Electron build output
+apps/lumina-desktop/out/
+apps/lumina-desktop/release/
+apps/lumina-desktop/build/
+
+# Vite build output (built before packaging)
+Open_PC/dist/
+
+# pnpm
+.pnpm-store/
+claurst/
+
+# Build artifacts
+*.tgz
+LUMINA_DESKTOP_PHASES.md
+rust/**/target/
+apps/lumina-desktop/src-tauri/target/
+.tmp/
+_openclaw-deploy-test/
+github-release-notes.md
+
+# Lumina local dev runtime — anchored to repo root so nested
+# runtime/ folders (e.g. Open_PC/src/harness/runtime/) are not blocked.
+/.lumina-dev/
+/logs/
+/runtime/

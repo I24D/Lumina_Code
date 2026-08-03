@@ -1,0 +1,511 @@
+import { REALTIME_VOICE_AGENT_CONSULT_TOOL_NAME } from "../../../../src/talk/agent-consult-tool.js";
+import type { TalkEvent } from "../../../../src/talk/talk-events.js";
+import type { GatewayBrowserClient, GatewayEventFrame } from "../gateway.ts";
+import {
+  buildRealtimeTalkLiveAttachments,
+  enrichRealtimeTalkConsultArgs,
+} from "./realtime-talk-room-intelligence.ts";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export type RealtimeTalkStatus =
+  | "idle"
+  | "dormant"
+  | "connecting"
+  | "listening"
+  | "understanding"
+  | "thinking"
+  | "planning"
+  | "executing"
+  | "waiting"
+  | "speaking"
+  | "alert"
+  | "emergency"
+  | "error";
+
+/**
+ * Visual config for each Start Talk state (Nivel 6).
+ * Used by voice-overlay.ts to pick color/animation/sound without an if-tree.
+ * `sound` references files under `ui/public/sounds/` (created on demand —
+ * missing files just don't play, no error).
+ */
+export type RealtimeTalkStateVisual = {
+  readonly label: string;
+  readonly color: string;
+  readonly halo: string;
+  readonly sound: string | null;
+  readonly mascotState:
+    | "idle"
+    | "connecting"
+    | "listening"
+    | "thinking"
+    | "speaking"
+    | "searching"
+    | "executing"
+    | "learning"
+    | "error"
+    | "alert";
+};
+
+export const REALTIME_TALK_STATE_VISUALS: Readonly<
+  Record<RealtimeTalkStatus, RealtimeTalkStateVisual>
+> = {
+  idle: {
+    label: "Inactivo",
+    color: "#6b7280",
+    halo: "rgba(107,114,128,0.0)",
+    sound: null,
+    mascotState: "idle",
+  },
+  dormant: {
+    label: "En reposo",
+    color: "#374151",
+    halo: "rgba(55,65,81,0.15)",
+    sound: null,
+    mascotState: "idle",
+  },
+  connecting: {
+    label: "Conectando",
+    color: "#3b82f6",
+    halo: "rgba(59,130,246,0.35)",
+    sound: "connect.mp3",
+    mascotState: "connecting",
+  },
+  listening: {
+    label: "Escuchando",
+    color: "#10b981",
+    halo: "rgba(16,185,129,0.55)",
+    sound: "listen.mp3",
+    mascotState: "listening",
+  },
+  understanding: {
+    label: "Entendiendo",
+    color: "#0ea5e9",
+    halo: "rgba(14,165,233,0.5)",
+    sound: null,
+    mascotState: "thinking",
+  },
+  thinking: {
+    label: "Pensando",
+    color: "#8b5cf6",
+    halo: "rgba(139,92,246,0.5)",
+    sound: null,
+    mascotState: "thinking",
+  },
+  planning: {
+    label: "Planeando",
+    color: "#6366f1",
+    halo: "rgba(99,102,241,0.5)",
+    sound: null,
+    mascotState: "thinking",
+  },
+  executing: {
+    label: "Ejecutando",
+    color: "#f59e0b",
+    halo: "rgba(245,158,11,0.5)",
+    sound: "execute.mp3",
+    mascotState: "executing",
+  },
+  waiting: {
+    label: "Esperando",
+    color: "#a78bfa",
+    halo: "rgba(167,139,250,0.4)",
+    sound: null,
+    mascotState: "listening",
+  },
+  speaking: {
+    label: "Hablando",
+    color: "#22d3ee",
+    halo: "rgba(34,211,238,0.55)",
+    sound: null,
+    mascotState: "speaking",
+  },
+  alert: {
+    label: "Alerta",
+    color: "#f97316",
+    halo: "rgba(249,115,22,0.65)",
+    sound: "alert.mp3",
+    mascotState: "alert",
+  },
+  emergency: {
+    label: "Emergencia",
+    color: "#ef4444",
+    halo: "rgba(239,68,68,0.8)",
+    sound: "emergency.mp3",
+    mascotState: "alert",
+  },
+  error: {
+    label: "Error",
+    color: "#dc2626",
+    halo: "rgba(220,38,38,0.6)",
+    sound: "error.mp3",
+    mascotState: "error",
+  },
+};
+export type RealtimeTalkEvent = TalkEvent;
+
+export type RealtimeTalkCallbacks = {
+  onStatus?: (status: RealtimeTalkStatus, detail?: string) => void;
+  onTranscript?: (entry: { role: "user" | "assistant"; text: string; final: boolean }) => void;
+  onTalkEvent?: (event: RealtimeTalkEvent) => void;
+};
+
+export function extractRealtimeTalkWebResearchChatText(
+  event: RealtimeTalkEvent,
+): string | undefined {
+  if (event.type !== "tool.result") {
+    return undefined;
+  }
+  const payload = isRecord(event.payload) ? event.payload : undefined;
+  if (payload?.name !== "lumina_web_research") {
+    return undefined;
+  }
+  const result = isRecord(payload.result) ? payload.result : undefined;
+  const chatText = typeof result?.chatText === "string" ? result.chatText.trim() : "";
+  return chatText || undefined;
+}
+
+export type RealtimeTalkEventInput<TPayload = unknown> = {
+  type: RealtimeTalkEvent["type"];
+  payload?: TPayload;
+  turnId?: string;
+  captureId?: string;
+  final?: boolean;
+  callId?: string;
+  itemId?: string;
+  parentId?: string;
+};
+
+export type RealtimeTalkAudioContract = {
+  inputEncoding: "pcm16" | "g711_ulaw";
+  inputSampleRateHz: number;
+  outputEncoding: "pcm16" | "g711_ulaw";
+  outputSampleRateHz: number;
+};
+
+export type RealtimeTalkWebRtcSdpSessionResult = {
+  provider: string;
+  transport: "webrtc";
+  clientSecret: string;
+  offerUrl?: string;
+  offerHeaders?: Record<string, string>;
+  model?: string;
+  voice?: string;
+  expiresAt?: number;
+  consultThinkingLevel?: string;
+  consultFastMode?: boolean;
+};
+
+export type RealtimeTalkJsonPcmWebSocketSessionResult = {
+  provider: string;
+  transport: "provider-websocket";
+  protocol: string;
+  clientSecret: string;
+  websocketUrl: string;
+  audio: RealtimeTalkAudioContract;
+  initialMessage?: unknown;
+  model?: string;
+  voice?: string;
+  expiresAt?: number;
+  consultThinkingLevel?: string;
+  consultFastMode?: boolean;
+};
+
+export type RealtimeTalkGatewayRelaySessionResult = {
+  provider: string;
+  transport: "gateway-relay";
+  relaySessionId: string;
+  audio: RealtimeTalkAudioContract;
+  model?: string;
+  voice?: string;
+  expiresAt?: number;
+  consultThinkingLevel?: string;
+  consultFastMode?: boolean;
+};
+
+export type RealtimeTalkManagedRoomSessionResult = {
+  provider: string;
+  transport: "managed-room";
+  roomUrl: string;
+  token?: string;
+  model?: string;
+  voice?: string;
+  expiresAt?: number;
+  consultThinkingLevel?: string;
+  consultFastMode?: boolean;
+};
+
+export type RealtimeTalkSessionResult =
+  | RealtimeTalkWebRtcSdpSessionResult
+  | RealtimeTalkJsonPcmWebSocketSessionResult
+  | RealtimeTalkGatewayRelaySessionResult
+  | RealtimeTalkManagedRoomSessionResult;
+
+export type RealtimeTalkTransport = {
+  start(): Promise<void>;
+  stop(): void;
+};
+
+export type RealtimeTalkTransportContext = {
+  client: GatewayBrowserClient;
+  sessionKey: string;
+  callbacks: RealtimeTalkCallbacks;
+  consultThinkingLevel?: string;
+  consultFastMode?: boolean;
+};
+
+export function createRealtimeTalkEventEmitter(
+  ctx: RealtimeTalkTransportContext,
+  session: RealtimeTalkSessionResult,
+): (input: RealtimeTalkEventInput) => void {
+  let seq = 0;
+  let turnSeq = 0;
+  let activeTurnId: string | undefined;
+  const sessionId = resolveRealtimeTalkEventSessionId(ctx, session);
+  return (input) => {
+    if (!ctx.callbacks.onTalkEvent) {
+      return;
+    }
+    const turnId = resolveRealtimeTalkTurnId(input);
+    seq += 1;
+    ctx.callbacks.onTalkEvent({
+      id: `${sessionId}:${seq}`,
+      type: input.type,
+      sessionId,
+      turnId,
+      captureId: input.captureId,
+      seq,
+      timestamp: new Date().toISOString(),
+      mode: "realtime",
+      transport: session.transport,
+      brain: "agent-consult",
+      provider: session.provider,
+      final: input.final,
+      callId: input.callId,
+      itemId: input.itemId,
+      parentId: input.parentId,
+      payload: input.payload ?? null,
+    });
+    if (
+      input.type === "turn.ended" ||
+      input.type === "turn.cancelled" ||
+      input.type === "session.replaced" ||
+      input.type === "session.closed"
+    ) {
+      activeTurnId = undefined;
+    }
+  };
+
+  function resolveRealtimeTalkTurnId(input: RealtimeTalkEventInput): string | undefined {
+    if (input.type === "turn.started") {
+      activeTurnId = input.turnId ?? activeTurnId ?? `turn-${++turnSeq}`;
+      return activeTurnId;
+    }
+    if (!isTurnScopedTalkEvent(input.type)) {
+      return input.turnId;
+    }
+    activeTurnId = input.turnId ?? activeTurnId ?? `turn-${++turnSeq}`;
+    return activeTurnId;
+  }
+}
+
+function isTurnScopedTalkEvent(type: RealtimeTalkEvent["type"]): boolean {
+  return (
+    type === "turn.ended" ||
+    type === "turn.cancelled" ||
+    type.startsWith("input.audio.") ||
+    type.startsWith("transcript.") ||
+    type.startsWith("output.") ||
+    type.startsWith("tool.")
+  );
+}
+
+function resolveRealtimeTalkEventSessionId(
+  ctx: RealtimeTalkTransportContext,
+  session: RealtimeTalkSessionResult,
+): string {
+  const explicitSessionId = (session as { sessionId?: unknown }).sessionId;
+  if (typeof explicitSessionId === "string" && explicitSessionId.trim()) {
+    return explicitSessionId.trim();
+  }
+  if ("relaySessionId" in session && session.relaySessionId.trim()) {
+    return session.relaySessionId;
+  }
+  return `${ctx.sessionKey}:${session.provider}:${session.transport}`;
+}
+
+type ChatPayload = {
+  runId?: string;
+  state?: string;
+  errorMessage?: string;
+  message?: unknown;
+};
+
+function extractTextFromMessage(message: unknown): string {
+  if (!message || typeof message !== "object") {
+    return "";
+  }
+  const record = message as Record<string, unknown>;
+  if (typeof record.text === "string") {
+    return record.text;
+  }
+  const content = Array.isArray(record.content) ? record.content : [];
+  const parts = content
+    .map((block) => {
+      if (!block || typeof block !== "object") {
+        return "";
+      }
+      const entry = block as Record<string, unknown>;
+      return entry.type === "text" && typeof entry.text === "string" ? entry.text : "";
+    })
+    .filter(Boolean);
+  return parts.join("\n\n").trim();
+}
+
+function extractSpeechTextFromMessage(message: unknown): string | undefined {
+  if (!message || typeof message !== "object") {
+    return undefined;
+  }
+  const record = message as Record<string, unknown>;
+  const metadata =
+    record.__openclaw && typeof record.__openclaw === "object" && !Array.isArray(record.__openclaw)
+      ? (record.__openclaw as Record<string, unknown>)
+      : undefined;
+  const value = metadata?.luminaSpeechText;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function waitForChatResult(params: {
+  client: GatewayBrowserClient;
+  runId: string;
+  timeoutMs: number;
+  signal?: AbortSignal;
+}): Promise<{ text: string; speechText?: string }> {
+  return new Promise((resolve, reject) => {
+    if (params.signal?.aborted) {
+      reject(new DOMException("OpenClaw tool call aborted", "AbortError"));
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("OpenClaw tool call timed out"));
+    }, params.timeoutMs);
+    const onAbort = () => {
+      cleanup();
+      reject(new DOMException("OpenClaw tool call aborted", "AbortError"));
+    };
+    params.signal?.addEventListener("abort", onAbort, { once: true });
+    let unsubscribe: () => void = () => undefined;
+    unsubscribe = params.client.addEventListener((evt: GatewayEventFrame) => {
+      if (evt.event !== "chat") {
+        return;
+      }
+      const payload = evt.payload as ChatPayload | undefined;
+      if (!payload || payload.runId !== params.runId) {
+        return;
+      }
+      if (payload.state === "final") {
+        cleanup();
+        resolve({
+          text: extractTextFromMessage(payload.message) || "OpenClaw finished with no text.",
+          speechText: extractSpeechTextFromMessage(payload.message),
+        });
+      } else if (payload.state === "aborted") {
+        cleanup();
+        reject(
+          new DOMException(payload.errorMessage ?? "OpenClaw tool call aborted", "AbortError"),
+        );
+      } else if (payload.state === "error") {
+        cleanup();
+        reject(new Error(payload.errorMessage ?? "OpenClaw tool call failed"));
+      }
+    });
+    function cleanup() {
+      window.clearTimeout(timer);
+      params.signal?.removeEventListener("abort", onAbort);
+      unsubscribe();
+    }
+  });
+}
+
+export async function submitRealtimeTalkConsult(params: {
+  ctx: RealtimeTalkTransportContext;
+  args: unknown;
+  submit: (callId: string, result: unknown) => void;
+  callId: string;
+  relaySessionId?: string;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const { ctx, callId, submit } = params;
+  ctx.callbacks.onStatus?.("thinking");
+  let runId: string | undefined;
+  let aborted = false;
+  const abortRun = () => {
+    aborted = true;
+    if (runId) {
+      void ctx.client.request("chat.abort", { sessionKey: ctx.sessionKey, runId });
+    }
+  };
+  if (params.signal?.aborted) {
+    return;
+  }
+  params.signal?.addEventListener("abort", abortRun, { once: true });
+  try {
+    const enrichedArgs = enrichRealtimeTalkConsultArgs(params.args ?? {});
+    const attachments = await buildRealtimeTalkLiveAttachments();
+    const response = await ctx.client.request<{ runId?: string; idempotencyKey?: string }>(
+      "talk.client.toolCall",
+      {
+        sessionKey: ctx.sessionKey,
+        callId,
+        name: REALTIME_VOICE_AGENT_CONSULT_TOOL_NAME,
+        args: enrichedArgs,
+        ...(attachments.length > 0 ? { attachments } : {}),
+        ...(params.relaySessionId ? { relaySessionId: params.relaySessionId } : {}),
+      },
+    );
+    runId = response.runId ?? response.idempotencyKey;
+    if (!runId) {
+      throw new Error("OpenClaw realtime tool call did not return a run id");
+    }
+    if (params.signal?.aborted) {
+      abortRun();
+      return;
+    }
+    const result = await waitForChatResult({
+      client: ctx.client,
+      runId,
+      timeoutMs: 120_000,
+      signal: params.signal,
+    });
+    submit(callId, {
+      result: result.text,
+      speechText: result.speechText ?? result.text,
+      instruction: "Speak speechText to the user. The complete result and artifacts are in OpenClaw.",
+    });
+  } catch (error) {
+    if (aborted || params.signal?.aborted || isAbortError(error)) {
+      return;
+    }
+    submit(callId, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    params.signal?.removeEventListener("abort", abortRun);
+    if (!aborted && !params.signal?.aborted) {
+      ctx.callbacks.onStatus?.("listening");
+    }
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof DOMException !== "undefined" &&
+    error instanceof DOMException &&
+    error.name === "AbortError"
+  );
+}
+
+export { REALTIME_VOICE_AGENT_CONSULT_TOOL_NAME };

@@ -1,0 +1,77 @@
+{
+  "id": "lumina-pc",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": true,
+  "contracts": {
+    "tools": [
+      "lumina_screen_capture",
+      "lumina_clipboard",
+      "lumina_window_control",
+      "lumina_process_list",
+      "lumina_system_metrics",
+      "lumina_shell_run",
+      "lumina_file_ops",
+      "lumina_code",
+      "lumina_notify_toast",
+      "lumina_notifications",
+      "lumina_alarm",
+      "lumina_input_control"
+    ],
+    "trustedToolPolicies": [
+      "lumina-input-control-approval"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "description": "Enable or disable the Lumina_PC execution layer.",
+        "default": true
+      },
+      "shellApprovalRequired": {
+        "type": "boolean",
+        "description": "Require explicit approval before executing shell commands.",
+        "default": true
+      },
+      "heartbeatEnabled": {
+        "type": "boolean",
+        "description": "Enable or disable the background system heartbeat service.",
+        "default": true
+      },
+      "heartbeatIntervalMs": {
+        "type": "number",
+        "description": "Interval in milliseconds for reporting system metrics to I24D.",
+        "default": 30000
+      },
+      "screenshotDir": {
+        "type": "string",
+        "description": "Directory where screenshots are saved. Defaults to %TEMP%\\lumina-pc-screenshots."
+      },
+      "watchedPaths": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Paths to watch for file changes and report to I24D."
+      },
+      "inputControlEnabled": {
+        "type": "boolean",
+        "description": "Enable allowlisted mouse and keyboard control. Disabled by default.",
+        "default": false
+      },
+      "inputApprovalRequired": {
+        "type": "boolean",
+        "description": "Require explicit approval before each mouse or keyboard action.",
+        "default": true
+      },
+      "inputAllowedApps": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Foreground process names allowed to receive input, for example Code, chrome, or notepad.",
+        "default": []
+      }
+    }
+  }
+}

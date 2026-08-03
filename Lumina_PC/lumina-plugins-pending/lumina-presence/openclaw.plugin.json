@@ -1,0 +1,84 @@
+{
+  "id": "lumina-presence",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": false,
+  "name": "Lumina Presence",
+  "contracts": {
+    "tools": [
+      "lumina_presence_status"
+    ]
+  },
+  "description": "Cognitive presence layer — passive observer of OpenClaw runtime state. Phase 1: no actions, no narration, no initiative; only state tracking and a status tool. Higher phases build on this foundation.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "description": "Enable or disable the Lumina Presence layer.",
+        "default": true
+      },
+      "stateTransitionLogLevel": {
+        "type": "string",
+        "enum": ["off", "summary", "verbose"],
+        "description": "How much detail to log when presence state changes. 'off' = silent, 'summary' = one line per transition, 'verbose' = include event payload. Default: summary.",
+        "default": "summary"
+      },
+      "idleTimeoutMs": {
+        "type": "number",
+        "minimum": 1000,
+        "maximum": 3600000,
+        "description": "Milliseconds without activity before presence transitions back to Idle. Default 60_000 (1 minute).",
+        "default": 60000
+      },
+      "initiative": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allow Lumina to schedule tightly controlled proactive updates."
+          },
+          "defaultSessionKey": {
+            "type": "string",
+            "default": "agent:main:main",
+            "description": "Fallback session for proactive updates when no recent session is known."
+          },
+          "cooldownMs": {
+            "type": "number",
+            "minimum": 30000,
+            "maximum": 86400000,
+            "default": 300000
+          },
+          "dedupeWindowMs": {
+            "type": "number",
+            "minimum": 60000,
+            "maximum": 86400000,
+            "default": 1800000
+          },
+          "maxInitiativesPerHour": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "default": 3
+          },
+          "quietHoursStart": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23,
+            "default": 23
+          },
+          "quietHoursEnd": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23,
+            "default": 8
+          }
+        }
+      }
+    }
+  }
+}

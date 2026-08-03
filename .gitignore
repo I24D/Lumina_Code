@@ -91,3 +91,15 @@ _tmp/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# --- Runtime local de Lumina_PC ---
+Lumina_PC/logs/
+Lumina_PC/runtime/
+
+# --- Lab del Windows Bridge ---
+# Clon de un repo publico ajeno (openclaw/openclaw-windows-node, 903 MB).
+openclaw-windows-bridge-lab/windows-node-source/
+# Salidas de pruebas (capturas de pantalla, JSON de resultados).
+openclaw-windows-bridge-lab/artifacts/
+# Perfil local del Tray: contiene mcp-token.txt y una clave privada Ed25519.
+openclaw-windows-bridge-lab/tray-data/

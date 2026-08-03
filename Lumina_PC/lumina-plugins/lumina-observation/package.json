@@ -1,0 +1,37 @@
+{
+  "name": "@lumina/lumina-observation",
+  "version": "2026.7.2",
+  "description": "Lumina passive observation — watches windows, processes and idle state, narrates meaningful changes via an LLM, and exposes snapshot + recent-narration tools.",
+  "type": "module",
+  "files": [
+    "dist",
+    "sidecars",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "esbuild index.ts --bundle --platform=node --format=esm --target=node22 --external:openclaw/* --outfile=dist/index.js"
+  },
+  "dependencies": {
+    "typebox": "1.3.3"
+  },
+  "devDependencies": {
+    "esbuild": "*"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.2"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.7.2",
+      "minGatewayVersion": "2026.7.2"
+    },
+    "build": {
+      "openclawVersion": "2026.7.2",
+      "pluginSdkVersion": "2026.7.2"
+    }
+  }
+}

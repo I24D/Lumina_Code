@@ -1,0 +1,219 @@
+{
+  "id": "lumina-cognitive-os",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": true,
+  "name": "Lumina Cognitive OS",
+  "description": "Cognitive layer Niveles 1-12: Risk Engine, Environment Awareness, Memory tiers (Working/Episodic), Vision (UI Automation + multimonitor), Action Planner + Browser driver, 12-agent Director, Intent Router, MCP Gmail/Calendar/Drive, Boot Greeting and Wake-Word. Every capability is exposed as an agent tool so the user can invoke it by voice via Start Talk.",
+  "contracts": {
+    "tools": [
+      "lumina_risk_evaluate",
+      "lumina_awareness_snapshot",
+      "lumina_awareness_subscribe",
+      "lumina_windows_context",
+      "lumina_phone_link_status",
+      "lumina_phone_link_reply",
+      "lumina_working_memory_get",
+      "lumina_working_memory_set",
+      "lumina_working_memory_recall",
+      "lumina_working_memory_log",
+      "lumina_episodic_remember",
+      "lumina_episodic_recall",
+      "lumina_vision_ui_tree",
+      "lumina_vision_ui_resolve",
+      "lumina_ui_invoke",
+      "lumina_sight",
+      "lumina_vision_multimonitor",
+      "lumina_vision_parse",
+      "lumina_vision_parse_health",
+      "lumina_window_classify",
+      "lumina_browser_drive",
+      "lumina_browser_screencast",
+      "lumina_browser_session",
+      "lumina_browser_dom_screenshot",
+      "lumina_smart_click",
+      "lumina_smart_type",
+      "lumina_pc_observe",
+      "lumina_pc_scroll",
+      "lumina_pc_drag",
+      "lumina_browser_smart_click",
+      "lumina_browser_smart_type",
+      "lumina_browser_dom_observe",
+      "lumina_browser_natural",
+      "lumina_app_list",
+      "lumina_app_launch",
+      "lumina_app_close",
+      "lumina_adapter_resolve",
+      "lumina_office",
+      "lumina_registry",
+      "lumina_audio",
+      "lumina_pc_do",
+      "lumina_pc_do_status",
+      "lumina_pc_do_list",
+      "lumina_pc_do_abort",
+      "lumina_pc_do_cost_summary",
+      "lumina_pc_do_skill_health",
+      "lumina_pc_do_skill_reset",
+      "lumina_harness_health",
+      "lumina_harness_task",
+      "lumina_action_plan",
+      "lumina_perception_start",
+      "lumina_perception_stop",
+      "lumina_perception_pause",
+      "lumina_perception_resume",
+      "lumina_perception_tune",
+      "lumina_perception_status",
+      "lumina_perception_recent",
+      "lumina_perception_health",
+      "lumina_director_route",
+      "lumina_intent_run",
+      "lumina_workflow_list",
+      "lumina_workflow_run",
+      "lumina_skill_list",
+      "lumina_skill_describe",
+      "lumina_skill_read_asset",
+      "lumina_skill_run",
+      "lumina_code_execute",
+      "lumina_operative_status",
+      "lumina_operative_enable",
+      "lumina_operative_disable",
+      "lumina_operative_reload",
+      "lumina_operative_recent",
+      "lumina_codeact_start",
+      "lumina_codeact_step",
+      "lumina_codeact_status",
+      "lumina_codeact_end",
+      "lumina_recorder_start",
+      "lumina_recorder_stop",
+      "lumina_recorder_pause",
+      "lumina_recorder_resume",
+      "lumina_recorder_status",
+      "lumina_recorder_list",
+      "lumina_recorder_get",
+      "lumina_recorder_delete",
+      "lumina_replay_run",
+      "lumina_replay_status",
+      "lumina_replay_list",
+      "lumina_replay_abort",
+      "lumina_replay_strategies",
+      "lumina_recording_to_skill",
+      "lumina_skill_eval",
+      "lumina_skill_eval_record",
+      "lumina_gmail",
+      "lumina_calendar",
+      "lumina_drive",
+      "lumina_supabase_status",
+      "lumina_supabase_schema",
+      "lumina_supabase_query",
+      "lumina_supabase_mutate",
+      "lumina_memory_status",
+      "lumina_memory_search",
+      "lumina_supabase_memory_remember",
+      "lumina_warehouse_catalog",
+      "lumina_kill_switch",
+      "lumina_governance_evaluate",
+      "lumina_governance_policy",
+      "lumina_boot_greeting",
+      "lumina_wake_word",
+      "lumina_risk_recent",
+      "lumina_transparency_publish",
+      "lumina_transparency_recent"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable the Lumina Cognitive OS layer."
+      },
+      "envPath": {
+        "type": "string",
+        "default": "c:/I24D_WhatsApp/.env",
+        "description": "Absolute path to the .env file shared with the rest of I24D."
+      },
+      "memoryDir": {
+        "type": "string",
+        "description": "Directory where Working/Episodic memory JSONL files are stored. Defaults to %APPDATA%/lumina-cognitive-os."
+      },
+      "awarenessIntervalMs": {
+        "type": "number",
+        "default": 15000,
+        "minimum": 2000,
+        "maximum": 600000,
+        "description": "Polling interval for the unified environment snapshot."
+      },
+      "wakeWordEnabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "Run the Python wake-word sidecar (requires Python with openwakeword installed)."
+      },
+      "wakeWordModel": {
+        "type": "string",
+        "default": "hey_jarvis_v0.1",
+        "description": "Wake-word model name. Defaults to hey_jarvis_v0.1 (openwakeword bundled model)."
+      },
+      "bootGreetingEnabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Greet the user on startup with calendar/email/task context."
+      },
+      "browserDriverEnabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable the Playwright/CDP browser driver tool. Disabled by default — opt-in."
+      },
+      "perceptionAutoStart": {
+        "type": "boolean",
+        "default": false,
+        "description": "Auto-start the continuous semantic perception loop so Lumina always 'sees' the foreground app + its actionable UI elements. Opt-in (screen capture)."
+      },
+      "perceptionFps": {
+        "type": "number",
+        "default": 3,
+        "description": "Capture rate for the perception loop (0.5-10). Higher = fresher sight, more CPU."
+      },
+      "skillsDir": {
+        "type": "string",
+        "default": "c:/I24D_WhatsApp/skills",
+        "description": "Directory of agentskills.io skills Lumina can list/describe/run. Defaults to c:/I24D_WhatsApp/skills; LUMINA_SKILLS_DIR overrides."
+      },
+      "pcOperatorProvider": {
+        "type": "string",
+        "enum": ["auto", "gemini", "openai", "anthropic", "ollama"],
+        "default": "auto",
+        "description": "Default brain provider for lumina_pc_do. auto preserves fallback order; a tool call can still override it."
+      },
+      "pcOperatorModel": {
+        "type": "string",
+        "default": "",
+        "description": "Optional default brain model for lumina_pc_do, for example gemma4:31b, gemini-2.5-flash, or a Claude/OpenAI model."
+      },
+      "supabaseSchema": {
+        "type": "string",
+        "default": "public",
+        "description": "Supabase/PostgREST schema exposed to Lumina tools."
+      },
+      "supabaseMaxRows": {
+        "type": "number",
+        "default": 100,
+        "minimum": 1,
+        "maximum": 500,
+        "description": "Maximum rows returned by lumina_supabase_query."
+      },
+      "supabaseAllowWrites": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable lumina_supabase_mutate. Keep false unless the user explicitly wants database writes."
+      },
+      "warehousesPath": {
+        "type": "string",
+        "default": "c:/I24D_WhatsApp/src/cuerpo/warehouses",
+        "description": "Path to Lumina's existing warehouses. Catalog only; OpenClaw does not load experimental cerebro/local AI modules."
+      }
+    }
+  }
+}

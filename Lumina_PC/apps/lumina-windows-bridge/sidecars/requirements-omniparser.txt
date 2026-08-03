@@ -1,0 +1,20 @@
+# OmniParser (Microsoft) — opt-in heavy dep set for the Visual Engine.
+#
+# Install with:
+#   python -m pip install -r requirements-omniparser.txt
+#
+# First run will download ~2GB of model weights (YOLOv8 icon detector
+# + Florence-2 captioner) to LUMINA_OMNIPARSER_DIR (defaults to
+# c:/I24D_WhatsApp/.models/omniparser).
+#
+# GPU is recommended (CUDA 12.1+). CPU works but is ~5-10x slower.
+
+torch>=2.2.0
+transformers>=4.40.0
+ultralytics>=8.2.0
+huggingface_hub>=0.23.0
+opencv-python-headless>=4.9.0
+einops>=0.7.0
+timm>=0.9.0
+paddleocr>=2.7.0
+paddlepaddle>=2.6.0

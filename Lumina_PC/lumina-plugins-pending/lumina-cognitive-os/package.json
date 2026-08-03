@@ -1,0 +1,21 @@
+{
+  "name": "@openclaw/lumina-cognitive-os",
+  "version": "2026.6.23",
+  "private": true,
+  "description": "Lumina Cognitive Operating System - Niveles 1-12. Risk engine, environment awareness, memory tiers, UI Automation vision, action planner, 12-agent director, intent router, MCP tools (Gmail/Calendar/Drive), boot greeting and wake-word. All capabilities are agent tools invocable by voice via Start Talk.",
+  "type": "module",
+  "dependencies": {
+    "typebox": "1.1.38"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.4.4"
+    },
+    "build": {
+      "openclawVersion": "2026.5.22"
+    }
+  }
+}

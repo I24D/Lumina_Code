@@ -1,0 +1,22 @@
+{
+  "name": "@lumina/mcp-gateway",
+  "version": "0.1.0",
+  "description": "Remote MCP gateway that fronts the Lumina brain (chat, Windows bridge, memory) for the Claude app custom connector",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types --watch src/server.ts",
+    "start": "node --experimental-strip-types src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.5.4"
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "id": "lumina-observation",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": false,
+  "name": "Lumina Observation",
+  "description": "Loop-based observers of the local desktop with anti-spam filtering and an LLM-backed narrator. Phase 3. Read-only (never controls inputs).",
+  "contracts": {
+    "tools": [
+      "lumina_observation_snapshot",
+      "lumina_narration_recent"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "pollIntervalMs": {
+        "type": "number",
+        "minimum": 5000,
+        "maximum": 600000,
+        "default": 30000,
+        "description": "How often to sample the desktop. 30 s is a reasonable default; 5 s is the floor."
+      },
+      "idleThresholdMs": {
+        "type": "number",
+        "minimum": 30000,
+        "maximum": 7200000,
+        "default": 120000,
+        "description": "Treat the user as 'idle' after this many ms without input. Default 120 s."
+      },
+      "narration": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Turn on the LLM narrator. Off by default in Phase 3 — start with logs-only, enable when satisfied."
+          },
+          "baseUrl": {
+            "type": "string",
+            "default": "http://127.0.0.1:4321/v1/chat/completions",
+            "description": "OpenAI-compatible endpoint to call. Defaults to the local Lumina proxy."
+          },
+          "model": {
+            "type": "string",
+            "default": "gemini-2.5-flash",
+            "description": "Lightweight model — speed beats depth for narration."
+          },
+          "apiKey": {
+            "type": "string",
+            "description": "Optional bearer token for the LLM endpoint."
+          },
+          "maxNarrationsPerMinute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60,
+            "default": 4,
+            "description": "Hard rate limit so the narrator never spams."
+          }
+        }
+      }
+    }
+  }
+}

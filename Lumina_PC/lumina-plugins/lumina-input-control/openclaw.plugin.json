@@ -1,0 +1,56 @@
+{
+  "id": "lumina-input-control",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": false,
+  "name": "Lumina Input Control",
+  "description": "Mouse + keyboard automation with per-process allowlist and audit log. Phase 6. Disabled by default — opt-in once Phase 5 is comfortable.",
+  "contracts": {
+    "tools": [
+      "lumina_input_focus_window",
+      "lumina_input_type",
+      "lumina_input_hotkey",
+      "lumina_input_mouse_click"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "appAllowlist": {
+        "type": "array",
+        "description": "Process names (without .exe) where Lumina acts without per-action confirmation. Match is case-insensitive.",
+        "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "default": ["Code", "chrome", "msedge", "firefox", "WindowsTerminal", "powershell", "pwsh"]
+      },
+      "denylistAlways": {
+        "type": "array",
+        "description": "Process names where Lumina MUST NEVER act, even with confirmation. Hard veto.",
+        "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "default": ["LsaIso", "winlogon", "lsass", "csrss", "smss", "consent", "UserAccountControlSettings"]
+      },
+      "confirmationMode": {
+        "type": "string",
+        "enum": ["block", "log_only"],
+        "default": "block",
+        "description": "What to do for off-allowlist apps. 'block' returns needs_confirmation and refuses to act; 'log_only' lets the agent act and only audits (NOT recommended in production)."
+      },
+      "auditLogPath": {
+        "type": "string",
+        "description": "Override path to the audit JSONL. Defaults to ~/.lumina/input-control/audit.jsonl."
+      },
+      "maxTypingChars": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10000,
+        "default": 4000,
+        "description": "Hard cap on the length of any single typing request."
+      }
+    }
+  }
+}

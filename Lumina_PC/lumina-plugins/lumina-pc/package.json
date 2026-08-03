@@ -1,0 +1,36 @@
+{
+  "name": "@lumina/lumina-pc",
+  "version": "2026.7.2",
+  "description": "Lumina_PC — execution layer for I24D. Gives I24D arms, hands, eyes and reflexes on the local Windows PC. Delegates OS-sensitive actions to the Windows Bridge (:8765).",
+  "type": "module",
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "esbuild index.ts --bundle --platform=node --format=esm --target=node22 --external:openclaw/* --outfile=dist/index.js"
+  },
+  "dependencies": {
+    "typebox": "1.3.3"
+  },
+  "devDependencies": {
+    "esbuild": "*"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.2"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.7.2",
+      "minGatewayVersion": "2026.7.2"
+    },
+    "build": {
+      "openclawVersion": "2026.7.2",
+      "pluginSdkVersion": "2026.7.2"
+    }
+  }
+}

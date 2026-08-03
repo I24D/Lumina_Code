@@ -1,0 +1,51 @@
+{
+  "id": "lumina-memory",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": false,
+  "name": "Lumina Memory",
+  "description": "User profile + long-term fact store + semantic recall (BM25 by default; mem0 via optional HTTP adapter). Phase 2.",
+  "contracts": {
+    "tools": [
+      "lumina_memory_recall",
+      "lumina_memory_remember",
+      "lumina_memory_profile_read",
+      "lumina_memory_profile_update"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "profileDir": {
+        "type": "string",
+        "description": "Override the directory for the user profile file. Defaults to ~/.lumina/profile/."
+      },
+      "factStoreDir": {
+        "type": "string",
+        "description": "Override the directory for the fact store JSONL. Defaults to ~/.lumina/memory/."
+      },
+      "mem0BaseUrl": {
+        "type": "string",
+        "description": "Optional HTTP URL to a mem0 service. If unset, the local BM25 recall is used.",
+        "format": "uri"
+      },
+      "mem0ApiKey": {
+        "type": "string",
+        "description": "Optional bearer token for the mem0 service."
+      },
+      "recallLimitDefault": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 8,
+        "description": "Default number of facts returned by lumina_memory_recall when the caller does not specify."
+      }
+    }
+  }
+}

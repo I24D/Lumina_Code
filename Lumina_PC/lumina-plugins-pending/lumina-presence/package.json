@@ -1,0 +1,21 @@
+{
+  "name": "@openclaw/lumina-presence",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lumina Presence — cognitive presence layer for Lumina. Maintains state, subscribes to runtime events, exposes presence status to the agent. Phase 1 (foundations) — passive observer only, no actions.",
+  "type": "module",
+  "dependencies": {
+    "typebox": "1.1.38"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.4.4"
+    },
+    "build": {
+      "openclawVersion": "2026.5.22"
+    }
+  }
+}

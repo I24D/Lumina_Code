@@ -1,0 +1,139 @@
+/* =============================================
+   Nivel 8 — Transparency dashboard panel.
+   Floats above the chat on the left; shows what Lumina is doing right
+   now (intent, tool, app, agent, file, email, page, command, risk).
+   ============================================= */
+
+.lumina-transparency {
+  position: fixed;
+  inset: 16px auto 16px 16px;
+  width: min(86vw, 320px);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--panel, #15151b) 96%, transparent);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+  z-index: 8900;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.lumina-transparency--empty .lumina-transparency__list {
+  display: none;
+}
+
+.lumina-transparency__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lumina-transparency__title {
+  flex: 1 1 auto;
+  color: var(--text);
+}
+
+.lumina-transparency__count {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--accent, #10b981) 18%, transparent);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-right: 8px;
+}
+
+.lumina-transparency__close {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.lumina-transparency__close:hover {
+  color: var(--text);
+}
+
+.lumina-transparency__placeholder {
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.lumina-transparency__list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.lumina-transparency__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.lumina-transparency__item:last-child {
+  border-bottom: 0;
+}
+
+.lumina-transparency__icon {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 16px;
+  line-height: 1.4;
+  width: 20px;
+  text-align: center;
+  color: var(--accent, #10b981);
+}
+
+.lumina-transparency__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lumina-transparency__top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.lumina-transparency__summary {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+  word-wrap: break-word;
+}
+
+.lumina-transparency__detail {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.lumina-transparency__risk--warning { border-left: 3px solid #f59e0b; }
+.lumina-transparency__risk--high   { border-left: 3px solid #f97316; background: color-mix(in srgb, #f97316 6%, transparent); }
+.lumina-transparency__risk--critical {
+  border-left: 3px solid #ef4444;
+  background: color-mix(in srgb, #ef4444 8%, transparent);
+}
+.lumina-transparency__risk--safe   { border-left: 3px solid #10b981; }
+
+@media (max-width: 640px) {
+  .lumina-transparency {
+    inset: auto 8px calc(8px + env(safe-area-inset-bottom, 0)) 8px;
+    width: auto;
+    max-height: 38vh;
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "id": "lumina-claude-bridge",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": false,
+  "name": "Lumina Claude Bridge",
+  "description": "Phase 7 — delega tareas por voz a Claude App (UI automation), Claude Code CLI, o Cowork (stub).",
+  "contracts": {
+    "tools": [
+      "lumina_claude_dispatch",
+      "lumina_claude_app_status",
+      "lumina_claude_app_send_prompt"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "claudeApp": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "processName": {
+            "type": "string",
+            "default": "Claude",
+            "description": "Process name (sin .exe) de Claude App desktop. Default 'Claude'. En algunos sistemas: 'AnthropicClaude'."
+          },
+          "responseWaitMaxMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 600000,
+            "default": 60000,
+            "description": "Tiempo máximo a esperar la respuesta de Claude App antes de leerla. Default 60s."
+          },
+          "responseStableMs": {
+            "type": "integer",
+            "minimum": 200,
+            "maximum": 10000,
+            "default": 1500,
+            "description": "Cuánto tiempo el clipboard/screen tienen que estar 'estables' para considerar que Claude terminó. Default 1.5s."
+          }
+        }
+      },
+      "claudeCodeCli": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "binPath": {
+            "type": "string",
+            "description": "Ruta al ejecutable claude CLI. Si no está, se busca en PATH."
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 5000,
+            "maximum": 1800000,
+            "default": 300000,
+            "description": "Timeout total del comando claude. Default 5 minutos."
+          }
+        }
+      }
+    }
+  }
+}

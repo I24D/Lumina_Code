@@ -1,0 +1,49 @@
+# Lumina Cognitive OS — Python sidecar dependencies
+#
+# Install with:
+#   python -m pip install -r requirements.txt
+#
+# Wake-word also needs the openwakeword bundled models which download
+# automatically on first use.
+
+# UI Automation tree (Nivel 3)
+uiautomation==2.0.20
+
+# Browser driver (Nivel 4)
+playwright==1.49.0
+
+# Wake-word detector (Nivel 12)
+openwakeword==0.6.0
+sounddevice==0.4.7
+numpy==1.26.4
+
+# Recorder (LfD) — mouse/keyboard listeners + fast screenshots.
+# pynput also powers the global kill-switch hotkey (kill_switch.py, §9).
+pynput==1.7.7
+mss==9.0.2
+Pillow==10.4.0
+
+# Continuous monitor video stream (DXGI Desktop Duplication)
+dxcam==0.3.0
+
+# App Adapter Registry sidecars (§5) — OPTIONAL. Each adapter degrades with a
+# structured hint if its dep is missing; winreg (registry_manager.py) is stdlib.
+#   pywin32        → office_com.py  (Word/Excel/Outlook COM Automation)
+#   pycaw+comtypes → audio_manager.py (master volume / mute / devices)
+# pywin32==306
+# pycaw==20240210
+# comtypes==1.4.1
+
+# capture_analyze.py OCR — OPTIONAL. Text-with-bbox for apps whose UIA tree is
+# opaque (Chromium/canvas/UWP web). Falls back gracefully if absent:
+#   winsdk  → Windows.Media.Ocr, no external binary (preferred, Windows-only)
+#   pytesseract → needs the Tesseract binary installed separately
+# Uncomment ONE to enable OCR; without either, capture_analyze still returns
+# the screenshot + UIA structure and reports ocr.available=false.
+# winsdk==1.0.0b10
+# pytesseract==0.3.13
+
+# OmniParser (Visual Engine) — OPT-IN, install separately:
+#   pip install -r requirements-omniparser.txt
+# Kept out of the default requirements because it pulls ~2GB of model
+# weights and torch/transformers (~3GB of deps).
