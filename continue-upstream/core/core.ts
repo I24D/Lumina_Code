@@ -1378,13 +1378,13 @@ export class Core {
   }
 
   private createWhatsAppAutoResponder(): WhatsAppAutoResponder | undefined {
-    // Windows-only (WhatsApp Desktop + Enlace móvil live there). On by default;
-    // set LUMINA_WHATSAPP_AUTOREPLY=0 to disable, =dry to draft without sending.
+    // Windows-only and opt-in. Use "dry" to draft without sending, or an
+    // explicit truthy value after reviewing the integration and permissions.
     if (process.platform !== "win32") {
       return undefined;
     }
     const flag = (process.env.LUMINA_WHATSAPP_AUTOREPLY ?? "").trim();
-    if (/^(0|false|off|no)$/iu.test(flag)) {
+    if (!/^(1|true|on|yes|dry|dry-?run)$/iu.test(flag)) {
       return undefined;
     }
     return new WhatsAppAutoResponder({

@@ -1,0 +1,103 @@
+name: Reportar un problema
+description: Ayúdanos a documentar un comportamiento incorrecto o inesperado.
+title: "[Bug]: "
+labels:
+  - bug
+  - "status: needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por ayudar a mejorar Lumina Code. El proyecto sigue en desarrollo activo y aún no tiene una release pública estable.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Verificaciones previas
+      options:
+        - label: Busqué issues existentes y no encontré este mismo problema.
+          required: true
+        - label: Eliminé credenciales, datos personales y contenido privado de los registros.
+          required: true
+        - label: Entiendo que commits históricos y builds antiguas no son releases soportadas.
+          required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Componente
+      options:
+        - VS Code extension / agente de código
+        - Start Talk / voz
+        - Memoria
+        - Windows bridge
+        - MCP gateway
+        - Model router
+        - Instalación o build
+        - Documentación
+        - Otro
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Versión, commit o fecha
+      description: Indica exactamente qué build, commit o documento observaste.
+      placeholder: "Ejemplo: commit abc1234 o documentación del 14 de agosto de 2026"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Entorno
+      description: Incluye Windows, VS Code, Node.js y cualquier runtime relacionado.
+      placeholder: |
+        Windows 11 24H2
+        VS Code 1.xx
+        Node.js 22.x
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+      description: Escribe la secuencia mínima y repetible.
+      placeholder: |
+        1. Abrir...
+        2. Ejecutar...
+        3. Observar...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Resultado real
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Registros o evidencia saneada
+      description: No pegues tokens, archivos .env, conversaciones privadas ni datos personales.
+      render: shell
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: ¿Te gustaría colaborar en una solución?
+      options:
+        - Sí
+        - Tal vez, con orientación
+        - No por ahora

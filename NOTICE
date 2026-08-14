@@ -1,0 +1,18 @@
+Lumina Code
+Copyright 2026 I24D and Lumina Code contributors
+
+Lumina Code is based in part on software from the Continue project:
+
+    Continue
+    Copyright 2023-2026 Continue Dev, Inc.
+    https://github.com/continuedev/continue
+
+Continue is distributed under the Apache License, Version 2.0.
+Lumina Code includes modifications developed independently by the Lumina Code
+contributors. The Continue name and associated marks belong to their respective
+owners. No endorsement by or affiliation with Continue Dev, Inc. is implied.
+
+A copy of the Apache License, Version 2.0 is provided in the LICENSE file.
+Third-party dependencies and assets remain subject to their own licenses and
+notices. This NOTICE file may be expanded as additional source components are
+published in this repository.

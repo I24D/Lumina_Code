@@ -1,0 +1,88 @@
+name: Proponer una mejora
+description: Comparte una necesidad, flujo o capacidad que Lumina Code podría resolver.
+title: "[Idea]: "
+labels:
+  - enhancement
+  - "status: needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Las mejores propuestas comienzan por un problema real y explican cómo verificar que la solución funciona.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Verificaciones previas
+      options:
+        - label: Revisé el roadmap, los issues y las Discussions existentes.
+          required: true
+        - label: Esta propuesta no requiere publicar credenciales ni información privada.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema o necesidad
+      description: ¿Quién tiene este problema y en qué situación aparece?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Propuesta
+      description: Describe el flujo deseado sin asumir una implementación específica.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación
+      description: ¿Qué debería poder comprobar una persona para considerar resuelto el problema?
+      placeholder: |
+        - Dado que...
+        - Cuando...
+        - Entonces...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área principal
+      options:
+        - Experiencia de programación
+        - Voz / Start Talk
+        - Memoria y contexto
+        - Herramientas Windows
+        - MCP e integraciones
+        - Modelos y proveedores
+        - Seguridad y privacidad
+        - Accesibilidad
+        - Documentación y comunidad
+        - Otro
+    validations:
+      required: true
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Riesgos y límites
+      description: Considera privacidad, seguridad, costo, accesibilidad y acciones irreversibles.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: ¿Te gustaría colaborar?
+      options:
+        - Sí, puedo preparar una propuesta o pull request
+        - Sí, puedo ayudar a probar o documentar
+        - Tal vez, necesito orientación
+        - No por ahora

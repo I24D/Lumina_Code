@@ -145,20 +145,14 @@ finally {
 
 New-Item -ItemType Directory -Force -Path $userDataRoot, $extensionsRoot | Out-Null
 
-# Expose the shared I24D_WhatsApp skill library (SKILL.md format)
-# to Lumina Code. Start-Process inherits this env; loadMarkdownSkills scans it in
-# addition to the .continue/.claude skill folders. Remove this line to disable.
-$luminaSkillsDir = "C:\I24D_WhatsApp\skills"
-if (Test-Path $luminaSkillsDir) {
-    $env:LUMINA_SKILLS_DIR = $luminaSkillsDir
-}
+# Optional skill folders can be supplied through LUMINA_SKILLS_DIR. The public
+# launcher intentionally avoids private, machine-specific paths.
 
-# Autonomous WhatsApp assistant (WhatsApp Desktop + Enlace movil), DIRECT chats
-# only, never groups. On by default on Windows. Set to "0" to disable, or to "dry"
-# to draft and audit replies without actually sending them. Every reply is logged
-# to <continue global>\whatsapp-autoreply.jsonl, shown as an IDE toast, and read
-# aloud by the Start Talk orb when the voice is on.
-$env:LUMINA_WHATSAPP_AUTOREPLY = "1"
+# Personal-app automation is opt-in. Use "dry" for drafts only or "1" to enable
+# sending after reviewing the implementation and its permissions.
+if ([string]::IsNullOrWhiteSpace($env:LUMINA_WHATSAPP_AUTOREPLY)) {
+    $env:LUMINA_WHATSAPP_AUTOREPLY = "0"
+}
 
 Write-Host "Opening an isolated Lumina Code Development Host..."
 Write-Host "The current VS Code and Codex windows will remain untouched."

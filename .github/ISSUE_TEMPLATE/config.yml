@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Preguntas y conversación comunitaria
+    url: https://github.com/I24D/Lumina_Code/discussions
+    about: Usa Discussions para preguntas abiertas, ideas iniciales y ayuda entre la comunidad.
+  - name: Reportar una vulnerabilidad
+    url: https://github.com/I24D/Lumina_Code/blob/main/SECURITY.md
+    about: No publiques vulnerabilidades ni información sensible en un issue público.
