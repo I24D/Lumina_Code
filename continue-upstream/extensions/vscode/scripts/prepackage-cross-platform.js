@@ -14,6 +14,7 @@ const {
   autodetectPlatformAndArch,
 } = require("../../../scripts/util/index");
 
+const { copyJsdomWorker } = require("./copy-jsdom-worker");
 const { generateAndCopyConfigYamlSchema } = require("./generate-copy-config");
 const { npmInstall } = require("./npm-install");
 const {
@@ -122,10 +123,7 @@ async function package(target, os, arch, exe) {
   await copyNodeModules();
 
   // Copy over any worker files
-  fs.cpSync(
-    "node_modules/jsdom/lib/jsdom/living/xhr/xhr-sync-worker.js",
-    "out/xhr-sync-worker.js",
-  );
+  copyJsdomWorker();
 
   // Validate the all of the necessary files are present
   validateFilesPresent([

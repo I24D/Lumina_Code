@@ -95,6 +95,19 @@ function Repair-LanceDbNativeModule {
     }
 }
 
+function Repair-SqliteNativeModule {
+    $copyScript = Join-Path $extensionRoot "scripts\copy-sqlite-binding.js"
+    if (-not (Test-Path -LiteralPath $copyScript)) {
+        throw "SQLite native binding repair script was not found: $copyScript"
+    }
+
+    Write-Host "Checking the SQLite native module..."
+    & node.exe $copyScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "The SQLite native module is missing or invalid. Run npm install in $sourceRoot\core and try again."
+    }
+}
+
 if (-not (Test-Path -LiteralPath $codeCommand)) {
     $resolvedCode = Get-Command code.cmd -ErrorAction SilentlyContinue
     if (-not $resolvedCode) {
@@ -110,6 +123,7 @@ foreach ($requiredPath in @($guiRoot, $extensionRoot, $workspaceRoot)) {
 }
 
 Repair-LanceDbNativeModule
+Repair-SqliteNativeModule
 
 if (-not (Test-LocalPort -Port 5174)) {
     Write-Host "Starting the Lumina Code development UI on port 5174..."
@@ -156,10 +170,13 @@ if ([string]::IsNullOrWhiteSpace($env:LUMINA_WHATSAPP_AUTOREPLY)) {
 
 Write-Host "Opening an isolated Lumina Code Development Host..."
 Write-Host "The current VS Code and Codex windows will remain untouched."
+# Start-Process does not quote array elements that contain spaces, so any
+# path with a space (like this repo's own "Lumina Code" folder) gets split
+# into multiple arguments downstream. Quote each value explicitly.
 Start-Process -FilePath $codeCommand -ArgumentList @(
     "--new-window",
-    "--user-data-dir=$userDataRoot",
-    "--extensions-dir=$extensionsRoot",
-    "--extensionDevelopmentPath=$extensionRoot",
-    $workspaceRoot
+    "--user-data-dir=`"$userDataRoot`"",
+    "--extensions-dir=`"$extensionsRoot`"",
+    "--extensionDevelopmentPath=`"$extensionRoot`"",
+    "`"$workspaceRoot`""
 ) | Out-Null

@@ -1,5 +1,6 @@
 const fs = require("fs");
 
+const { copyJsdomWorker } = require("./copy-jsdom-worker");
 const { writeBuildTimestamp } = require("./utils");
 
 const esbuild = require("esbuild");
@@ -53,6 +54,8 @@ const esbuildConfig = {
 void (async () => {
   // Create .buildTimestamp.js before starting the first build
   writeBuildTimestamp();
+  // jsdom resolves this worker next to the bundled extension at runtime.
+  copyJsdomWorker();
   // Bundles the extension into one file
   if (flags.includes("--watch")) {
     const ctx = await esbuild.context(esbuildConfig);

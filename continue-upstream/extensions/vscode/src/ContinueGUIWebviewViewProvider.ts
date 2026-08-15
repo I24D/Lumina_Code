@@ -156,12 +156,13 @@ export class ContinueGUIWebviewViewProvider
     const extensionUri = getExtensionUri();
     let scriptUri: string;
     let styleMainUri: string;
-    const vscMediaUrl: string = panel.webview
-      .asWebviewUri(vscode.Uri.joinPath(extensionUri, "gui"))
-      .toString();
-
     const inDevelopmentMode =
       context?.extensionMode === vscode.ExtensionMode.Development;
+    const vscMediaUrl: string = inDevelopmentMode
+      ? DEV_GUI_URL
+      : panel.webview
+          .asWebviewUri(vscode.Uri.joinPath(extensionUri, "gui"))
+          .toString();
     if (inDevelopmentMode) {
       scriptUri = `${DEV_GUI_URL}/src/main.tsx`;
       styleMainUri = `${DEV_GUI_URL}/src/index.css`;
