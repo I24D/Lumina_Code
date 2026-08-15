@@ -405,16 +405,23 @@ const IconButton = styled.button<{
   }
 `;
 
-const SessionStrip = styled.div`
+const SessionStrip = styled.div<{ $roomy: boolean }>`
   position: relative;
   z-index: 5;
   display: grid;
-  width: min(100%, 760px);
+  width: ${({ $roomy }) =>
+    $roomy ? "min(calc(100% - 48px), 1180px)" : "min(100%, 760px)"};
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   align-self: center;
-  gap: 8px;
-  padding: 10px 14px 4px;
+  gap: ${({ $roomy }) => ($roomy ? "14px" : "8px")};
+  padding: ${({ $roomy }) => ($roomy ? "14px 0 8px" : "10px 14px 4px")};
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
 `;
 
 const SettingField = styled.div`
@@ -426,7 +433,7 @@ const SettingField = styled.div`
 
 const SettingLabel = styled.span`
   color: var(--live-muted);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 720;
   text-transform: uppercase;
 `;
@@ -435,19 +442,19 @@ const SettingMenuButton = styled.button`
   display: flex;
   width: 100%;
   min-width: 0;
-  height: 34px;
+  height: 40px;
   align-items: center;
   justify-content: space-between;
   gap: 7px;
   border: 1px solid var(--live-border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--live-control);
   color: var(--live-text);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 620;
   outline: none;
-  padding: 0 9px;
+  padding: 0 12px;
   text-align: left;
 
   &:focus-visible {
@@ -518,19 +525,37 @@ const MenuItemDescription = styled.span`
   line-height: 1.3;
 `;
 
-const Stage = styled.main<{ $large: boolean }>`
-  display: flex;
-  width: min(100%, 760px);
+const Stage = styled.main<{ $large: boolean; $roomy: boolean }>`
+  display: grid;
+  width: ${({ $roomy }) =>
+    $roomy ? "min(calc(100% - 48px), 1180px)" : "min(100%, 760px)"};
   min-height: 0;
   box-sizing: border-box;
   flex: 1;
   align-self: center;
-  align-items: center;
-  flex-direction: column;
-  gap: ${({ $large }) => ($large ? "12px" : "8px")};
+  grid-template-columns: ${({ $roomy }) =>
+    $roomy ? "minmax(280px, 0.82fr) minmax(460px, 1.35fr)" : "minmax(0, 1fr)"};
+  grid-template-rows: ${({ $roomy }) =>
+    $roomy ? "minmax(0, 1fr)" : "auto minmax(0, 1fr)"};
+  align-items: stretch;
+  gap: ${({ $roomy, $large }) =>
+    $roomy ? "clamp(28px, 4vw, 64px)" : $large ? "12px" : "8px"};
   overflow: hidden;
-  padding: ${({ $large }) => ($large ? "18px 28px 14px" : "10px 18px 8px")};
+  padding: ${({ $roomy, $large }) =>
+    $roomy
+      ? "clamp(22px, 3vh, 38px) 0 24px"
+      : $large
+        ? "18px 28px 14px"
+        : "10px 18px 8px"};
   text-align: center;
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 12px;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
 
   @media (max-height: 560px) {
     gap: 5px;
@@ -539,36 +564,66 @@ const Stage = styled.main<{ $large: boolean }>`
   }
 `;
 
-const Prompt = styled.h1<{ $large: boolean }>`
+const HeroRegion = styled.section<{ $roomy: boolean }>`
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: ${({ $roomy }) => ($roomy ? "center" : "flex-start")};
+  flex-direction: column;
+  gap: ${({ $roomy }) => ($roomy ? "16px" : "8px")};
+  padding: ${({ $roomy }) => ($roomy ? "28px 0" : "0")};
+
+  @media (max-width: 900px) {
+    gap: 8px;
+    padding: 0;
+  }
+`;
+
+const ConversationRegion = styled.section<{ $roomy: boolean }>`
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: ${({ $roomy }) => ($roomy ? "12px" : "7px")};
+  text-align: left;
+`;
+
+const Prompt = styled.h1<{ $large: boolean; $roomy: boolean }>`
   width: 100%;
   margin: 0;
   color: var(--live-text);
-  font-size: ${({ $large }) => ($large ? "31px" : "23px")};
-  font-weight: 470;
-  letter-spacing: 0;
-  line-height: 1.12;
+  max-width: 560px;
+  font-size: ${({ $large, $roomy }) =>
+    $roomy ? "clamp(30px, 2.4vw, 42px)" : $large ? "31px" : "23px"};
+  font-weight: 520;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
 
   @media (max-height: 560px) {
     font-size: 20px;
   }
 `;
 
-const StatusLine = styled.div<{ $tone: StartTalkStatus }>`
+const StatusLine = styled.div<{ $roomy: boolean; $tone: StartTalkStatus }>`
   min-height: 18px;
   overflow: hidden;
   color: ${({ $tone }) =>
     $tone === "error" ? "var(--live-danger)" : "var(--live-muted)"};
-  font-size: 11px;
+  font-size: ${({ $roomy }) => ($roomy ? "13px" : "11px")};
   font-weight: 620;
   line-height: 1.35;
   text-overflow: ellipsis;
 `;
 
-const OrbWrap = styled.div<{ $large: boolean }>`
+const OrbWrap = styled.div<{ $large: boolean; $roomy: boolean }>`
   position: relative;
   display: flex;
-  width: ${({ $large }) => ($large ? "166px" : "128px")};
-  height: ${({ $large }) => ($large ? "166px" : "128px")};
+  width: ${({ $large, $roomy }) =>
+    $roomy ? "clamp(174px, 13vw, 214px)" : $large ? "166px" : "128px"};
+  height: ${({ $large, $roomy }) =>
+    $roomy ? "clamp(174px, 13vw, 214px)" : $large ? "166px" : "128px"};
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -593,9 +648,14 @@ const Ring = styled.div<{ $status: StartTalkStatus }>`
   animation: ${listeningRing} 1.7s ease-in-out infinite;
 `;
 
-const Orb = styled.div<{ $large: boolean; $status: StartTalkStatus }>`
+const Orb = styled.div<{
+  $large: boolean;
+  $roomy: boolean;
+  $status: StartTalkStatus;
+}>`
   position: relative;
-  width: ${({ $large }) => ($large ? "138px" : "108px")};
+  width: ${({ $large, $roomy }) =>
+    $roomy ? "clamp(148px, 11vw, 182px)" : $large ? "138px" : "108px"};
   aspect-ratio: 1;
   border-radius: 50%;
   background:
@@ -699,17 +759,64 @@ const AudioBars = styled.div<{ $active: boolean }>`
   }
 `;
 
-const TranscriptPanel = styled.div<{ $large: boolean }>`
+const ConversationHeader = styled.div`
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 2px;
+`;
+
+const ConversationHeading = styled.div`
   display: grid;
+  gap: 2px;
+`;
+
+const ConversationEyebrow = styled.span`
+  color: var(--live-accent-text);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+`;
+
+const ConversationTitle = styled.h2<{ $roomy: boolean }>`
+  margin: 0;
+  color: var(--live-text);
+  font-size: ${({ $roomy }) => ($roomy ? "21px" : "15px")};
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+`;
+
+const ConversationHint = styled.span`
+  color: var(--live-muted);
+  font-size: 10px;
+  line-height: 1.3;
+  text-align: right;
+`;
+
+const TranscriptPanel = styled.div<{ $large: boolean; $roomy: boolean }>`
+  display: flex;
   width: 100%;
-  min-height: ${({ $large }) => ($large ? "92px" : "68px")};
-  max-height: ${({ $large }) => ($large ? "160px" : "104px")};
+  min-height: ${({ $large, $roomy }) =>
+    $roomy ? "260px" : $large ? "118px" : "82px"};
+  max-height: ${({ $large, $roomy }) =>
+    $roomy ? "none" : $large ? "190px" : "126px"};
   box-sizing: border-box;
-  align-content: start;
-  gap: 6px;
+  flex: ${({ $roomy }) => ($roomy ? "1 1 320px" : "0 1 auto")};
+  align-items: stretch;
+  flex-direction: column;
+  gap: ${({ $roomy }) => ($roomy ? "12px" : "8px")};
   overflow: auto;
-  border-top: 1px solid var(--live-border);
-  padding: 10px 4px 0;
+  border: 1px solid var(--live-border);
+  border-radius: ${({ $roomy }) => ($roomy ? "18px" : "12px")};
+  background:
+    linear-gradient(180deg, var(--live-control), transparent 36%),
+    var(--live-surface-elevated);
+  box-shadow: ${({ $roomy }) =>
+    $roomy ? "0 18px 48px rgba(5, 12, 24, 0.16)" : "none"};
+  padding: ${({ $roomy }) => ($roomy ? "22px" : "12px")};
   scrollbar-width: thin;
 
   @media (max-height: 560px) {
@@ -719,28 +826,64 @@ const TranscriptPanel = styled.div<{ $large: boolean }>`
   }
 `;
 
-const TranscriptLine = styled.div<{ $source: "assistant" | "user" }>`
-  min-width: 0;
+const TranscriptMessage = styled.div<{
+  $roomy: boolean;
+  $source: "assistant" | "user";
+}>`
+  display: grid;
+  width: fit-content;
+  max-width: ${({ $roomy }) => ($roomy ? "88%" : "94%")};
+  align-self: ${({ $source }) =>
+    $source === "user" ? "flex-end" : "flex-start"};
+  gap: 4px;
+  border: 1px solid
+    ${({ $source }) =>
+      $source === "user" ? "var(--live-border-strong)" : "var(--live-border)"};
+  border-radius: ${({ $source }) =>
+    $source === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px"};
+  background: ${({ $source }) =>
+    $source === "user" ? "var(--live-accent-soft)" : "var(--live-control)"};
+  padding: ${({ $roomy }) => ($roomy ? "12px 15px" : "9px 11px")};
+`;
+
+const TranscriptRole = styled.div<{ $source: "assistant" | "user" }>`
   color: ${({ $source }) =>
-    $source === "user" ? "var(--live-text)" : "var(--live-muted)"};
-  font-size: 12px;
-  font-weight: ${({ $source }) => ($source === "user" ? 620 : 440)};
-  line-height: 1.42;
-  text-align: ${({ $source }) => ($source === "user" ? "right" : "left")};
+    $source === "user" ? "var(--live-accent-text)" : "var(--live-success)"};
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.03em;
+`;
+
+const TranscriptLine = styled.div<{
+  $roomy: boolean;
+  $source: "assistant" | "user";
+}>`
+  min-width: 0;
+  color: var(--live-text);
+  font-size: ${({ $roomy }) => ($roomy ? "15px" : "12px")};
+  font-weight: 450;
+  line-height: ${({ $roomy }) => ($roomy ? "1.55" : "1.42")};
+  text-align: left;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 `;
 
-const EmptyTranscript = styled.div`
+const EmptyTranscript = styled.div<{ $roomy: boolean }>`
+  display: grid;
+  min-height: ${({ $roomy }) => ($roomy ? "190px" : "54px")};
+  align-content: center;
+  justify-items: center;
+  gap: 7px;
   color: var(--live-muted);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: ${({ $roomy }) => ($roomy ? "14px" : "11px")};
+  line-height: 1.5;
   text-align: center;
 `;
 
 const SpeakerLabel = styled.div`
+  align-self: flex-end;
   color: var(--live-success);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-align: right;
 `;
@@ -955,27 +1098,28 @@ const DelegationApprovalButton = styled.button<{ $primary?: boolean }>`
   }
 `;
 
-const ToolActivityPanel = styled.div<{ $visible: boolean }>`
+const ToolActivityPanel = styled.div<{ $roomy: boolean; $visible: boolean }>`
   display: ${({ $visible }) => ($visible ? "grid" : "none")};
   width: 100%;
-  max-height: 74px;
-  gap: 5px;
+  max-height: ${({ $roomy }) => ($roomy ? "132px" : "74px")};
+  gap: ${({ $roomy }) => ($roomy ? "7px" : "5px")};
   overflow: auto;
+  scrollbar-width: thin;
 `;
 
-const ToolActivityRow = styled.div`
+const ToolActivityRow = styled.div<{ $roomy: boolean }>`
   display: grid;
-  min-height: 27px;
+  min-height: ${({ $roomy }) => ($roomy ? "38px" : "27px")};
   box-sizing: border-box;
   grid-template-columns: 17px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   border: 1px solid var(--live-border);
-  border-radius: 7px;
+  border-radius: ${({ $roomy }) => ($roomy ? "10px" : "7px")};
   background: var(--live-control);
-  padding: 4px 7px;
+  padding: ${({ $roomy }) => ($roomy ? "8px 10px" : "4px 7px")};
   color: var(--live-muted);
-  font-size: 10px;
+  font-size: ${({ $roomy }) => ($roomy ? "12px" : "10px")};
   text-align: left;
 `;
 
@@ -1429,6 +1573,7 @@ export function LiveConversationOverlay({
   const size = useMemo(() => getSizeForMode(mode), [mode]);
   const visualMode: PanelMode = orbFullscreen ? "expanded" : mode;
   const isLarge = visualMode === "expanded";
+  const isRoomy = isOrb && orbFullscreen;
 
   useEffect(() => {
     if (pendingDelegationApproval && mode === "minimized") {
@@ -1978,6 +2123,7 @@ export function LiveConversationOverlay({
         </Header>
 
         <SessionStrip
+          $roomy={isRoomy}
           ref={settingsRef}
           onPointerDown={(event) => event.stopPropagation()}
         >
@@ -2063,63 +2209,100 @@ export function LiveConversationOverlay({
           </SettingField>
         </SessionStrip>
 
-        <Stage $large={isLarge}>
-          <Prompt $large={isLarge}>¿En qué deberíamos enfocarnos?</Prompt>
-          <StatusLine $tone={status}>{statusText}</StatusLine>
-          <OrbWrap $large={isLarge}>
-            <Ring $status={status} />
-            <Orb
-              $large={isLarge}
-              $status={status}
+        <Stage $large={isLarge} $roomy={isRoomy}>
+          <HeroRegion $roomy={isRoomy}>
+            <Prompt $large={isLarge} $roomy={isRoomy}>
+              ¿En qué deberíamos enfocarnos?
+            </Prompt>
+            <StatusLine $roomy={isRoomy} $tone={status}>
+              {statusText}
+            </StatusLine>
+            <OrbWrap $large={isLarge} $roomy={isRoomy}>
+              <Ring $status={status} />
+              <Orb
+                $large={isLarge}
+                $roomy={isRoomy}
+                $status={status}
+                aria-hidden="true"
+                style={{
+                  transform:
+                    status === "listening"
+                      ? `scale(${1 + micLevel * 0.18})`
+                      : undefined,
+                }}
+              />
+            </OrbWrap>
+            <AudioBars
+              $active={status === "listening" || status === "speaking"}
               aria-hidden="true"
-              style={{
-                transform:
-                  status === "listening"
-                    ? `scale(${1 + micLevel * 0.18})`
-                    : undefined,
-              }}
-            />
-          </OrbWrap>
-          <AudioBars
-            $active={status === "listening" || status === "speaking"}
-            aria-hidden="true"
-          >
-            {Array.from({ length: 7 }).map((_, index) => (
-              <span key={index} />
-            ))}
-          </AudioBars>
+            >
+              {Array.from({ length: 7 }).map((_, index) => (
+                <span key={index} />
+              ))}
+            </AudioBars>
+          </HeroRegion>
 
-          <TranscriptPanel $large={isLarge} aria-live="polite">
-            {speaker?.name ? <SpeakerLabel>{speaker.name}</SpeakerLabel> : null}
-            {userTranscript ? (
-              <TranscriptLine $source="user">{userTranscript}</TranscriptLine>
-            ) : null}
-            {assistantTranscript ? (
-              <TranscriptLine $source="assistant">
-                {assistantTranscript}
-              </TranscriptLine>
-            ) : null}
-            {!hasTranscript ? (
-              <EmptyTranscript>
-                La conversación aparecerá aquí mientras hablas con Lumina.
-              </EmptyTranscript>
-            ) : null}
-          </TranscriptPanel>
+          <ConversationRegion $roomy={isRoomy}>
+            <ConversationHeader>
+              <ConversationHeading>
+                <ConversationEyebrow>Transcripción</ConversationEyebrow>
+                <ConversationTitle $roomy={isRoomy}>
+                  Conversación en vivo
+                </ConversationTitle>
+              </ConversationHeading>
+              <ConversationHint>Solo tú y Lumina</ConversationHint>
+            </ConversationHeader>
 
-          <ToolActivityPanel $visible={toolActivities.length > 0}>
-            {toolActivities.slice(-3).map((activity) => (
-              <ToolActivityRow key={activity.id}>
-                <ToolActivityIcon $status={activity.status}>
-                  <ToolActivityStatusIcon activity={activity} />
-                </ToolActivityIcon>
-                <ToolActivityText>
-                  {activity.detail
-                    ? `${activity.label}: ${activity.detail}`
-                    : activity.label}
-                </ToolActivityText>
-              </ToolActivityRow>
-            ))}
-          </ToolActivityPanel>
+            <TranscriptPanel
+              $large={isLarge}
+              $roomy={isRoomy}
+              aria-label="Conversación de Start Talk"
+              aria-live="polite"
+            >
+              {speaker?.name && !speaker.name.trim().startsWith("<") ? (
+                <SpeakerLabel>{speaker.name}</SpeakerLabel>
+              ) : null}
+              {userTranscript ? (
+                <TranscriptMessage $roomy={isRoomy} $source="user">
+                  <TranscriptRole $source="user">Tú</TranscriptRole>
+                  <TranscriptLine $roomy={isRoomy} $source="user">
+                    {userTranscript}
+                  </TranscriptLine>
+                </TranscriptMessage>
+              ) : null}
+              {assistantTranscript ? (
+                <TranscriptMessage $roomy={isRoomy} $source="assistant">
+                  <TranscriptRole $source="assistant">Lumina</TranscriptRole>
+                  <TranscriptLine $roomy={isRoomy} $source="assistant">
+                    {assistantTranscript}
+                  </TranscriptLine>
+                </TranscriptMessage>
+              ) : null}
+              {!hasTranscript ? (
+                <EmptyTranscript $roomy={isRoomy}>
+                  La conversación aparecerá aquí mientras hablas con Lumina.
+                </EmptyTranscript>
+              ) : null}
+            </TranscriptPanel>
+
+            <ToolActivityPanel
+              $roomy={isRoomy}
+              $visible={toolActivities.length > 0}
+            >
+              {toolActivities.slice(-3).map((activity) => (
+                <ToolActivityRow $roomy={isRoomy} key={activity.id}>
+                  <ToolActivityIcon $status={activity.status}>
+                    <ToolActivityStatusIcon activity={activity} />
+                  </ToolActivityIcon>
+                  <ToolActivityText>
+                    {activity.detail
+                      ? `${activity.label}: ${activity.detail}`
+                      : activity.label}
+                  </ToolActivityText>
+                </ToolActivityRow>
+              ))}
+            </ToolActivityPanel>
+          </ConversationRegion>
         </Stage>
 
         {pendingDelegationApproval ? (
