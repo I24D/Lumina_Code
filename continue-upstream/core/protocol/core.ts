@@ -303,7 +303,13 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "startTalk/getTranscript": [StartTalkSessionRequest, StartTalkTranscriptEntry[]];
   // Voice delegation into the main chat (orb → core → sidebar → core → orb).
   "startTalk/delegateToMain": [
-    { requestId: string; task: string; context?: string },
+    {
+      requestId: string;
+      task: string;
+      context?: string;
+      /** Set only after the Start Talk confirmation UI was accepted. */
+      userApproved?: boolean;
+    },
     void,
   ];
   "startTalk/mainResult": [

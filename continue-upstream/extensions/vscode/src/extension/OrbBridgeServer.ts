@@ -1,5 +1,5 @@
 import * as crypto from "node:crypto";
-
+import * as vscode from "vscode";
 
 import { Message } from "core/protocol/messenger";
 import { WebSocket, WebSocketServer } from "ws";
@@ -56,6 +56,7 @@ export class OrbBridgeServer {
     const ownedSessionIds = new Set<string>();
     const pendingConnectMessageIds = new Set<string>();
     let cleanedUp = false;
+    let authorizationInProgress = false;
 
     const stopOwnedSession = (sessionId: string) => {
       void this.webviewProtocol.handleExternalMessage(
@@ -100,9 +101,16 @@ export class OrbBridgeServer {
         socket.send(JSON.stringify(msg));
       }
     };
+    const denyDelegation = (requestId: string, reason: string) => {
+      sink({
+        messageType: "startTalk/mainResultReady",
+        messageId: crypto.randomUUID(),
+        data: { requestId, text: reason, error: true },
+      });
+    };
     const removeSink = this.webviewProtocol.addExternalSink(sink);
 
-    socket.on("message", (raw) => {
+    socket.on("message", async (raw) => {
       let msg: Message;
       try {
         msg = JSON.parse(raw.toString());
@@ -117,6 +125,65 @@ export class OrbBridgeServer {
           ?.sessionId;
         if (typeof sessionId === "string") {
           ownedSessionIds.delete(sessionId);
+        }
+      }
+
+      if (msg.messageType === "startTalk/delegateToMain") {
+        const delegation = msg.data as
+          | {
+              requestId?: unknown;
+              task?: unknown;
+              userApproved?: unknown;
+            }
+          | undefined;
+        const requestId =
+          typeof delegation?.requestId === "string"
+            ? delegation.requestId
+            : "";
+        const task =
+          typeof delegation?.task === "string" ? delegation.task.trim() : "";
+
+        if (!requestId || !task) {
+          if (requestId) {
+            denyDelegation(requestId, "Start Talk propuso una tarea invalida.");
+          }
+          return;
+        }
+
+        // New clients set this only after the user clicks the approval card.
+        // Old/hot-reloaded clients get a second, extension-owned safety gate so
+        // a stale event handler can never send work straight into the chat.
+        if (delegation?.userApproved !== true) {
+          if (authorizationInProgress) {
+            denyDelegation(
+              requestId,
+              "Solicitud cancelada: ya hay otra autorizacion pendiente.",
+            );
+            return;
+          }
+
+          authorizationInProgress = true;
+          let choice: string | undefined;
+          try {
+            choice = await vscode.window.showWarningMessage(
+              "Start Talk quiere enviar una tarea a Lumina Code",
+              {
+                modal: true,
+                detail: `${task}\n\nLa tarea no se ejecutara sin tu autorizacion.`,
+              },
+              "Autorizar una vez",
+            );
+          } finally {
+            authorizationInProgress = false;
+          }
+
+          if (choice !== "Autorizar una vez") {
+            denyDelegation(
+              requestId,
+              "Solicitud cancelada: el usuario no autorizo esta tarea.",
+            );
+            return;
+          }
         }
       }
 

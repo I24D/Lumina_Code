@@ -14,6 +14,7 @@ import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useWebviewListener } from "../../hooks/useWebviewListener";
 import { useAppSelector } from "../../redux/hooks";
 import {
+  StartTalkDelegationApproval,
   StartTalkModelOption,
   StartTalkStatus,
   StartTalkThinkingLevel,
@@ -190,12 +191,18 @@ export function useStartTalkAudio({
     notifications: StartTalkNotification[];
     expiresAt: number;
   } | null>(null);
+  // Gemini function calls are untrusted proposals. This resolver is the hard
+  // authorization gate between a proposal and the real Lumina Code agent.
+  const pendingDelegationDecisionRef = useRef<{
+    id: string;
+    resolve: (approved: boolean) => void;
+  } | null>(null);
   const dispatchAutoReplyRef = useRef<
     (notifications: StartTalkNotification[]) => void
   >(() => undefined);
-  const runDelegatedTaskRef = useRef<(text: string) => Promise<string>>(
-    async () => "",
-  );
+  const runDelegatedTaskRef = useRef<
+    (text: string, userApproved?: boolean) => Promise<string>
+  >(async () => "");
   const enqueueChatResponseRef = useRef<
     (response: { requestId: string; text: string }) => void
   >(() => undefined);
@@ -212,6 +219,8 @@ export function useStartTalkAudio({
   const [toolActivities, setToolActivities] = useState<StartTalkToolActivity[]>(
     [],
   );
+  const [pendingDelegationApproval, setPendingDelegationApproval] =
+    useState<StartTalkDelegationApproval | null>(null);
   const [userTranscript, setUserTranscript] = useState("");
   const [assistantTranscript, setAssistantTranscript] = useState("");
   const [videoSource, setVideoSource] = useState<StartTalkVideoSource | null>(
@@ -283,6 +292,28 @@ export function useStartTalkAudio({
     }
   }, []);
 
+  const settleDelegationApproval = useCallback((approved: boolean) => {
+    const pending = pendingDelegationDecisionRef.current;
+    if (!pending) {
+      return;
+    }
+    pendingDelegationDecisionRef.current = null;
+    setPendingDelegationApproval(null);
+    pending.resolve(approved);
+  }, []);
+
+  const requestDelegationApproval = useCallback(
+    (id: string, task: string): Promise<boolean> => {
+      // A second model call must not inherit a click intended for the first.
+      pendingDelegationDecisionRef.current?.resolve(false);
+      return new Promise((resolve) => {
+        pendingDelegationDecisionRef.current = { id, resolve };
+        setPendingDelegationApproval({ id, task });
+      });
+    },
+    [],
+  );
+
   const resetNotificationQueue = useCallback(() => {
     clearNotificationTimers();
     notificationQueueRef.current = [];
@@ -349,6 +380,7 @@ export function useStartTalkAudio({
     stopPlayback();
     resetNotificationQueue();
     resetChatResponseQueue();
+    settleDelegationApproval(false);
     sessionIdRef.current = null;
     setStatus("idle");
     setVideoSource(null);
@@ -361,6 +393,7 @@ export function useStartTalkAudio({
     resetChatResponseQueue,
     resetNotificationQueue,
     clearSessionRecoveryTimer,
+    settleDelegationApproval,
     stopPlayback,
   ]);
 
@@ -687,7 +720,12 @@ export function useStartTalkAudio({
 
   // Pending voice-delegation requests routed to the main chat, keyed by
   // requestId, resolved when the sidebar posts its final answer.
-  const pendingMainRef = useRef(new Map<string, (text: string) => void>());
+  const pendingMainRef = useRef(
+    new Map<
+      string,
+      { resolve: (text: string) => void; reject: (error: Error) => void }
+    >(),
+  );
 
   const enqueueChatResponse = useCallback(
     (response: ChatResponseAnnouncement) => {
@@ -725,10 +763,14 @@ export function useStartTalkAudio({
       console.log(
         `[VoiceDelegation] orb received mainResultReady: ${data.requestId} (${(data.text ?? "").length} chars)`,
       );
-      const resolve = pendingMainRef.current.get(data.requestId);
-      if (resolve) {
+      const pending = pendingMainRef.current.get(data.requestId);
+      if (pending) {
         pendingMainRef.current.delete(data.requestId);
-        resolve(data.text ?? "");
+        if (data.error) {
+          pending.reject(new Error(data.text || "La tarea no fue autorizada."));
+        } else {
+          pending.resolve(data.text ?? "");
+        }
         return;
       }
 
@@ -745,17 +787,18 @@ export function useStartTalkAudio({
   // texto final para que la voz lo lea. Every Start Talk surface routes through
   // the main chat so one persistent completion observer owns all responses.
   const runDelegatedTask = useCallback(
-    async (text: string): Promise<string> => {
-      return await new Promise<string>((resolve) => {
+    async (text: string, userApproved = false): Promise<string> => {
+      return await new Promise<string>((resolve, reject) => {
         const requestId =
           typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
             : `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-        pendingMainRef.current.set(requestId, resolve);
+        pendingMainRef.current.set(requestId, { resolve, reject });
         console.log(`[VoiceDelegation] sent delegateToMain: ${requestId}`);
         ideMessenger.post("startTalk/delegateToMain", {
           requestId,
           task: text,
+          userApproved,
         });
       });
     },
@@ -832,17 +875,53 @@ export function useStartTalkAudio({
         current.concat({
           id: activityId,
           label: "Lumina Code",
-          status: "running",
-          detail: task.slice(0, 80) || "Ejecutando tarea",
+          status: "waiting",
+          detail: task.slice(0, 80) || "Esperando autorizacion",
         }),
       );
 
       try {
+        if (!task.trim()) {
+          throw new Error("Start Talk propuso una tarea vacia.");
+        }
+
+        const approved = await requestDelegationApproval(call.id, fullTask);
+        if (!approved) {
+          const message =
+            "Solicitud cancelada: el usuario no autorizo esta tarea.";
+          if (sessionIdRef.current === sessionId) {
+            await ideMessenger.request("startTalk/sendToolResponse", {
+              sessionId,
+              id: call.id,
+              name: call.name,
+              connectionEpoch: call.connectionEpoch,
+              output: message,
+              error: true,
+            });
+          }
+          setToolActivities((current) =>
+            current.map((activity) =>
+              activity.id === activityId
+                ? { ...activity, status: "error", detail: "No autorizada" }
+                : activity,
+            ),
+          );
+          return;
+        }
+
         if (isStreamingRef.current) {
           throw new Error("Lumina Code ya esta trabajando en otra tarea.");
         }
 
-        const response = await runDelegatedTask(fullTask);
+        setToolActivities((current) =>
+          current.map((activity) =>
+            activity.id === activityId
+              ? { ...activity, status: "running", detail: task.slice(0, 80) }
+              : activity,
+          ),
+        );
+
+        const response = await runDelegatedTask(fullTask, true);
         const output = response || "Tarea completada.";
         const toolResponse =
           sessionIdRef.current === sessionId
@@ -903,7 +982,12 @@ export function useStartTalkAudio({
         );
       }
     },
-    [enqueueChatResponse, ideMessenger, runDelegatedTask],
+    [
+      enqueueChatResponse,
+      ideMessenger,
+      requestDelegationApproval,
+      runDelegatedTask,
+    ],
   );
 
   useWebviewListener(
@@ -1343,6 +1427,7 @@ export function useStartTalkAudio({
   }, [clearSessionRecoveryTimer, stopListening]);
 
   return {
+    approveDelegation: () => settleDelegationApproval(true),
     assistantTranscript,
     errorMessage,
     isActive: Boolean(sessionIdRef.current),
@@ -1362,6 +1447,8 @@ export function useStartTalkAudio({
     lastSoundEvent,
     notificationAccess,
     pendingNotificationCount,
+    pendingDelegationApproval,
+    rejectDelegation: () => settleDelegationApproval(false),
     isMuted,
     toggleMute,
     listAudioDevices,

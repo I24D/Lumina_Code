@@ -741,6 +741,66 @@ const SpeakerLabel = styled.div`
   text-align: right;
 `;
 
+const DelegationApprovalCard = styled.section`
+  position: absolute;
+  right: 14px;
+  bottom: 86px;
+  left: 14px;
+  z-index: 20;
+  display: grid;
+  width: auto;
+  max-width: 620px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  gap: 8px;
+  border: 1px solid var(--live-border-strong);
+  border-radius: 10px;
+  background: var(--live-surface-elevated);
+  box-shadow: 0 16px 42px rgba(8, 14, 22, 0.32);
+  padding: 10px;
+  text-align: left;
+`;
+
+const DelegationApprovalTitle = styled.div`
+  color: var(--live-text);
+  font-size: 11px;
+  font-weight: 720;
+`;
+
+const DelegationApprovalTask = styled.div`
+  max-height: 62px;
+  overflow: auto;
+  color: var(--live-muted);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+`;
+
+const DelegationApprovalActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+`;
+
+const DelegationApprovalButton = styled.button<{ $primary?: boolean }>`
+  border: 1px solid
+    ${({ $primary }) =>
+      $primary ? "var(--live-accent)" : "var(--live-border-strong)"};
+  border-radius: 7px;
+  background: ${({ $primary }) =>
+    $primary ? "var(--live-accent)" : "var(--live-control)"};
+  color: ${({ $primary }) => ($primary ? "#ffffff" : "var(--live-text)")};
+  cursor: pointer;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+`;
+
 const ToolActivityPanel = styled.div<{ $visible: boolean }>`
   display: ${({ $visible }) => ($visible ? "grid" : "none")};
   width: 100%;
@@ -1167,6 +1227,7 @@ export function LiveConversationOverlay({
     "idle",
   );
   const {
+    approveDelegation,
     assistantTranscript,
     errorMessage,
     isActive,
@@ -1190,6 +1251,8 @@ export function LiveConversationOverlay({
     exportTranscript,
     notificationAccess,
     pendingNotificationCount,
+    pendingDelegationApproval,
+    rejectDelegation,
   } = useStartTalkAudio({
     isOpen,
     model: liveModel,
@@ -1204,6 +1267,12 @@ export function LiveConversationOverlay({
   const size = useMemo(() => getSizeForMode(mode), [mode]);
   const visualMode: PanelMode = orbFullscreen ? "expanded" : mode;
   const isLarge = visualMode === "expanded";
+
+  useEffect(() => {
+    if (pendingDelegationApproval && mode === "minimized") {
+      setMode("compact");
+    }
+  }, [mode, pendingDelegationApproval]);
 
   useEffect(() => {
     try {
@@ -1807,6 +1876,35 @@ export function LiveConversationOverlay({
             ))}
           </ToolActivityPanel>
         </Stage>
+
+        {pendingDelegationApproval ? (
+          <DelegationApprovalCard
+            aria-label="Autorizacion de tarea de Start Talk"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <DelegationApprovalTitle>
+              Start Talk propone enviar esta tarea a Lumina Code
+            </DelegationApprovalTitle>
+            <DelegationApprovalTask>
+              {pendingDelegationApproval.task}
+            </DelegationApprovalTask>
+            <DelegationApprovalActions>
+              <DelegationApprovalButton
+                type="button"
+                onClick={rejectDelegation}
+              >
+                Rechazar
+              </DelegationApprovalButton>
+              <DelegationApprovalButton
+                type="button"
+                $primary
+                onClick={approveDelegation}
+              >
+                Autorizar una vez
+              </DelegationApprovalButton>
+            </DelegationApprovalActions>
+          </DelegationApprovalCard>
+        ) : null}
 
         {advancedOpen ? (
           <AdvancedSheet aria-label="Ajustes avanzados de Start Talk">

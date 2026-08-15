@@ -2,6 +2,7 @@ import type { ChatHistoryItem } from "core";
 import { describe, expect, it } from "vitest";
 import {
   buildChatResponseSpeechPrompt,
+  buildDelegatedPrompt,
   getLatestAssistantResponse,
 } from "./voiceDelegation";
 
@@ -40,5 +41,14 @@ describe("Start Talk chat response relay", () => {
     expect(prompt).toContain(response);
     expect(prompt).toContain("Read it aloud naturally and faithfully");
     expect(prompt).toContain("do not call tools");
+  });
+
+  it("marks delegated tasks as explicitly authorized", () => {
+    const prompt = buildDelegatedPrompt("Create a file");
+
+    expect(prompt).toContain(
+      "Esta tarea fue autorizada explicitamente por el usuario",
+    );
+    expect(prompt).toContain("Create a file");
   });
 });

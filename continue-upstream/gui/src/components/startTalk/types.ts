@@ -27,3 +27,9 @@ export type StartTalkToolActivity = {
   status: StartTalkToolActivityStatus;
   detail?: string;
 };
+
+/** A model-proposed task that cannot run until the user approves it. */
+export type StartTalkDelegationApproval = {
+  id: string;
+  task: string;
+};

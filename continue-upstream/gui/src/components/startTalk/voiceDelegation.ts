@@ -89,6 +89,7 @@ export function buildChatResponseSpeechPrompt(text: string): string {
 export function buildDelegatedPrompt(text: string): string {
   return [
     "Solicitud recibida por voz desde Start Talk.",
+    "Esta tarea fue autorizada explicitamente por el usuario en Start Talk.",
     "Atiende esta solicitud usando el LLM activo de Lumina Code y sus herramientas disponibles.",
     "Si requiere controlar Windows, aplicaciones, ventanas, mouse, teclado, screenshots o clipboard, usa la herramienta lumina_windows_bridge.",
     "Al terminar, responde de forma breve y clara porque Start Talk leera tu respuesta en voz.",
