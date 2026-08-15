@@ -1,6 +1,7 @@
 import type { LuminaRuntimeStatus } from "core/protocol/ideWebview";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { IdeMessengerContext } from "../context/IdeMessenger";
+import { getLuminaAssetUrl } from "../util/luminaAssets";
 
 export function LuminaWorkspaceSwitcher() {
   const ideMessenger = useContext(IdeMessengerContext);
@@ -53,7 +54,12 @@ export function LuminaWorkspaceSwitcher() {
         className="lumina-workspace-switcher__brand"
         aria-label="Lumina Code"
       >
-        <span className="lumina-workspace-switcher__mark">L</span>
+        <img
+          className="lumina-workspace-switcher__mark"
+          src={window.luminaAvatarUrl || getLuminaAssetUrl("lumina-icon.png")}
+          alt="Lumina Code mascot"
+          draggable={false}
+        />
         <span>Lumina Code</span>
       </div>
 

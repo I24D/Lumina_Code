@@ -170,15 +170,11 @@ body {
 }
 
 .lumina-workspace-switcher__mark {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: #e52b2f;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 750;
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  object-fit: contain;
 }
 
 .lumina-workspace-switcher__runtime {

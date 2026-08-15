@@ -11,5 +11,9 @@ describe("LuminaWorkspaceSwitcher", () => {
       expect(screen.getByText("Runtime connected")).toBeInTheDocument();
     });
     expect(screen.getByLabelText("Lumina Code")).toBeInTheDocument();
+    expect(screen.getByAltText("Lumina Code mascot")).toHaveAttribute(
+      "src",
+      expect.stringMatching(/\/lumina-icon\.png$/),
+    );
   });
 });
