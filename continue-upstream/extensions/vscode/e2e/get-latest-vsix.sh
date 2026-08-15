@@ -3,8 +3,8 @@
 # echo pwd
 echo "Current directory: $(pwd)"
 
-# Find the latest VSIX file in the build directory
-latest_vsix=$(ls -t ./build/continue-*.vsix | head -n1)
+# Find the latest Lumina Code VSIX file in the build directory
+latest_vsix=$(ls -t ./build/lumina-code-*.vsix | head -n1)
 
 if [ -z "$latest_vsix" ]; then
     echo "No VSIX file found in build directory"
@@ -14,5 +14,5 @@ fi
 # Create e2e/vsix directory if it doesn't exist
 mkdir -p "./e2e/vsix"
 
-# Copy the file to e2e directory with fixed name
+# Keep the historical fixed filename expected by the E2E harness
 cp "$latest_vsix" "./e2e/vsix/continue.vsix"

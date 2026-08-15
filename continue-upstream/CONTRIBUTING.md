@@ -1,5 +1,8 @@
 # Contributing to Continue
 
+> [!NOTE]
+> This is the inherited upstream contribution guide. For Lumina Code setup, VSIX packaging, issue reporting, and project governance, use the [root contribution guide](../CONTRIBUTING.md) and the [Lumina Code installation guide](../docs/INSTALLATION_AND_VSIX.md).
+
 ## Table of Contents
 
 - [Contributing to Continue](#contributing-to-continue)

@@ -1,9 +1,10 @@
 const { exec } = require("child_process");
 const fs = require("fs");
 
-const version = JSON.parse(
+const manifest = JSON.parse(
   fs.readFileSync("./package.json", { encoding: "utf-8" }),
-).version;
+);
+const { name, version } = manifest;
 
 const args = process.argv.slice(2);
 let target;
@@ -31,6 +32,6 @@ exec(command, (error) => {
     throw error;
   }
   console.log(
-    `vsce package completed - extension created at extensions/vscode/build/continue-${version}.vsix`,
+    `vsce package completed - ${name} ${version} was created in extensions/vscode/build`,
   );
 });

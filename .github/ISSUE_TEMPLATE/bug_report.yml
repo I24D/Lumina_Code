@@ -52,11 +52,14 @@ body:
     id: environment
     attributes:
       label: Entorno
-      description: Incluye Windows, VS Code, Node.js y cualquier runtime relacionado.
+      description: Incluye Windows, VS Code, Node.js, el método de ejecución y cualquier runtime relacionado.
       placeholder: |
         Windows 11 24H2
         VS Code 1.xx
-        Node.js 22.x
+        Node.js 20.20.1
+        Método: Development Host o VSIX local
+        Target: win32-x64
+        Rust/Cargo: versión, si es un fallo de build
     validations:
       required: true
 

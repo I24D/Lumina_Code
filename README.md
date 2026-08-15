@@ -95,45 +95,53 @@ La arquitectura se mantiene modular para separar razonamiento, memoria, voz y ac
 ## Instalación y requisitos / Installation and requirements
 
 > [!WARNING]
-> **El flujo siguiente es experimental y está dirigido a colaboradores.** No se recomienda distribuir binarios propios ni utilizar commits históricos como releases: pueden contener integraciones incompletas, rutas locales o decisiones que siguen bajo revisión.
+> **El flujo siguiente es experimental y está dirigido a colaboradores.** Todavía no hay una release, un VSIX firmado ni una publicación en Marketplace. Construye e instala solamente código que hayas revisado.
 
 Los requisitos provisionales del entorno de desarrollo son:
 
 | Requisito | Uso previsto |
 |---|---|
-| Windows 10/11 | Plataforma principal |
+| Windows 10/11 x64 | Plataforma de build documentada actualmente |
 | VS Code 1.70 o superior | Extension Development Host |
 | Git | Clonación y flujo de contribución |
 | Node.js 20.20.1 | Extensión y monorepo base; versión indicada en `continue-upstream/.nvmrc` |
-| Node.js 22 | Bridges TypeScript opcionales que usan type stripping nativo |
-| Rust toolchain | Aplicación nativa Start Talk basada en Tauri |
+| Rust `stable-msvc` | Aplicación nativa Start Talk basada en Tauri |
+| Microsoft C++ Build Tools y WebView2 | Requisitos de Tauri sobre Windows |
+| Node.js 22 | Bridges TypeScript opcionales; no se usa para empaquetar la extensión |
 | Python | Sidecars opcionales para ciertas integraciones Windows |
 
-### Abrir la extensión en modo desarrollador
+### Preparar el proyecto y abrirlo en modo desarrollador
 
 ```powershell
 git clone https://github.com/I24D/Lumina_Code.git
-cd Lumina_Code\continue-upstream
+cd Lumina_Code\Start-talk
+npm install
+npm run tauri build -- --no-bundle
+cd ..\continue-upstream
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-dependencies.ps1
 cd ..
 powershell -NoProfile -ExecutionPolicy Bypass -File .\ABRIR_LUMINA_CODE_DEV.ps1
 ```
 
-El instalador de dependencias compila varias partes del monorepo y puede tardar. El launcher abre un **VS Code Extension Development Host aislado** y levanta la interfaz de desarrollo en `127.0.0.1:5174`; no reemplaza tu instalación normal de VS Code.
+Start Talk debe compilarse primero porque su ejecutable se incluye dentro del VSIX. `install-dependencies.ps1` no es una comprobación pasiva: instala dependencias, compila varios módulos y genera un primer paquete. El proceso necesita red, puede tardar y todavía no ha sido validado desde una máquina Windows limpia.
+
+El launcher abre un **VS Code Extension Development Host aislado** y levanta la interfaz de desarrollo en `127.0.0.1:5174`; no reemplaza tu instalación normal de VS Code.
 
 Las automatizaciones que interactúan con aplicaciones personales permanecen desactivadas por defecto en el flujo público. Cualquier activación debe ser consciente, explícita y precedida por una revisión de sus permisos.
 
-### Compilar Start Talk
+### Generar o instalar el VSIX
 
-Start Talk es una aplicación Tauri separada. Requiere Node.js, npm y Rust:
+Después de preparar el proyecto, el artefacto se genera desde `continue-upstream/extensions/vscode` con:
 
 ```powershell
-cd Start-talk
-npm install
-npm run tauri build
+cd continue-upstream\extensions\vscode
+npm run package -- --target win32-x64
+Get-ChildItem .\build\*.vsix
 ```
 
-Después de compilarla, ábrela mediante el comando **Lumina Code: Start Talk (orbe de escritorio)** dentro del Development Host. Ejecutar el `.exe` directamente omite el puente de comunicación con Lumina Code.
+Consulta la guía completa de [instalación, generación e instalación del VSIX](docs/INSTALLATION_AND_VSIX.md). Incluye verificaciones, ubicación del artefacto, instalación desde la interfaz o la CLI de VS Code, limitaciones y errores frecuentes.
+
+Después de instalar o abrir la extensión, inicia el orbe mediante **Lumina Code: Start Talk (orbe de escritorio)**. Ejecutar `start-talk.exe` directamente omite el puente de comunicación con Lumina Code.
 
 Los componentes avanzados tienen documentación propia:
 

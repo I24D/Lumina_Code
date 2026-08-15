@@ -32,21 +32,23 @@ El proyecto no publicará un árbol de código solamente para poder decir que es
 
 ## Fase 2: Snapshot reproducible de desarrollo
 
-**Estado: planificada**
+**Estado: en progreso**
 
 - [ ] Publicar la extensión de VS Code y sus dependencias necesarias.
-- [ ] Documentar instalación de Node.js, VS Code y toolchains opcionales.
-- [ ] Proporcionar un launcher de desarrollo sin rutas específicas del autor.
+- [x] Documentar instalación de Node.js, VS Code y toolchains opcionales.
+- [x] Documentar generación e instalación manual del VSIX para Windows x64.
+- [x] Proporcionar un launcher de desarrollo sin rutas específicas del autor.
 - [ ] Añadir verificaciones de salud y diagnóstico.
 - [ ] Publicar pruebas enfocadas para los contratos compartidos.
 - [ ] Validar el flujo desde un equipo Windows limpio.
 
 ## Fase 3: Start Talk y runtime Windows
 
-**Estado: planificada**
+**Estado: en progreso**
 
 - [ ] Documentar el protocolo entre la extensión y el orbe nativo.
-- [ ] Publicar instrucciones reproducibles para Tauri/Rust.
+- [x] Documentar requisitos y comandos de build para Tauri/Rust.
+- [ ] Validar la compilación de Start Talk desde un equipo Windows limpio.
 - [ ] Estabilizar reconexión, dispositivos de audio y estados de error.
 - [ ] Documentar permisos y límites del Windows bridge.
 - [ ] Añadir pruebas de acciones permitidas y bloqueadas.

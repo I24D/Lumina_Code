@@ -1,0 +1,16 @@
+Lumina Code VS Code Extension
+Copyright 2026 I24D and Lumina Code contributors
+
+This extension is based in part on software from the Continue project:
+
+    Continue
+    Copyright 2023-2026 Continue Dev, Inc.
+    https://github.com/continuedev/continue
+
+Continue is distributed under the Apache License, Version 2.0.
+Lumina Code includes independent modifications. The Continue name and related
+marks belong to their respective owners. No endorsement by or affiliation with
+Continue Dev, Inc. is implied.
+
+The Apache License is provided in LICENSE.txt. Additional third-party software
+included in the package remains subject to its own licenses and notices.

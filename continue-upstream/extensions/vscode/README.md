@@ -1,54 +1,47 @@
-<div align="center">
+<p align="center">
+  <img src="media/lumina-icon.png" alt="Lumina Code" width="128">
+</p>
 
-![Continue logo](media/readme.png)
+<h1 align="center">Lumina Code</h1>
 
-<div align="center">
+<p align="center">
+  <strong>IA que trabaja a tu lado.</strong><br>
+  <em>Windows-first AI coding agent with voice, memory, MCP, and responsible tools.</em>
+</p>
 
-<a target="_blank" href="https://opensource.org/licenses/Apache-2.0" style="background:none">
-    <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" style="height: 22px;" />
-</a>
-<a target="_blank" href="https://docs.continue.dev" style="background:none">
-    <img src="https://img.shields.io/badge/Continue-docs-%23BE1B55.svg?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNiAyNCIgZmlsbD0id2hpdGUiPgogIDxwYXRoIGQ9Ik0yMC41Mjg2IDMuMjY4MTFMMTkuMTUxMiA1LjY1Njk0TDIyLjYzMjggMTEuNjg0OUMyMi42NTgyIDExLjczMDYgMjIuNjczNSAxMS43ODY2IDIyLjY3MzUgMTEuODM3NEMyMi42NzM1IDExLjg4ODIgMjIuNjU4MiAxMS45NDQxIDIyLjYzMjggMTEuOTg5OUwxOS4xNTEyIDE4LjAyMjlMMjAuNTI4NiAyMC40MTE3TDI1LjQ3OTEgMTEuODM3NEwyMC41Mjg2IDMuMjYzMDNWMy4yNjgxMVpNMTguNjE3NiA1LjM0NjlMMTkuOTk1IDIuOTU4MDdIMTcuMjQwMkwxNS44NjI4IDUuMzQ2OUgxOC42MjI3SDE4LjYxNzZaTTE1Ljg1NzcgNS45NjY5N0wxOS4wNzUgMTEuNTMyNEgyMS44Mjk4TDE4LjYxNzYgNS45NjY5N0gxNS44NTc3Wk0xOC42MTc2IDE3LjcxNzlMMjEuODI5OCAxMi4xNDc0SDE5LjA3NUwxNS44NTc3IDE3LjcxNzlIMTguNjE3NlpNMTUuODU3NyAxOC4zMzhMMTcuMjM1MSAyMC43MTY3SDE5Ljk4OTlMMTguNjEyNSAxOC4zMzhIMTUuODUyNkgxNS44NTc3Wk02LjUyMDk4IDIxLjMwNjNDNi40NjUwNyAyMS4zMDYzIDYuNDE0MjQgMjEuMjkxIDYuMzY4NSAyMS4yNjU2QzYuMzIyNzYgMjEuMjQwMiA2LjI4MjA5IDIxLjE5OTUgNi4yNTY2OCAyMS4xNTM4TDIuNzcwMDIgMTUuMTIwN0gwLjAxNTI0ODJMNC45NjU3IDIzLjY5SDE0Ljg2MTVMMTMuNDg0MSAyMS4zMDYzSDYuNTI2MDZINi41MjA5OFpNMTQuMDE3OCAyMC45OTYyTDE1LjM5NTIgMjMuMzhMMTYuNzcyNiAyMC45OTExTDE1LjM5NTIgMTguNjAyM0wxNC4wMTc4IDIwLjk5MTFWMjAuOTk2MlpNMTQuODYxNSAxOC4yOTc0SDguNDM3MTJMNy4wNTk3MyAyMC42ODYySDEzLjQ4NDFMMTQuODYxNSAxOC4yOTc0Wk03Ljg5ODM2IDE3Ljk5MjRMNC42ODEwOCAxMi40MjE5TDMuMzAzNjkgMTQuODEwN0w2LjUyMDk4IDIwLjM4MTJMNy44OTgzNiAxNy45OTI0Wk0wLjAxMDE2NTQgMTQuNTAwN0gyLjc2NDk0TDQuMTQyMzIgMTIuMTExOEgxLjM5MjYzTDAuMDEwMTY1NCAxNC41MDA3Wk02LjI0MTQzIDIuNTQxM0M2LjI2Njg1IDIuNDk1NTYgNi4zMDc1MSAyLjQ1NDkgNi4zNTMyNSAyLjQyOTQ4QzYuMzk5IDIuNDA0MDcgNi40NTQ5IDIuMzg4ODIgNi41MDU3MyAyLjM4ODgySDEzLjQ3NEwxNC44NTE0IDBINC45NTA0NUwwIDguNTc0MzVIMi43NTQ3N0w2LjIzMTI3IDIuNTQ2MzhMNi4yNDE0MyAyLjU0MTNaTTQuMTQyMzIgMTEuNTc4MkwyLjc2NDk0IDkuMTg5MzRIMC4wMTAxNjU0TDEuMzg3NTUgMTEuNTc4Mkg0LjE0MjMyWk02LjUxMDgxIDMuMzEzODZMMy4yOTg2MSA4Ljg3OTNMNC42NzU5OSAxMS4yNjgxTDcuODg4MiA1LjcwMjY4TDYuNTEwODEgMy4zMTM4NlpNMTMuNDc5MSAzLjAwMzgySDcuMDQ0NDhMOC40MjE4NyA1LjM5MjY0SDE0Ljg1NjRMMTMuNDc5MSAzLjAwMzgyWk0xNS4zOTUyIDUuMDgyNkwxNi43Njc1IDIuNjk4ODZMMTUuMzk1MiAwLjMxMDAzOEwxNC4wMTc4IDIuNjkzNzhMMTUuMzk1MiA1LjA4MjZaIi8+Cjwvc3ZnPg==" style="height: 22px;" />
-</a>
+> [!IMPORTANT]
+> Lumina Code se encuentra en desarrollo activo. Los VSIX generados desde este repositorio son builds experimentales para colaboradores; todavía no existe una release estable ni una publicación oficial en Marketplace.
 
-<p></p>
+## Capacidades en desarrollo
 
-</div>
+- conversación y trabajo asistido sobre código dentro de VS Code;
+- voz nativa mediante Start Talk;
+- memoria y continuidad entre sesiones;
+- modelos locales o remotos según la configuración;
+- herramientas para archivos, terminal y contexto del proyecto;
+- interoperabilidad mediante MCP y puentes modulares.
 
-<h1 align="center">Continue</h1>
+## Instalación para colaboradores
 
-<div align="center">
+La extensión incluye componentes nativos y no puede empaquetarse correctamente con un `vsce package` aislado. Start Talk debe existir antes del preempaquetado.
 
-**[Source-controlled AI checks, enforceable in CI](https://docs.continue.dev)**
+Consulta la guía oficial del repositorio:
 
-</div>
+- [Instalación y generación del VSIX](https://github.com/I24D/Lumina_Code/blob/main/docs/INSTALLATION_AND_VSIX.md)
+- [Estado del proyecto](https://github.com/I24D/Lumina_Code#estado-del-proyecto--project-status)
+- [Contribuir](https://github.com/I24D/Lumina_Code/blob/main/CONTRIBUTING.md)
+- [Reportar un problema](https://github.com/I24D/Lumina_Code/issues/new/choose)
 
-## VS Code Agent
+Una vez abierta o instalada la extensión, Start Talk debe iniciarse con el comando **Lumina Code: Start Talk (orbe de escritorio)**. Abrir el ejecutable directamente omite el puente de sesión creado por la extensión.
 
-[Agent](https://docs.continue.dev/ide-extensions/agent/quick-start) to work on development tasks together with AI
+## Seguridad
 
-![agent](docs/images/agent.gif)
+Una extensión de VS Code posee los mismos permisos del editor. Revisa el commit que vas a compilar, no agregues secretos al árbol y utiliza únicamente VSIX creados por ti o provenientes de una release verificable. Consulta la [política de seguridad](https://github.com/I24D/Lumina_Code/blob/main/SECURITY.md).
 
-## VS Code Chat
+## Atribución
 
-[Chat](https://docs.continue.dev/ide-extensions/chat/quick-start) to ask general questions and clarify code sections
+Lumina Code está basado en parte en [Continue](https://github.com/continuedev/continue), distribuido bajo Apache License 2.0. Lumina Code contiene modificaciones independientes y no está respaldado ni afiliado oficialmente con Continue Dev, Inc. Consulta `NOTICE` para la atribución incluida en el paquete.
 
-![chat](docs/images/chat.gif)
+## Licencia
 
-## VS Code Edit
-
-[Edit](https://docs.continue.dev/ide-extensions/edit/quick-start) to modify a code section without leaving your current file
-
-![edit](docs/images/edit.gif)
-
-## VS Code Autocomplete
-
-[Autocomplete](https://docs.continue.dev/ide-extensions/autocomplete/quick-start) to receive inline code suggestions as you type
-
-![autocomplete](docs/images/autocomplete.gif)
-
-</div>
-
-## License
-
-[Apache 2.0 © 2023-2025 Continue Dev, Inc.](./LICENSE)
+[Apache License 2.0](LICENSE.txt)

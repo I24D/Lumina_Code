@@ -22,6 +22,8 @@ Durante la estabilización del snapshot público, se aceptan especialmente:
 
 Los pull requests de código son bienvenidos cuando están vinculados a un issue y mantienen un alcance pequeño y verificable. Para cambios amplios, nuevas integraciones o decisiones de arquitectura, abre primero una Discussion. Algunos módulos todavía dependen de configuración no documentada y pueden requerir trabajo previo antes de aceptar cambios. Consulta [ROADMAP.md](ROADMAP.md) para conocer el avance.
 
+Para preparar el entorno, generar un VSIX o instalarlo localmente, utiliza la guía de [instalación y empaquetado](docs/INSTALLATION_AND_VSIX.md). Al reportar un fallo de build, indica el commit, las versiones de Node.js, npm, Rust y VS Code, el target utilizado y el primer error real del proceso.
+
 ## Reportar un problema
 
 Un buen reporte permite reproducir el problema sin adivinar. Incluye:
