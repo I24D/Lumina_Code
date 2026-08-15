@@ -16,7 +16,10 @@ import {
   VideoCameraIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import type { StartTalkTranslationConfig } from "core/startTalk";
+import type {
+  StartTalkTranslationConfig,
+  StartTalkVideoSourceInfo,
+} from "core/startTalk";
 import {
   PointerEvent as ReactPointerEvent,
   useCallback,
@@ -741,6 +744,149 @@ const SpeakerLabel = styled.div`
   text-align: right;
 `;
 
+/**
+ * Vista previa de lo que Lumina está mirando. Existe por confianza: compartir
+ * la pantalla es invasivo, así que el usuario tiene que poder comprobar de un
+ * vistazo qué se está enviando y desde cuándo.
+ */
+const VisionCard = styled.section`
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 18;
+  display: grid;
+  width: 168px;
+  gap: 6px;
+  border: 1px solid var(--live-border-strong);
+  border-radius: 10px;
+  background: var(--live-surface-elevated);
+  box-shadow: 0 12px 32px rgba(8, 14, 22, 0.34);
+  padding: 8px;
+
+  @media (max-width: 360px) {
+    width: 130px;
+  }
+`;
+
+const VisionHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+`;
+
+const VisionTitle = styled.div<{ $tone: "live" | "starting" | "error" }>`
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  color: ${({ $tone }) =>
+    $tone === "error"
+      ? "var(--live-danger)"
+      : $tone === "live"
+        ? "var(--live-success)"
+        : "var(--live-muted)"};
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: 0.01em;
+`;
+
+const VisionDot = styled.span<{ $tone: "live" | "starting" | "error" }>`
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  ${({ $tone }) =>
+    $tone === "live"
+      ? "animation: liveVisionPulse 1.8s ease-in-out infinite;"
+      : ""}
+
+  @keyframes liveVisionPulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+`;
+
+const VisionThumb = styled.img`
+  display: block;
+  width: 100%;
+  border: 1px solid var(--live-border);
+  border-radius: 6px;
+  background: var(--live-control);
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+`;
+
+const VisionPlaceholder = styled.div`
+  display: grid;
+  width: 100%;
+  border: 1px dashed var(--live-border);
+  border-radius: 6px;
+  background: var(--live-control);
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  color: var(--live-muted);
+  font-size: 10px;
+  text-align: center;
+  padding: 0 6px;
+`;
+
+const VisionMeta = styled.div`
+  color: var(--live-muted);
+  font-size: 9px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+`;
+
+/** Selector de monitor/cámara, anclado sobre el botón de compartir. */
+const SourceMenu = styled.div`
+  position: absolute;
+  bottom: 78px;
+  left: 14px;
+  z-index: 22;
+  display: grid;
+  width: min(260px, calc(100% - 28px));
+  gap: 2px;
+  border: 1px solid var(--live-border-strong);
+  border-radius: 10px;
+  background: var(--live-surface-elevated);
+  box-shadow: 0 16px 42px rgba(8, 14, 22, 0.34);
+  padding: 6px;
+`;
+
+const SourceMenuTitle = styled.div`
+  color: var(--live-muted);
+  font-size: 9px;
+  font-weight: 720;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 6px;
+`;
+
+const SourceMenuItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--live-text);
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+  padding: 7px 8px;
+
+  &:hover {
+    background: var(--live-control-hover);
+  }
+`;
+
 const DelegationApprovalCard = styled.section`
   position: absolute;
   right: 14px;
@@ -1226,6 +1372,10 @@ export function LiveConversationOverlay({
   const [exportState, setExportState] = useState<"idle" | "done" | "empty">(
     "idle",
   );
+  const [videoSources, setVideoSources] = useState<StartTalkVideoSourceInfo[]>(
+    [],
+  );
+  const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const {
     approveDelegation,
     assistantTranscript,
@@ -1238,9 +1388,11 @@ export function LiveConversationOverlay({
     toolActivities,
     userTranscript,
     videoSource,
+    videoState,
     startScreenShare,
     startCamera,
     stopVideo,
+    listVideoSources,
     micLevel,
     speaker,
     isMuted,
@@ -1502,6 +1654,61 @@ export function LiveConversationOverlay({
     () => getStatusText(status, errorMessage),
     [errorMessage, status],
   );
+
+  const isSharingScreen =
+    videoSource === "screen" ||
+    (videoState.source === "screen" && videoState.phase === "starting");
+  const visionTone: "live" | "starting" | "error" =
+    videoState.phase === "error"
+      ? "error"
+      : videoState.phase === "live" && videoState.framesSent > 0
+        ? "live"
+        : "starting";
+  // Solo decimos "está viendo" cuando el modelo ha recibido un fotograma real.
+  const visionLabel =
+    videoState.phase === "error"
+      ? "Sin visión"
+      : visionTone === "live"
+        ? videoState.source === "camera"
+          ? "Te está viendo"
+          : "Viendo tu pantalla"
+        : "Preparando…";
+
+  /**
+   * Compartir pantalla: con un solo monitor arranca directo; con varios abre el
+   * selector, porque capturar la unión de todos produce una panorámica en la
+   * que Lumina no puede leer nada.
+   */
+  const handleToggleScreenShare = useCallback(async () => {
+    if (isSharingScreen) {
+      setSourceMenuOpen(false);
+      await stopVideo();
+      return;
+    }
+
+    if (sourceMenuOpen) {
+      setSourceMenuOpen(false);
+      return;
+    }
+
+    const sources = await listVideoSources();
+    const screens = sources.filter((source) => source.kind === "screen");
+    setVideoSources(screens);
+
+    if (screens.length > 1) {
+      setSourceMenuOpen(true);
+      return;
+    }
+
+    await startScreenShare(screens[0]);
+  }, [
+    isSharingScreen,
+    listVideoSources,
+    sourceMenuOpen,
+    startScreenShare,
+    stopVideo,
+  ]);
+
   const selectedThinkingOption =
     thinkingOptions.find((option) => option.level === thinkingLevel) ??
     thinkingOptions[0];
@@ -1959,6 +2166,71 @@ export function LiveConversationOverlay({
           </AdvancedSheet>
         ) : null}
 
+        {sourceMenuOpen ? (
+          <SourceMenu role="menu" aria-label="Elegir qué compartir">
+            <SourceMenuTitle>¿Qué quieres que vea Lumina?</SourceMenuTitle>
+            {videoSources.map((source) => (
+              <SourceMenuItem
+                key={source.id}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setSourceMenuOpen(false);
+                  void startScreenShare(source);
+                }}
+              >
+                {source.label}
+              </SourceMenuItem>
+            ))}
+            <SourceMenuItem
+              type="button"
+              role="menuitem"
+              onClick={() => setSourceMenuOpen(false)}
+            >
+              Cancelar
+            </SourceMenuItem>
+          </SourceMenu>
+        ) : null}
+
+        {videoState.phase !== "stopped" ? (
+          <VisionCard aria-live="polite">
+            <VisionHeader>
+              <VisionTitle $tone={visionTone}>
+                <VisionDot $tone={visionTone} />
+                {visionLabel}
+              </VisionTitle>
+              <IconButton
+                type="button"
+                $small
+                title="Dejar de compartir"
+                aria-label="Dejar de compartir"
+                onClick={() => void stopVideo()}
+              >
+                <XMarkIcon />
+              </IconButton>
+            </VisionHeader>
+            {videoState.preview ? (
+              <VisionThumb
+                src={`data:image/jpeg;base64,${videoState.preview}`}
+                alt="Vista previa de lo que Lumina está viendo"
+              />
+            ) : (
+              <VisionPlaceholder>
+                {videoState.phase === "error"
+                  ? "No se pudo capturar"
+                  : "Capturando…"}
+              </VisionPlaceholder>
+            )}
+            <VisionMeta>
+              {videoState.phase === "error"
+                ? (videoState.message ?? "La captura falló.")
+                : `${videoState.label ?? "Pantalla"} · ${videoState.framesSent} ${
+                    videoState.framesSent === 1 ? "fotograma" : "fotogramas"
+                  }`}
+            </VisionMeta>
+          </VisionCard>
+        ) : null}
+
         <Dock>
           <Controls>
             <IconButton
@@ -1980,22 +2252,19 @@ export function LiveConversationOverlay({
             <IconButton
               type="button"
               title={
-                videoSource === "screen"
+                isSharingScreen
                   ? "Dejar de compartir pantalla"
-                  : "Compartir pantalla"
+                  : "Compartir pantalla con Lumina"
               }
               aria-label={
-                videoSource === "screen"
+                isSharingScreen
                   ? "Dejar de compartir pantalla"
-                  : "Compartir pantalla"
+                  : "Compartir pantalla con Lumina"
               }
-              $active={videoSource === "screen"}
+              aria-pressed={isSharingScreen}
+              $active={isSharingScreen}
               disabled={!isActive}
-              onClick={() =>
-                videoSource === "screen"
-                  ? void stopVideo()
-                  : void startScreenShare()
-              }
+              onClick={() => void handleToggleScreenShare()}
             >
               <ArrowUpTrayIcon />
             </IconButton>

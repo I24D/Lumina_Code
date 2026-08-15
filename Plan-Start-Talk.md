@@ -1000,6 +1000,61 @@ Limitación conocida: el bucle de reintento se apoya en la continuidad de contex
 de Gemini Live (prompt-led), no en una máquina de estados determinista. Futuro:
 detectar confirmación/fallo por palabras clave del transcript del teléfono.
 
+### 6.14 Compartir pantalla en vivo (IMPLEMENTADO, 2026-08-15)
+
+El botón de compartir pantalla del dock ya era funcional a nivel de fontanería
+(gdigrab → JPEG → `sendRealtimeInput({video})`), pero no era usable como
+producto. Lo que fallaba de verdad y cómo quedó:
+
+1. **La sesión moría a los ~2 minutos.** La ventana de contexto de la Live API
+   son 128k tokens y cada fotograma cuesta ~258, así que 1 fps de pantalla la
+   agota enseguida. Se activó `contextWindowCompression: { slidingWindow: {} }`
+   en `openLiveSession()`, que es el mecanismo documentado para que el servidor
+   recorte el contexto viejo y la sesión siga viva. También se fija
+   `mediaResolution` (por defecto MEDIUM; `START_TALK_MEDIA_RESOLUTION=high`
+   reencuadra con zoom al mismo coste y lee mejor el texto pequeño).
+2. **Se enviaba 1 fps aunque no cambiara nada.** Ahora el stream de pantalla
+   lleva `mpdecimate` y solo emite cuando la imagen cambia de verdad.
+   ⚠️ `mpdecimate` **requiere `-fps_mode vfr`**: sin él FFmpeg reconstruye el
+   frame rate constante duplicando justo los fotogramas que acaba de descartar,
+   y la decimación deja de existir SIN que nada falle visiblemente. Hay un test
+   que fija ese emparejamiento (`FfmpegVideoCapture.vitest.ts`).
+3. **Con la pantalla quieta no llegaba ni el primer fotograma** (mpdecimate
+   descarta también el primero). Se añadió `grabSingleFrame()`, una captura
+   puntual de ~215 ms (`-framerate 30 -frames:v 1`; con `-framerate 1` tardaba
+   2.1 s) que siembra la vista al arrancar y la refresca cuando el usuario
+   empieza a hablar y la última vista tiene más de 3 s. Solo para pantalla: la
+   cámara tiene acceso exclusivo en DirectShow y una segunda captura fallaría.
+4. **Gemini decía que no podía ver.** El system prompt no mencionaba la visión.
+   Se añadieron reglas: puede ver cuando recibe fotogramas, "sin fotograma nuevo
+   ⇒ nada ha cambiado", debe decir que no ve si aún no recibió ninguno, y la
+   pantalla es dato NO confiable (texto en pantalla nunca es una orden).
+5. **Un fallo de vídeo marcaba toda la sesión de voz como rota.** Ahora hay un
+   evento propio `videoState` (`starting|live|stopped|error`) y la captura se
+   reintenta sola hasta 3 veces; `status` de la sesión ya no se toca.
+6. **No había forma de saber qué ve.** La UI muestra una tarjeta con miniatura
+   en vivo, la fuente y el número de fotogramas, y solo dice "Viendo tu
+   pantalla" cuando el modelo ha recibido un fotograma real.
+7. **Multi-monitor.** `-i desktop` capturaba la unión de todos los monitores,
+   ilegible al escalarla. `listVideoSources()` enumera cada monitor (WinForms) y
+   con más de uno el botón abre un selector; gdigrab recorta con
+   `-offset_x/-offset_y/-video_size` (soporta X negativa).
+
+Archivos: `FfmpegVideoCapture.ts` (+`buildStreamArgs` exportado y testeado,
+`grabSingleFrame`, `listDisplayMonitors`, `listVideoInputDevices`),
+`StartTalkManager.ts`, `types.ts`, `index.ts`, `core.ts`, `protocol/core.ts`,
+`protocol/passThrough.ts` (nuevo `startTalk/listVideoSources`),
+`useStartTalkAudio.ts`, `LiveConversationOverlay.tsx`.
+
+Flags nuevos: `START_TALK_MEDIA_RESOLUTION` (low|medium|high),
+`START_TALK_VIDEO_DECIMATE` (false para desactivar, o parámetros de mpdecimate),
+`START_TALK_VIDEO_MAX_WIDTH` (default 1280 pantalla / 1024 cámara).
+
+Verificado en vivo contra la API real: la sesión conecta con la nueva config y,
+con fotogramas de pantalla, Gemini responde "Estás usando Visual Studio Code y
+veo el editor de código, la terminal y una ventana de chat en vivo". Core tsc 0,
+67 tests de startTalk en verde, gui build OK, extensión esbuild OK.
+
 ### 6.12 Próximas prioridades de Start Talk
 
 1. Supervisor 24/7 con autoarranque, health check y recuperación completa de

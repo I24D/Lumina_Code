@@ -6,7 +6,9 @@ import type {
   StartTalkSoundCategory,
   StartTalkTranscriptEntry,
   StartTalkTranslationConfig,
+  StartTalkVideoPhase,
   StartTalkVideoSource,
+  StartTalkVideoSourceInfo,
 } from "core/startTalk";
 import { getStartTalkRetryDelayMs } from "core/startTalk/resiliencePolicy";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -119,6 +121,20 @@ export interface SpeakerInfo {
   score?: number;
 }
 
+/** Lo que la UI sabe del stream de vídeo, siempre según lo que reporta core. */
+export interface StartTalkVideoStatus {
+  phase: StartTalkVideoPhase;
+  source?: StartTalkVideoSource;
+  sourceId?: string;
+  label?: string;
+  /** Fotogramas que el modelo ha recibido de verdad. 0 ⇒ todavía no ve nada. */
+  framesSent: number;
+  lastFrameAt?: number;
+  /** Miniatura JPEG (base64) del último fotograma, para la vista previa. */
+  preview?: string;
+  message?: string;
+}
+
 export function useStartTalkAudio({
   isOpen,
   model,
@@ -226,6 +242,12 @@ export function useStartTalkAudio({
   const [videoSource, setVideoSource] = useState<StartTalkVideoSource | null>(
     null,
   );
+  // Estado REAL del stream, reportado por core. La UI no debe decir que Lumina
+  // está viendo la pantalla hasta que haya llegado un fotograma de verdad.
+  const [videoState, setVideoState] = useState<StartTalkVideoStatus>({
+    phase: "stopped",
+    framesSent: 0,
+  });
   const [micLevel, setMicLevel] = useState(0);
   const [speaker, setSpeaker] = useState<SpeakerInfo | null>(null);
   const [lastSoundEvent, setLastSoundEvent] =
@@ -384,6 +406,7 @@ export function useStartTalkAudio({
     sessionIdRef.current = null;
     setStatus("idle");
     setVideoSource(null);
+    setVideoState({ phase: "stopped", framesSent: 0 });
 
     if (sessionId) {
       await ideMessenger.request("startTalk/stop", { sessionId });
@@ -1012,6 +1035,29 @@ export function useStartTalkAudio({
         return;
       }
 
+      if (event.type === "videoState") {
+        // A propósito NO toca `status`: que se caiga la captura de pantalla no
+        // puede dejar toda la sesión de voz marcada como rota.
+        setVideoState((previous) => ({
+          phase: event.phase,
+          source: event.source,
+          sourceId: event.sourceId,
+          label: event.label,
+          framesSent: event.framesSent ?? 0,
+          lastFrameAt: event.lastFrameAt,
+          // Los fotogramas llegan sin miniatura casi siempre (va limitada);
+          // conservamos la última para que la vista previa no parpadee.
+          preview: event.preview ?? previous.preview,
+          message: event.message,
+        }));
+        setVideoSource(
+          event.phase === "stopped" || event.phase === "error"
+            ? null
+            : (event.source ?? null),
+        );
+        return;
+      }
+
       if (event.type === "status") {
         setStatus(event.status === "closed" ? "idle" : event.status);
         if (event.status === "idle" || event.status === "listening") {
@@ -1186,19 +1232,49 @@ export function useStartTalkAudio({
     ],
   );
 
-  const startScreenShare = useCallback(async () => {
-    const sessionId = sessionIdRef.current;
-    if (!sessionId) {
-      return;
-    }
-    const res = await ideMessenger.request("startTalk/startVideo", {
-      sessionId,
-      source: "screen",
-    });
-    if (res.status !== "error") {
-      setVideoSource("screen");
-    }
+  /** Monitores y cámaras entre los que el usuario puede elegir. */
+  const listVideoSources = useCallback(async (): Promise<
+    StartTalkVideoSourceInfo[]
+  > => {
+    const res = await ideMessenger.request(
+      "startTalk/listVideoSources",
+      undefined,
+    );
+    return res.status === "error" ? [] : (res.content ?? []);
   }, [ideMessenger]);
+
+  const startScreenShare = useCallback(
+    async (target?: StartTalkVideoSourceInfo) => {
+      const sessionId = sessionIdRef.current;
+      if (!sessionId) {
+        return;
+      }
+      // "starting" ya, para que el botón responda al instante; core corrige a
+      // "live" en cuanto el modelo recibe el primer fotograma, o a "error".
+      setVideoState({
+        phase: "starting",
+        source: "screen",
+        sourceId: target?.id,
+        label: target?.label ?? "Pantalla",
+        framesSent: 0,
+      });
+      const res = await ideMessenger.request("startTalk/startVideo", {
+        sessionId,
+        source: "screen",
+        region: target?.region,
+        sourceId: target?.id,
+      });
+      if (res.status === "error") {
+        setVideoState({
+          phase: "error",
+          source: "screen",
+          framesSent: 0,
+          message: res.error,
+        });
+      }
+    },
+    [ideMessenger],
+  );
 
   const startCamera = useCallback(
     async (deviceName?: string) => {
@@ -1206,13 +1282,24 @@ export function useStartTalkAudio({
       if (!sessionId) {
         return;
       }
+      setVideoState({
+        phase: "starting",
+        source: "camera",
+        label: deviceName ?? "Cámara",
+        framesSent: 0,
+      });
       const res = await ideMessenger.request("startTalk/startVideo", {
         sessionId,
         source: "camera",
         deviceName,
       });
-      if (res.status !== "error") {
-        setVideoSource("camera");
+      if (res.status === "error") {
+        setVideoState({
+          phase: "error",
+          source: "camera",
+          framesSent: 0,
+          message: res.error,
+        });
       }
     },
     [ideMessenger],
@@ -1221,6 +1308,7 @@ export function useStartTalkAudio({
   const stopVideo = useCallback(async () => {
     const sessionId = sessionIdRef.current;
     setVideoSource(null);
+    setVideoState({ phase: "stopped", framesSent: 0 });
     if (sessionId) {
       await ideMessenger.request("startTalk/stopVideo", { sessionId });
     }
@@ -1439,9 +1527,11 @@ export function useStartTalkAudio({
     toolActivities,
     userTranscript,
     videoSource,
+    videoState,
     startScreenShare,
     startCamera,
     stopVideo,
+    listVideoSources,
     micLevel,
     speaker,
     lastSoundEvent,

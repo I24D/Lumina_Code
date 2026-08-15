@@ -20,6 +20,9 @@ export type {
   StartTalkToolActivityStatus,
   StartTalkToolResponseInput,
   StartTalkVideoFrameInput,
+  StartTalkVideoPhase,
+  StartTalkVideoRegion,
   StartTalkVideoSource,
+  StartTalkVideoSourceInfo,
   StartTalkVideoStartRequest,
 } from "./types.js";

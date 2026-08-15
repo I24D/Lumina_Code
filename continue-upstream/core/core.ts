@@ -921,6 +921,10 @@ export class Core {
       this.startTalkManager.sendVideoFrame(msg.data);
     });
 
+    on("startTalk/listVideoSources", async () => {
+      return this.startTalkManager.listVideoSources();
+    });
+
     on("index/forceReIndex", async ({ data }) => {
       const { config } = await this.configHandler.loadConfig();
       if (!config || config.disableIndexing) {

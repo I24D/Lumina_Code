@@ -148,12 +148,50 @@ export interface StartTalkToolResponseInput {
 
 export type StartTalkVideoSource = "screen" | "camera";
 
+/**
+ * Región de escritorio a capturar, en píxeles del escritorio virtual. Se usa
+ * para compartir UN monitor concreto en vez de la unión de todos (que en
+ * multi-monitor produce una imagen panorámica ilegible al escalarla).
+ */
+export interface StartTalkVideoRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Una fuente de vídeo elegible: un monitor concreto o una cámara. */
+export interface StartTalkVideoSourceInfo {
+  /** Identificador estable usado para volver a seleccionarla. */
+  id: string;
+  kind: StartTalkVideoSource;
+  label: string;
+  /** Solo para monitores: región del escritorio virtual que ocupa. */
+  region?: StartTalkVideoRegion;
+  /** Solo para monitores: true si es el monitor principal de Windows. */
+  primary?: boolean;
+}
+
 export interface StartTalkVideoStartRequest {
   sessionId: string;
   source: StartTalkVideoSource;
   /** Nombre del dispositivo de cámara (DirectShow) si source === "camera". */
   deviceName?: string;
+  /**
+   * Solo pantalla: recorta la captura a esta región. Si se omite, se captura
+   * el escritorio completo (todos los monitores).
+   */
+  region?: StartTalkVideoRegion;
+  /** Identificador de la fuente elegida (para reflejarlo en la UI). */
+  sourceId?: string;
 }
+
+/** Fase del stream de vídeo, para que la UI no mienta sobre lo que Lumina ve. */
+export type StartTalkVideoPhase =
+  | "starting"
+  | "live"
+  | "stopped"
+  | "error";
 
 /** Fotograma de vídeo (JPEG base64) provisto por el cliente, si aplica. */
 export interface StartTalkVideoFrameInput {
@@ -263,6 +301,27 @@ export type StartTalkCoreEvent =
       category: StartTalkSoundCategory;
       /** Confidence in [0, 1]. */
       confidence: number;
+    }
+  | {
+      // Estado real del stream de vídeo (pantalla o cámara). Va aparte de
+      // `error` a propósito: que se caiga la captura de pantalla NO debe dejar
+      // toda la sesión de voz marcada como rota en la UI.
+      type: "videoState";
+      sessionId: string;
+      phase: StartTalkVideoPhase;
+      source?: StartTalkVideoSource;
+      /** Identificador de la fuente elegida (monitor o cámara). */
+      sourceId?: string;
+      /** Etiqueta legible de la fuente ("Monitor 1", "HD Webcam"…). */
+      label?: string;
+      /** Fotogramas enviados al modelo desde que arrancó este stream. */
+      framesSent?: number;
+      /** Momento (epoch ms) del último fotograma que vio el modelo. */
+      lastFrameAt?: number;
+      /** Miniatura JPEG en base64 para la vista previa de la UI (throttled). */
+      preview?: string;
+      /** Causa del fallo cuando phase === "error". */
+      message?: string;
     }
   | {
       type: "error";

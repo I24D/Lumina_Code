@@ -60,6 +60,7 @@ import type {
   StartTalkToolResponseInput,
   StartTalkTranscriptEntry,
   StartTalkVideoFrameInput,
+  StartTalkVideoSourceInfo,
   StartTalkVideoStartRequest,
 } from "../startTalk/index.js";
 import { ContinueErrorReason } from "../util/errors";
@@ -322,6 +323,7 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "startTalk/startVideo": [StartTalkVideoStartRequest, void];
   "startTalk/stopVideo": [StartTalkSessionRequest, void];
   "startTalk/sendVideoFrame": [StartTalkVideoFrameInput, void];
+  "startTalk/listVideoSources": [undefined, StartTalkVideoSourceInfo[]];
   // Codebase indexing
   "index/setPaused": [boolean, void];
   "index/forceReIndex": [
