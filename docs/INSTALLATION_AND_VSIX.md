@@ -1,35 +1,35 @@
 # Instalación y generación del VSIX
 
-Esta guía documenta el flujo que existe actualmente en el código de Lumina Code. Está orientada a colaboradores que desean abrir la extensión en modo desarrollador, generar un VSIX para Windows x64 o instalar ese VSIX manualmente.
+Esta guía documenta el flujo oficial para abrir Lumina Code en modo desarrollador, generar un VSIX funcional para Windows x64 e instalarlo manualmente en VS Code.
 
 > [!WARNING]
-> Lumina Code continúa en desarrollo activo. No hay una release estable, un VSIX firmado ni una publicación oficial en Visual Studio Marketplace. El flujo se analizó a partir de los manifiestos y scripts del repositorio, pero todavía debe validarse de principio a fin en un equipo Windows limpio.
+> Lumina Code continúa en desarrollo activo, pero la extensión disponible desde el código fuente es estable y funcional. El VSIX se genera localmente: todavía no está firmado ni publicado en Visual Studio Marketplace.
 
 ## Estado actual
 
-| Elemento | Estado |
-|---|---|
-| Código fuente | Disponible en `main` |
-| Development Host | Launcher disponible para Windows |
-| Generación manual del VSIX | Implementada para colaboradores |
-| VSIX descargable desde Releases | No disponible |
-| Publicación en Marketplace | No disponible |
-| Build reproducible desde equipo limpio | Pendiente de validación |
-| Plataforma documentada | Windows 10/11 x64 |
+| Elemento                                 | Estado                                            |
+| ---------------------------------------- | ------------------------------------------------- |
+| Código fuente                            | Disponible en `main`                              |
+| Development Host                         | Verificado con launcher automatizado para Windows |
+| Generación manual del VSIX               | Disponible para usuarios y colaboradores          |
+| VSIX descargable desde Releases          | No disponible                                     |
+| Publicación en Marketplace               | No disponible                                     |
+| Preparación reproducible de dependencias | Implementada y validada en Windows x64            |
+| Plataforma documentada                   | Windows 10/11 x64                                 |
 
 ## Requisitos
 
-| Herramienta | Versión o uso |
-|---|---|
-| Git | Clonar y actualizar el repositorio |
-| Node.js | `20.20.1`, definido en `continue-upstream/.nvmrc` |
-| npm | Incluido con Node.js |
-| VS Code | `1.70` o posterior, según el manifiesto de la extensión |
-| Rust | Toolchain estable MSVC |
-| Microsoft C++ Build Tools | Carga de trabajo **Desktop development with C++** |
-| Microsoft Edge WebView2 | Runtime utilizado por Tauri |
-| PowerShell | Ejecución de los scripts Windows |
-| Conexión de red | Descarga de dependencias npm y binarios nativos |
+| Herramienta               | Versión o uso                                           |
+| ------------------------- | ------------------------------------------------------- |
+| Git                       | Clonar y actualizar el repositorio                      |
+| Node.js                   | `20.20.1`, definido en `continue-upstream/.nvmrc`       |
+| npm                       | Incluido con Node.js                                    |
+| VS Code                   | `1.70` o posterior, según el manifiesto de la extensión |
+| Rust                      | Toolchain estable MSVC                                  |
+| Microsoft C++ Build Tools | Carga de trabajo **Desktop development with C++**       |
+| Microsoft Edge WebView2   | Runtime utilizado por Tauri                             |
+| PowerShell                | Ejecución de los scripts Windows                        |
+| Conexión de red           | Descarga de dependencias npm y binarios nativos         |
 
 Tauri mantiene sus [requisitos oficiales para Windows](https://v2.tauri.app/start/prerequisites/). En Windows 10 actualizado y Windows 11, WebView2 normalmente ya está presente.
 
@@ -200,18 +200,18 @@ El proceso de preempaquetado prepara, copia y valida al menos:
 - modelos y archivos WASM requeridos por el contexto de código;
 - licencia y atribución del proyecto.
 
-El VSIX no convierte el snapshot actual en una release estable. Algunas funciones necesitan configuración de modelos o servicios que todavía no tiene un `.env.example` raíz unificado.
+El VSIX contiene una extensión funcional. El chat y el agente requieren configurar un proveedor de modelos, mientras que Start Talk requiere una clave independiente de Gemini. Algunas integraciones avanzadas también necesitan servicios o permisos opcionales.
 
 ## Errores frecuentes
 
-| Mensaje o síntoma | Causa probable | Comprobación |
-|---|---|---|
-| `Start Talk release binary was not found` | No se compiló el orbe antes del VSIX | Verifica `Start-talk\src-tauri\target\release\start-talk.exe` |
-| Error de linker o compilación Rust | Falta toolchain MSVC o C++ Build Tools | Ejecuta `rustc --version` y revisa los requisitos de Tauri |
-| La versión de Node no coincide | Se está usando otro runtime | Compara `node --version` con `.nvmrc` |
-| No aparece ningún `.vsix` | Falló prepackage o `vsce` | Busca el primer error y revisa `extensions\vscode\build` |
-| `code` no se reconoce | La CLI de VS Code no está en `PATH` | Instala desde la interfaz o corrige el PATH |
-| La extensión abre pero un modelo no responde | Falta configuración de runtime o proveedor | Revisa los logs antes de reportar el problema |
+| Mensaje o síntoma                            | Causa probable                             | Comprobación                                                  |
+| -------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------- |
+| `Start Talk release binary was not found`    | No se compiló el orbe antes del VSIX       | Verifica `Start-talk\src-tauri\target\release\start-talk.exe` |
+| Error de linker o compilación Rust           | Falta toolchain MSVC o C++ Build Tools     | Ejecuta `rustc --version` y revisa los requisitos de Tauri    |
+| La versión de Node no coincide               | Se está usando otro runtime                | Compara `node --version` con `.nvmrc`                         |
+| No aparece ningún `.vsix`                    | Falló prepackage o `vsce`                  | Busca el primer error y revisa `extensions\vscode\build`      |
+| `code` no se reconoce                        | La CLI de VS Code no está en `PATH`        | Instala desde la interfaz o corrige el PATH                   |
+| La extensión abre pero un modelo no responde | Falta configuración de runtime o proveedor | Revisa los logs antes de reportar el problema                 |
 
 ## Seguridad y procedencia
 
@@ -221,7 +221,7 @@ Las extensiones tienen los mismos permisos que VS Code. Antes de instalar un VSI
 - no instales archivos compartidos por una fuente desconocida;
 - no empaquetes archivos `.env`, tokens ni registros personales;
 - conserva `LICENSE` y `NOTICE` al redistribuir una build permitida;
-- trata cualquier VSIX local como software experimental y no firmado.
+- recuerda que el VSIX local es funcional, pero no está firmado ni recibe actualizaciones automáticas.
 
 Los reportes deben seguir la [política de seguridad](../SECURITY.md).
 
@@ -236,4 +236,4 @@ Los reportes deben seguir la [política de seguridad](../SECURITY.md).
 
 ## English quick reference
 
-Lumina Code currently documents an experimental Windows x64 contributor build. Build `Start-talk\src-tauri\target\release\start-talk.exe` first with `npm run tauri build -- --no-bundle`, prepare the monorepo with `continue-upstream\scripts\install-dependencies.ps1`, and regenerate the extension from `continue-upstream\extensions\vscode` with `npm run package -- --target win32-x64`. Install the newest file under `build\*.vsix` through **Install from VSIX...** or `code --install-extension <path>`. No signed release or Marketplace package is available yet.
+Lumina Code provides a stable, functional Windows x64 extension from source. Build `Start-talk\src-tauri\target\release\start-talk.exe` first with `npm run tauri build -- --no-bundle`, prepare the monorepo with `continue-upstream\scripts\install-dependencies.ps1`, and generate the extension from `continue-upstream\extensions\vscode` with `npm run package -- --target win32-x64`. Install the newest file under `build\*.vsix` through **Install from VSIX...** or `code --install-extension <path>`. The locally generated VSIX is not signed and is not yet distributed through Marketplace.

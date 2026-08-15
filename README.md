@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-active%20development-f4b942?style=for-the-badge" alt="Active development">
+  <img src="https://img.shields.io/badge/extension-stable%20%26%20functional-2ea44f?style=for-the-badge" alt="Stable and functional extension">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4?style=for-the-badge" alt="Windows">
   <img src="https://img.shields.io/badge/license-Apache%202.0-2f855a?style=for-the-badge" alt="Apache 2.0">
   <img src="https://img.shields.io/badge/contributions-welcome-2ea44f?style=for-the-badge" alt="Contributions welcome">
@@ -26,8 +26,7 @@
   <a href="SECURITY.md">Seguridad</a>
 </p>
 
-> [!IMPORTANT]
-> **Lumina Code sigue en desarrollo activo.** El código fuente ya está disponible como snapshot comunitario, pero el proceso de instalación y la separación de configuración privada todavía se están estabilizando. No existe una release pública estable ni un instalador recomendado. Los issues, las propuestas, la documentación y los pull requests enfocados son bienvenidos.
+> [!IMPORTANT] > **Lumina Code ya ofrece una extensión estable y funcional para VS Code en Windows.** La rama `main` incluye un flujo reproducible para abrirla en modo desarrollo o generar e instalar un VSIX. El proyecto continúa evolucionando y todavía no se distribuye mediante Visual Studio Marketplace; los issues, las propuestas, la documentación y los pull requests enfocados son bienvenidos.
 
 ## Qué es / What it is
 
@@ -48,7 +47,7 @@ El objetivo no es crear otro cuadro de chat. Es construir un colaborador técnic
 | **Memoria con propósito**    | Recordar debe mejorar la continuidad sin ocultar al usuario qué información se conserva ni por qué.                                 |
 | **Interoperabilidad**        | MCP y los puentes modulares permiten conectar Lumina Code con otros clientes y herramientas.                                        |
 
-## Capacidades en desarrollo / Capabilities in development
+## Capacidades principales / Main capabilities
 
 - Agente de código dentro de VS Code.
 - Experiencia de voz nativa **Start Talk** con orbe de escritorio.
@@ -59,22 +58,21 @@ El objetivo no es crear otro cuadro de chat. Es construir un colaborador técnic
 - Gateway MCP para interoperar con otros clientes compatibles.
 - Registro de actividad y superficies de transparencia para acciones del agente.
 
-Estas capacidades reflejan la dirección técnica actual. Su interfaz, alcance y disponibilidad pueden cambiar antes de la primera versión pública estable.
+Estas capacidades forman parte de la experiencia funcional actual. Algunas integraciones requieren credenciales propias o componentes opcionales, tal como se explica en la sección de instalación.
 
 ## Estado del proyecto / Project status
 
-| Área                                                       | Estado público                  |
-| ---------------------------------------------------------- | ------------------------------- |
-| Licencia Apache 2.0                                        | Publicada                       |
-| Atribución a Continue                                      | Publicada en [`NOTICE`](NOTICE) |
-| Documentación y proceso comunitario                        | Disponibles                     |
-| Snapshot público del código fuente                         | Publicado                       |
-| Build reproducible desde un equipo limpio                  | **En preparación**              |
-| Configuración raíz unificada y `.env.example` del proyecto | **En preparación**              |
-| Build público de prueba                                    | Aún no disponible               |
-| Release estable                                            | Aún no disponible               |
+| Área                                     | Estado público                                          |
+| ---------------------------------------- | ------------------------------------------------------- |
+| Extensión de VS Code para Windows x64    | **Estable y funcional desde el código fuente**          |
+| Development Host                         | **Verificado con launcher automatizado**                |
+| Generación e instalación manual del VSIX | **Disponible y documentada**                            |
+| Start Talk y puente nativo de voz        | **Funcional; requiere Gemini API**                      |
+| Chat, edición y agente de código         | **Funcional; requiere configurar un modelo**            |
+| Licencia y atribuciones                  | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE) |
+| Publicación en Visual Studio Marketplace | Aún no disponible                                       |
 
-El desarrollo continúa de forma constante. La prioridad inmediata es convertir el snapshot disponible en una base que pueda configurarse, compilarse y verificarse desde un equipo limpio sin depender del entorno privado del autor.
+El repositorio ya no depende de copias manuales de los módulos nativos usados por la extensión: los scripts preparan y validan SQLite, LanceDB y las dependencias empaquetadas necesarias. La distribución actual es una build comunitaria desde el código fuente; no es un VSIX firmado ni una publicación de Marketplace.
 
 ## Arquitectura en evolución / Evolving architecture
 
@@ -95,10 +93,9 @@ La arquitectura se mantiene modular para separar razonamiento, memoria, voz y ac
 
 ## Instalación y requisitos / Installation and requirements
 
-> [!WARNING]
-> **El flujo siguiente es experimental y está dirigido a colaboradores.** Todavía no hay una release, un VSIX firmado ni una publicación en Marketplace. Construye e instala solamente código que hayas revisado.
+> [!WARNING] > **Este es el flujo oficial para usuarios y colaboradores en Windows x64.** Produce una extensión funcional, aunque el VSIX se genera localmente y no está firmado ni publicado todavía en Visual Studio Marketplace. Como con cualquier extensión instalada desde código fuente, revisa el commit que vas a compilar.
 
-Los requisitos provisionales del entorno de desarrollo son:
+Los requisitos del entorno de desarrollo y empaquetado son:
 
 | Requisito                            | Uso previsto                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------- |
@@ -124,7 +121,7 @@ cd ..
 powershell -NoProfile -ExecutionPolicy Bypass -File .\ABRIR_LUMINA_CODE_DEV.ps1
 ```
 
-Start Talk debe compilarse primero porque su ejecutable se incluye dentro del VSIX. `install-dependencies.ps1` no es una comprobación pasiva: instala dependencias, compila varios módulos y genera un primer paquete. El proceso necesita red, puede tardar y todavía no ha sido validado desde una máquina Windows limpia.
+Start Talk debe compilarse primero porque su ejecutable se incluye dentro del VSIX. `install-dependencies.ps1` no es una comprobación pasiva: instala dependencias, compila los módulos compartidos, prepara los recursos nativos y genera un primer paquete. El proceso necesita red y puede tardar según el equipo.
 
 El launcher abre un **VS Code Extension Development Host aislado** y levanta la interfaz de desarrollo en `127.0.0.1:5174`; no reemplaza tu instalación normal de VS Code.
 
@@ -193,11 +190,11 @@ Los componentes avanzados tienen documentación propia:
 - [Lumina Windows Bridge](Lumina_PC/apps/lumina-windows-bridge/README.md)
 - [Lumina MCP Gateway](Lumina_PC/apps/lumina-mcp-gateway/README.md)
 
-Todavía se está preparando un `.env.example` raíz y un diagnóstico único para validar todos los servicios. Algunos módulos ya incluyen ejemplos locales, pero varias integraciones no funcionarán hasta completar la configuración unificada. Sigue este repositorio con **Watch** para recibir los anuncios de builds verificadas.
+La extensión principal funciona después de configurar un proveedor de modelos. Las integraciones opcionales pueden requerir servicios, permisos o variables adicionales; consulta la documentación del componente antes de activarlas. Sigue este repositorio con **Watch** para recibir anuncios de nuevas versiones y mejoras.
 
 ## Contribuir / Contributing
 
-Este proyecto quiere crecer con una comunidad cuidadosa, crítica y creativa. No necesitas esperar a la primera release para participar.
+Este proyecto quiere crecer con una comunidad cuidadosa, crítica y creativa. Puedes usar la extensión actual y participar en su evolución desde ahora.
 
 Puedes contribuir ahora mediante:
 
@@ -214,10 +211,10 @@ Lee [`CONTRIBUTING.md`](CONTRIBUTING.md) antes de abrir un pull request. Toda co
 
 El plan público se mantiene en [`ROADMAP.md`](ROADMAP.md). Las prioridades actuales son:
 
-1. sanear y separar la configuración privada;
-2. publicar un árbol de código reproducible;
-3. documentar un flujo de desarrollo verificable;
-4. preparar una build comunitaria de prueba;
+1. simplificar todavía más la instalación desde un checkout limpio;
+2. ampliar las pruebas automáticas de la extensión y Start Talk;
+3. preparar una distribución firmada y un canal de actualizaciones;
+4. mejorar accesibilidad, documentación y compatibilidad;
 5. abrir módulos concretos a contribuciones de código.
 
 No se anuncian fechas artificiales. Cada fase se considerará lista cuando otra persona pueda reproducirla y verificarla.

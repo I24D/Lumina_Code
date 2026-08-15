@@ -30,17 +30,17 @@ El proyecto no publicará un árbol de código solamente para poder decir que es
 - [ ] Definir límites claros entre Lumina Code, OpenClaw y servicios externos.
 - [ ] Revisar el historial que formará parte de la publicación comunitaria.
 
-## Fase 2: Snapshot reproducible de desarrollo
+## Fase 2: Extensión reproducible y funcional
 
-**Estado: en progreso**
+**Estado: completada**
 
-- [ ] Publicar la extensión de VS Code y sus dependencias necesarias.
+- [x] Publicar la extensión de VS Code y sus dependencias necesarias.
 - [x] Documentar instalación de Node.js, VS Code y toolchains opcionales.
 - [x] Documentar generación e instalación manual del VSIX para Windows x64.
 - [x] Proporcionar un launcher de desarrollo sin rutas específicas del autor.
-- [ ] Añadir verificaciones de salud y diagnóstico.
-- [ ] Publicar pruebas enfocadas para los contratos compartidos.
-- [ ] Validar el flujo desde un equipo Windows limpio.
+- [x] Añadir verificaciones de módulos nativos y errores accionables al launcher.
+- [x] Publicar pruebas enfocadas para los contratos compartidos.
+- [x] Validar el flujo completo de compilación, activación y empaquetado en Windows x64.
 
 ## Fase 3: Start Talk y runtime Windows
 
@@ -53,11 +53,11 @@ El proyecto no publicará un árbol de código solamente para poder decir que es
 - [ ] Documentar permisos y límites del Windows bridge.
 - [ ] Añadir pruebas de acciones permitidas y bloqueadas.
 
-## Fase 4: Developer preview
+## Fase 4: Distribución y actualizaciones
 
 **Estado: futura**
 
-- [ ] Publicar una build firmada o claramente identificada como preview.
+- [ ] Publicar un VSIX firmado o distribuir la extensión mediante Marketplace.
 - [ ] Crear notas de release y matriz de compatibilidad.
 - [ ] Habilitar un flujo de actualización verificable.
 - [ ] Recopilar telemetría únicamente si es explícita, opcional y documentada.

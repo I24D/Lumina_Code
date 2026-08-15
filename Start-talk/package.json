@@ -2,6 +2,7 @@
   "name": "start-talk",
   "private": true,
   "version": "0.1.0",
+  "description": "Lumina Live native voice interface for the Lumina Code VS Code extension",
   "type": "module",
   "scripts": {
     "dev": "vite",

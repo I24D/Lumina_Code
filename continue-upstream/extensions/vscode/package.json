@@ -19,7 +19,7 @@
   "license": "Apache-2.0",
   "displayName": "Lumina Code",
   "pricing": "Free",
-  "description": "Windows-first AI coding agent with voice, memory, MCP, and responsible tools",
+  "description": "Stable Windows-first AI coding agent with voice, memory, MCP, and responsible tools",
   "publisher": "LuminaCode",
   "engines": {
     "vscode": "^1.70.0",
