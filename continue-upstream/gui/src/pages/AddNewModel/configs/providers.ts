@@ -491,6 +491,44 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
     ],
     downloadUrl: "https://ollama.ai/download",
   },
+  ollamaCloud: {
+    title: "Ollama Cloud",
+    provider: "ollama",
+    description:
+      "Run larger frontier models like GLM-5.2 on Ollama's hosted cloud GPUs using your Ollama API key — no local GPU required.",
+    longDescription:
+      "Ollama Cloud runs bigger models on Ollama's own GPUs through the same Ollama API you use locally. Create an API key at [ollama.com/settings/keys](https://ollama.com/settings/keys), paste it below, then pick a cloud model. Cloud model names end in `:cloud` — you can type any other one (e.g. `qwen3-coder:480b-cloud`) using the Autodetect option below.",
+    icon: "ollama.png",
+    tags: [ModelProviderTags.RequiresApiKey],
+    // Fixed (not user-editable): the "Add model" form only ever collects
+    // non-required collectInputFor fields, so apiBase must live here to be
+    // reliably included instead of silently dropping to Ollama's local
+    // default of http://localhost:11434.
+    params: {
+      apiBase: "https://ollama.com/",
+    },
+    packages: [
+      models.glm52Cloud,
+      {
+        ...models.AUTODETECT,
+        params: {
+          ...models.AUTODETECT.params,
+          title: "Ollama Cloud",
+        },
+      },
+    ],
+    collectInputFor: [
+      {
+        inputType: "text",
+        key: "apiKey",
+        label: "API Key",
+        placeholder: "Enter your Ollama API key",
+        required: true,
+      },
+      ...completionParamsInputsConfigs,
+    ],
+    apiKeyUrl: "https://ollama.com/settings/keys",
+  },
   cohere: {
     title: "Cohere",
     provider: "cohere",

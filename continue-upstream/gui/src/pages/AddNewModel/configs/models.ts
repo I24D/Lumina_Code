@@ -593,6 +593,20 @@ export const models: { [key: string]: ModelPackage } = {
     providerOptions: ["zAI"],
     isOpenSource: false,
   },
+  glm52Cloud: {
+    title: "GLM-5.2 (Ollama Cloud)",
+    description:
+      "Z.ai's GLM-5.2 flagship model with a 1M-token context, hosted on Ollama Cloud GPUs.",
+    refUrl: "https://ollama.com/library/glm-5.2",
+    params: {
+      title: "GLM-5.2 (Ollama Cloud)",
+      model: "glm-5.2:cloud",
+      contextLength: 1_000_000,
+    },
+    icon: "ollama.png",
+    providerOptions: ["ollamaCloud"],
+    isOpenSource: false,
+  },
   mistralOs: {
     title: "Mistral",
     description:

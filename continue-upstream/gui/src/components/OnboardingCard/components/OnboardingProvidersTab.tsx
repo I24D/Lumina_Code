@@ -22,18 +22,23 @@ export function OnboardingProvidersTab({
     isDialog,
   );
 
+  // `id` is the onboarding preset id (matches the switch in
+  // core/config/onboarding.ts::setupProviderConfig), which is NOT always the
+  // same as `config.provider` — e.g. Ollama Cloud shares the "ollama" LLM
+  // provider with local Ollama, so it needs its own distinct id here.
   const providerConfigs = [
-    providers["openai"],
-    providers["anthropic"],
-    providers["gemini"],
+    { id: "openai", config: providers["openai"] },
+    { id: "anthropic", config: providers["anthropic"] },
+    { id: "gemini", config: providers["gemini"] },
+    { id: "ollamaCloud", config: providers["ollamaCloud"] },
   ];
 
   const handleFormSubmit = () => {
     // Find the first provider with an API key entered
-    for (const config of providerConfigs) {
-      const apiKey = formMethods.watch(`${config?.provider}_apiKey`);
+    for (const { id } of providerConfigs) {
+      const apiKey = formMethods.watch(`${id}_apiKey`);
       if (apiKey?.trim()) {
-        submitOnboarding(config?.provider, apiKey);
+        submitOnboarding(id, apiKey);
         return;
       }
     }
@@ -53,8 +58,8 @@ export function OnboardingProvidersTab({
     );
   };
 
-  const hasAnyApiKey = providerConfigs.some((config) => {
-    const apiKey = formMethods.watch(`${config?.provider}_apiKey`);
+  const hasAnyApiKey = providerConfigs.some(({ id }) => {
+    const apiKey = formMethods.watch(`${id}_apiKey`);
     return apiKey?.trim();
   });
 
@@ -64,8 +69,8 @@ export function OnboardingProvidersTab({
         <FormProvider {...formMethods}>
           <div className="mt-5 space-y-6">
             <div className="space-y-4">
-              {providerConfigs.map((config) => (
-                <div key={config?.provider}>
+              {providerConfigs.map(({ id, config }) => (
+                <div key={id}>
                   <label className="text-foreground mb-1 flex items-center gap-3 text-sm font-medium">
                     {window.vscMediaUrl && (
                       <img
@@ -77,11 +82,11 @@ export function OnboardingProvidersTab({
                     {config?.title}
                   </label>
                   <Input
-                    id={`${config?.provider}_apiKey`}
+                    id={`${id}_apiKey`}
                     type="password"
                     placeholder={`Enter your ${config?.title} API key`}
                     className="w-full"
-                    {...formMethods.register(`${config?.provider}_apiKey`)}
+                    {...formMethods.register(`${id}_apiKey`)}
                   />
                   <span className="text-description-muted text-input-placeholder mt-1 block text-xs">
                     <a

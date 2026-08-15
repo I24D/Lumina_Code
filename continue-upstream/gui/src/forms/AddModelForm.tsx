@@ -85,6 +85,7 @@ export function AddModelForm({ onDone }: AddModelFormProps) {
     providers["gemini"]?.title || "",
     providers["azure"]?.title || "",
     providers["ollama"]?.title || "",
+    providers["ollamaCloud"]?.title || "",
     providers["openrouter"]?.title || "",
   ];
 

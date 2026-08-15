@@ -87,6 +87,23 @@ const GEMINI_ONBOARDING_MODELS = (apiKey: string): OnboardingModel[] => [
   },
 ];
 
+// Ollama Cloud uses the same "ollama" provider/API as local Ollama, just
+// pointed at Ollama's hosted API with an apiKey instead of a local server.
+const OLLAMA_CLOUD_ONBOARDING_MODELS = (
+  apiKey: string,
+): OnboardingModel[] => [
+  {
+    name: "GLM-5.2 (Ollama Cloud)",
+    provider: "ollama",
+    model: "glm-5.2:cloud",
+    apiKey,
+    apiBase: "https://ollama.com/",
+    roles: ["chat", "edit", "apply"],
+    defaultCompletionOptions: { contextLength: 1000000, maxTokens: 32768 },
+    capabilities: ["tool_use"],
+  },
+];
+
 /**
  * We set the "best" chat + autocopmlete models by default
  * whenever a user doesn't have a config.json
@@ -145,6 +162,9 @@ export function setupProviderConfig(
       break;
     case "gemini":
       newModels = GEMINI_ONBOARDING_MODELS(apiKey);
+      break;
+    case "ollamaCloud":
+      newModels = OLLAMA_CLOUD_ONBOARDING_MODELS(apiKey);
       break;
     default:
       throw new Error(`Unknown provider: ${provider}`);
