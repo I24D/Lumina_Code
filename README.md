@@ -20,6 +20,7 @@
   <a href="#estado-del-proyecto--project-status">Estado</a> ·
   <a href="#arquitectura-en-evolución--evolving-architecture">Arquitectura</a> ·
   <a href="#instalación-y-requisitos--installation-and-requirements">Instalación</a> ·
+  <a href="#configuración-recomendada-de-modelos--recommended-model-setup">Modelos</a> ·
   <a href="CONTRIBUTING.md">Contribuir</a> ·
   <a href="ROADMAP.md">Roadmap</a> ·
   <a href="SECURITY.md">Seguridad</a>
@@ -38,14 +39,14 @@ El objetivo no es crear otro cuadro de chat. Es construir un colaborador técnic
 
 ## Principios del proyecto / Project principles
 
-| Principio | Qué significa |
-|---|---|
-| **Local-first** | El runtime, los puentes y el control permanecen cerca del usuario. Los modelos pueden ser locales o remotos según la configuración. |
-| **Windows-first** | La experiencia se diseña y prueba primero sobre flujos reales de Windows y VS Code. |
-| **Voz como interfaz real** | Start Talk busca convertir la conversación por voz en una parte nativa del trabajo, no en un complemento decorativo. |
-| **Herramientas con límites** | Las acciones sensibles deben ser explícitas, verificables, auditables y restringidas por contexto. |
-| **Memoria con propósito** | Recordar debe mejorar la continuidad sin ocultar al usuario qué información se conserva ni por qué. |
-| **Interoperabilidad** | MCP y los puentes modulares permiten conectar Lumina Code con otros clientes y herramientas. |
+| Principio                    | Qué significa                                                                                                                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Local-first**              | El runtime, los puentes y el control permanecen cerca del usuario. Los modelos pueden ser locales o remotos según la configuración. |
+| **Windows-first**            | La experiencia se diseña y prueba primero sobre flujos reales de Windows y VS Code.                                                 |
+| **Voz como interfaz real**   | Start Talk busca convertir la conversación por voz en una parte nativa del trabajo, no en un complemento decorativo.                |
+| **Herramientas con límites** | Las acciones sensibles deben ser explícitas, verificables, auditables y restringidas por contexto.                                  |
+| **Memoria con propósito**    | Recordar debe mejorar la continuidad sin ocultar al usuario qué información se conserva ni por qué.                                 |
+| **Interoperabilidad**        | MCP y los puentes modulares permiten conectar Lumina Code con otros clientes y herramientas.                                        |
 
 ## Capacidades en desarrollo / Capabilities in development
 
@@ -62,16 +63,16 @@ Estas capacidades reflejan la dirección técnica actual. Su interfaz, alcance y
 
 ## Estado del proyecto / Project status
 
-| Área | Estado público |
-|---|---|
-| Licencia Apache 2.0 | Publicada |
-| Atribución a Continue | Publicada en [`NOTICE`](NOTICE) |
-| Documentación y proceso comunitario | Disponibles |
-| Snapshot público del código fuente | Publicado |
-| Build reproducible desde un equipo limpio | **En preparación** |
-| Configuración raíz unificada y `.env.example` del proyecto | **En preparación** |
-| Build público de prueba | Aún no disponible |
-| Release estable | Aún no disponible |
+| Área                                                       | Estado público                  |
+| ---------------------------------------------------------- | ------------------------------- |
+| Licencia Apache 2.0                                        | Publicada                       |
+| Atribución a Continue                                      | Publicada en [`NOTICE`](NOTICE) |
+| Documentación y proceso comunitario                        | Disponibles                     |
+| Snapshot público del código fuente                         | Publicado                       |
+| Build reproducible desde un equipo limpio                  | **En preparación**              |
+| Configuración raíz unificada y `.env.example` del proyecto | **En preparación**              |
+| Build público de prueba                                    | Aún no disponible               |
+| Release estable                                            | Aún no disponible               |
 
 El desarrollo continúa de forma constante. La prioridad inmediata es convertir el snapshot disponible en una base que pueda configurarse, compilarse y verificarse desde un equipo limpio sin depender del entorno privado del autor.
 
@@ -99,16 +100,16 @@ La arquitectura se mantiene modular para separar razonamiento, memoria, voz y ac
 
 Los requisitos provisionales del entorno de desarrollo son:
 
-| Requisito | Uso previsto |
-|---|---|
-| Windows 10/11 x64 | Plataforma de build documentada actualmente |
-| VS Code 1.70 o superior | Extension Development Host |
-| Git | Clonación y flujo de contribución |
-| Node.js 20.20.1 | Extensión y monorepo base; versión indicada en `continue-upstream/.nvmrc` |
-| Rust `stable-msvc` | Aplicación nativa Start Talk basada en Tauri |
-| Microsoft C++ Build Tools y WebView2 | Requisitos de Tauri sobre Windows |
-| Node.js 22 | Bridges TypeScript opcionales; no se usa para empaquetar la extensión |
-| Python | Sidecars opcionales para ciertas integraciones Windows |
+| Requisito                            | Uso previsto                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| Windows 10/11 x64                    | Plataforma de build documentada actualmente                               |
+| VS Code 1.70 o superior              | Extension Development Host                                                |
+| Git                                  | Clonación y flujo de contribución                                         |
+| Node.js 20.20.1                      | Extensión y monorepo base; versión indicada en `continue-upstream/.nvmrc` |
+| Rust `stable-msvc`                   | Aplicación nativa Start Talk basada en Tauri                              |
+| Microsoft C++ Build Tools y WebView2 | Requisitos de Tauri sobre Windows                                         |
+| Node.js 22                           | Bridges TypeScript opcionales; no se usa para empaquetar la extensión     |
+| Python                               | Sidecars opcionales para ciertas integraciones Windows                    |
 
 ### Preparar el proyecto y abrirlo en modo desarrollador
 
@@ -126,6 +127,46 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\ABRIR_LUMINA_CODE_DEV.ps1
 Start Talk debe compilarse primero porque su ejecutable se incluye dentro del VSIX. `install-dependencies.ps1` no es una comprobación pasiva: instala dependencias, compila varios módulos y genera un primer paquete. El proceso necesita red, puede tardar y todavía no ha sido validado desde una máquina Windows limpia.
 
 El launcher abre un **VS Code Extension Development Host aislado** y levanta la interfaz de desarrollo en `127.0.0.1:5174`; no reemplaza tu instalación normal de VS Code.
+
+### Configuración recomendada de modelos / Recommended model setup
+
+Lumina Code permite configurar otros proveedores, pero la configuración de referencia del autor —y la combinación recomendada para reproducir el funcionamiento actual— es la siguiente:
+
+| Función                                    | Proveedor    | Modelo                                 | Credencial necesaria                 |
+| ------------------------------------------ | ------------ | -------------------------------------- | ------------------------------------ |
+| Chat principal, edición y agente de código | Ollama Cloud | `glm-5.2:cloud`                        | API key de Ollama                    |
+| Voz en tiempo real mediante Start Talk     | Gemini Live  | `gemini-2.5-flash-native-audio-latest` | `GEMINI_API_KEY` de Google AI Studio |
+
+#### Chat y agente: Ollama Cloud con GLM 5.2
+
+1. Crea una API key en [Ollama](https://ollama.com/settings/keys).
+2. En Lumina Code, abre **Add model**, selecciona **Ollama Cloud** y elige **GLM-5.2 (Ollama Cloud)**.
+3. Introduce la API key cuando la interfaz la solicite. La configuración usa internamente:
+   - proveedor: `ollama`;
+   - modelo: `glm-5.2:cloud`;
+   - API base: `https://ollama.com/`.
+4. Selecciona el modelo para los roles de chat, edición y aplicación según tu flujo de trabajo.
+
+La ficha oficial del modelo y su disponibilidad se encuentran en [Ollama Library: GLM 5.2](https://ollama.com/library/glm-5.2). Ollama Cloud evita necesitar una GPU local capaz de ejecutar este modelo, pero requiere una cuenta y está sujeto a los límites y precios de Ollama.
+
+#### Start Talk: Gemini Live
+
+Crea una clave para Gemini API en [Google AI Studio](https://aistudio.google.com/api-keys) y guárdala en un archivo `.env` privado. Para el flujo de desarrollo documentado, puede colocarse en la raíz del clon:
+
+```dotenv
+# C:\ruta\a\Lumina_Code\.env
+GEMINI_API_KEY=<TU_API_KEY_DE_GEMINI>
+
+# Opcional: coincide con el modelo de voz seleccionado actualmente por defecto.
+START_TALK_GEMINI_MODEL=gemini-2.5-flash-native-audio-latest
+```
+
+Start Talk busca `GEMINI_API_KEY` en el entorno y en archivos `.env` ascendiendo desde el workspace. También puedes indicar otro archivo mediante la opción de VS Code `lumina.startTalk.envFile`; la extensión importa esa configuración a Secret Storage para reutilizarla en distintos proyectos. Reinicia o recarga el Extension Development Host después de cambiar estas variables.
+
+> [!CAUTION]
+> Las claves de Ollama y Gemini son credenciales diferentes y no son intercambiables. No pegues valores reales en este README, commits, issues, capturas o archivos versionados. El `.env` raíz está ignorado por Git; verifica siempre `git status` antes de publicar cambios.
+
+**English:** For the known-working reference setup, use Ollama Cloud with `glm-5.2:cloud` for the main coding agent and a separate Gemini API key for Start Talk's real-time voice model. Keep both credentials private and never commit them.
 
 Las automatizaciones que interactúan con aplicaciones personales permanecen desactivadas por defecto en el flujo público. Cualquier activación debe ser consciente, explícita y precedida por una revisión de sus permisos.
 
