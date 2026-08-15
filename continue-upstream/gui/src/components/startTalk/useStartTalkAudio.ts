@@ -30,10 +30,7 @@ import {
   isPhoneBridgeEligible,
   selectPhoneBridgeNotifications,
 } from "./phoneAssistantBridge";
-import {
-  isAffirmativeReply,
-  isNegativeReply,
-} from "./confirmationPhrases";
+import { isAffirmativeReply, isNegativeReply } from "./confirmationPhrases";
 import { buildChatResponseSpeechPrompt } from "./voiceDelegation";
 
 const PCM_CHUNK_SIZE = 0x8000;
@@ -207,6 +204,9 @@ export function useStartTalkAudio({
   const sessionRecoveryAttemptsRef = useRef(0);
   const sessionRecoveryTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const shouldStayActiveRef = useRef(isOpen);
+  // Automatic recovery is only valid after capture started successfully. An
+  // initial configuration/device failure must remain visible to the user.
+  const recoverActiveSessionRef = useRef(false);
   const [status, setStatus] = useState<StartTalkStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [toolActivities, setToolActivities] = useState<StartTalkToolActivity[]>(
@@ -253,6 +253,7 @@ export function useStartTalkAudio({
   const scheduleSessionRecovery = useCallback(() => {
     if (
       !shouldStayActiveRef.current ||
+      !recoverActiveSessionRef.current ||
       sessionIdRef.current ||
       connectInFlightRef.current ||
       sessionRecoveryTimerRef.current
@@ -343,6 +344,7 @@ export function useStartTalkAudio({
   const stopListening = useCallback(async () => {
     const sessionId = sessionIdRef.current;
 
+    recoverActiveSessionRef.current = false;
     clearSessionRecoveryTimer();
     stopPlayback();
     resetNotificationQueue();
@@ -1197,6 +1199,7 @@ export function useStartTalkAudio({
     }
 
     connectInFlightRef.current = true;
+    recoverActiveSessionRef.current = false;
     clearSessionRecoveryTimer();
     setStatus("connecting");
     setErrorMessage(undefined);
@@ -1239,6 +1242,7 @@ export function useStartTalkAudio({
       }
 
       sessionRecoveryAttemptsRef.current = 0;
+      recoverActiveSessionRef.current = true;
       setStatus("listening");
       scheduleChatResponseFlush();
     } catch (error) {
@@ -1255,7 +1259,7 @@ export function useStartTalkAudio({
       );
     } finally {
       connectInFlightRef.current = false;
-      if (!sessionIdRef.current) {
+      if (!sessionIdRef.current && recoverActiveSessionRef.current) {
         scheduleSessionRecovery();
       }
     }
