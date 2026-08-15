@@ -170,6 +170,12 @@ export interface StartTalkVideoSourceInfo {
   region?: StartTalkVideoRegion;
   /** Solo para monitores: true si es el monitor principal de Windows. */
   primary?: boolean;
+  /**
+   * Solo para cámaras: nombre exacto del dispositivo DirectShow. Va aparte de
+   * `label` a propósito: la etiqueta es texto para el usuario y puede cambiar,
+   * mientras que esto es lo que se le pasa a FFmpeg.
+   */
+  deviceName?: string;
 }
 
 export interface StartTalkVideoStartRequest {
@@ -184,6 +190,8 @@ export interface StartTalkVideoStartRequest {
   region?: StartTalkVideoRegion;
   /** Identificador de la fuente elegida (para reflejarlo en la UI). */
   sourceId?: string;
+  /** Etiqueta legible de la fuente, para que la UI diga cuál se está viendo. */
+  label?: string;
 }
 
 /** Fase del stream de vídeo, para que la UI no mienta sobre lo que Lumina ve. */

@@ -1263,6 +1263,7 @@ export function useStartTalkAudio({
         source: "screen",
         region: target?.region,
         sourceId: target?.id,
+        label: target?.label,
       });
       if (res.status === "error") {
         setVideoState({

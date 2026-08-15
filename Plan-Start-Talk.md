@@ -1040,6 +1040,22 @@ producto. Lo que fallaba de verdad y cómo quedó:
    con más de uno el botón abre un selector; gdigrab recorta con
    `-offset_x/-offset_y/-video_size` (soporta X negativa).
 
+**Cámara (2026-08-15, segunda tanda).** El selector se generalizó a las dos
+fuentes: el botón de cámara y el de pantalla comparten `handleToggleVideo(kind)`
+y abren el mismo menú cuando hay más de una fuente de ese tipo. Motivo real:
+en esta máquina conviven `HP TrueVision HD Camera` (webcam, tope 640x480 por
+hardware) y `moto g stylus 5G - 2024 (Windows Virtual Camera)` (el móvil por
+Enlace Móvil, 1024x576), así que "coge la primera" era una lotería. Ambas
+verificadas emitiendo a 1 fps con los argumentos reales.
+
+`StartTalkVideoSourceInfo` gana `deviceName` separado de `label`: la etiqueta es
+texto para el usuario y puede cambiar, `deviceName` es lo que recibe FFmpeg.
+`StartTalkVideoStartRequest` gana `label` para que la tarjeta de visión diga qué
+monitor/cámara se está usando en vez de un genérico "Pantalla".
+
+⚠️ El nombre de cámara se pasa LITERAL (`video=<nombre>`), sin comillas: se
+lanza con array de argumentos, sin shell, así que citarlo lo rompería. Hay test.
+
 Archivos: `FfmpegVideoCapture.ts` (+`buildStreamArgs` exportado y testeado,
 `grabSingleFrame`, `listDisplayMonitors`, `listVideoInputDevices`),
 `StartTalkManager.ts`, `types.ts`, `index.ts`, `core.ts`, `protocol/core.ts`,

@@ -10,6 +10,7 @@ import {
   ExclamationCircleIcon,
   MicrophoneIcon,
   MinusIcon,
+  ComputerDesktopIcon,
   MoonIcon,
   SpeakerWaveIcon,
   SunIcon,
@@ -887,6 +888,13 @@ const SourceMenuItem = styled.button`
   }
 `;
 
+const SourceMenuEmpty = styled.div`
+  color: var(--live-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 7px 8px;
+`;
+
 const DelegationApprovalCard = styled.section`
   position: absolute;
   right: 14px;
@@ -1375,7 +1383,9 @@ export function LiveConversationOverlay({
   const [videoSources, setVideoSources] = useState<StartTalkVideoSourceInfo[]>(
     [],
   );
-  const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
+  const [sourceMenuOpen, setSourceMenuOpen] = useState<
+    "screen" | "camera" | null
+  >(null);
   const {
     approveDelegation,
     assistantTranscript,
@@ -1658,6 +1668,9 @@ export function LiveConversationOverlay({
   const isSharingScreen =
     videoSource === "screen" ||
     (videoState.source === "screen" && videoState.phase === "starting");
+  const isUsingCamera =
+    videoSource === "camera" ||
+    (videoState.source === "camera" && videoState.phase === "starting");
   const visionTone: "live" | "starting" | "error" =
     videoState.phase === "error"
       ? "error"
@@ -1674,40 +1687,65 @@ export function LiveConversationOverlay({
           : "Viendo tu pantalla"
         : "Preparando…";
 
+  /** Arranca la fuente elegida en el menú, sea monitor o cámara. */
+  const startVideoSource = useCallback(
+    async (source: StartTalkVideoSourceInfo) => {
+      if (source.kind === "camera") {
+        await startCamera(source.deviceName ?? source.label);
+        return;
+      }
+      await startScreenShare(source);
+    },
+    [startCamera, startScreenShare],
+  );
+
   /**
-   * Compartir pantalla: con un solo monitor arranca directo; con varios abre el
-   * selector, porque capturar la unión de todos produce una panorámica en la
-   * que Lumina no puede leer nada.
+   * Enciende pantalla o cámara. Con una sola fuente de ese tipo arranca
+   * directo; con varias abre el selector, porque elegir "la primera" es una
+   * lotería (aquí conviven la webcam y el móvil como cámara virtual) y porque
+   * capturar la unión de varios monitores da una panorámica ilegible.
    */
-  const handleToggleScreenShare = useCallback(async () => {
-    if (isSharingScreen) {
-      setSourceMenuOpen(false);
-      await stopVideo();
-      return;
-    }
+  const handleToggleVideo = useCallback(
+    async (kind: "screen" | "camera") => {
+      const alreadyOn = kind === "screen" ? isSharingScreen : isUsingCamera;
+      if (alreadyOn) {
+        setSourceMenuOpen(null);
+        await stopVideo();
+        return;
+      }
 
-    if (sourceMenuOpen) {
-      setSourceMenuOpen(false);
-      return;
-    }
+      if (sourceMenuOpen === kind) {
+        setSourceMenuOpen(null);
+        return;
+      }
 
-    const sources = await listVideoSources();
-    const screens = sources.filter((source) => source.kind === "screen");
-    setVideoSources(screens);
+      const sources = await listVideoSources();
+      const matching = sources.filter((source) => source.kind === kind);
+      setVideoSources(matching);
 
-    if (screens.length > 1) {
-      setSourceMenuOpen(true);
-      return;
-    }
+      if (matching.length > 1) {
+        setSourceMenuOpen(kind);
+        return;
+      }
 
-    await startScreenShare(screens[0]);
-  }, [
-    isSharingScreen,
-    listVideoSources,
-    sourceMenuOpen,
-    startScreenShare,
-    stopVideo,
-  ]);
+      if (matching.length === 0) {
+        // Sin cámaras conectadas no hay nada que encender; core devolvería un
+        // error críptico de DirectShow, así que lo decimos aquí.
+        setSourceMenuOpen(kind);
+        return;
+      }
+
+      await startVideoSource(matching[0]);
+    },
+    [
+      isSharingScreen,
+      isUsingCamera,
+      listVideoSources,
+      sourceMenuOpen,
+      startVideoSource,
+      stopVideo,
+    ],
+  );
 
   const selectedThinkingOption =
     thinkingOptions.find((option) => option.level === thinkingLevel) ??
@@ -2167,25 +2205,42 @@ export function LiveConversationOverlay({
         ) : null}
 
         {sourceMenuOpen ? (
-          <SourceMenu role="menu" aria-label="Elegir qué compartir">
-            <SourceMenuTitle>¿Qué quieres que vea Lumina?</SourceMenuTitle>
-            {videoSources.map((source) => (
-              <SourceMenuItem
-                key={source.id}
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setSourceMenuOpen(false);
-                  void startScreenShare(source);
-                }}
-              >
-                {source.label}
-              </SourceMenuItem>
-            ))}
+          <SourceMenu role="menu" aria-label="Elegir qué debe ver Lumina">
+            <SourceMenuTitle>
+              {sourceMenuOpen === "camera"
+                ? "¿Qué cámara usa Lumina?"
+                : "¿Qué pantalla ve Lumina?"}
+            </SourceMenuTitle>
+            {videoSources.length === 0 ? (
+              <SourceMenuEmpty>
+                {sourceMenuOpen === "camera"
+                  ? "No hay ninguna cámara conectada."
+                  : "No se detectó ninguna pantalla."}
+              </SourceMenuEmpty>
+            ) : (
+              videoSources.map((source) => (
+                <SourceMenuItem
+                  key={source.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setSourceMenuOpen(null);
+                    void startVideoSource(source);
+                  }}
+                >
+                  {source.kind === "camera" ? (
+                    <VideoCameraIcon width={13} height={13} />
+                  ) : (
+                    <ComputerDesktopIcon width={13} height={13} />
+                  )}
+                  {source.label}
+                </SourceMenuItem>
+              ))
+            )}
             <SourceMenuItem
               type="button"
               role="menuitem"
-              onClick={() => setSourceMenuOpen(false)}
+              onClick={() => setSourceMenuOpen(null)}
             >
               Cancelar
             </SourceMenuItem>
@@ -2235,17 +2290,12 @@ export function LiveConversationOverlay({
           <Controls>
             <IconButton
               type="button"
-              title={
-                videoSource === "camera" ? "Apagar cámara" : "Encender cámara"
-              }
-              aria-label={
-                videoSource === "camera" ? "Apagar cámara" : "Encender cámara"
-              }
-              $active={videoSource === "camera"}
+              title={isUsingCamera ? "Apagar cámara" : "Encender cámara"}
+              aria-label={isUsingCamera ? "Apagar cámara" : "Encender cámara"}
+              aria-pressed={isUsingCamera}
+              $active={isUsingCamera}
               disabled={!isActive}
-              onClick={() =>
-                videoSource === "camera" ? void stopVideo() : void startCamera()
-              }
+              onClick={() => void handleToggleVideo("camera")}
             >
               <VideoCameraIcon />
             </IconButton>
@@ -2264,7 +2314,7 @@ export function LiveConversationOverlay({
               aria-pressed={isSharingScreen}
               $active={isSharingScreen}
               disabled={!isActive}
-              onClick={() => void handleToggleScreenShare()}
+              onClick={() => void handleToggleVideo("screen")}
             >
               <ArrowUpTrayIcon />
             </IconButton>

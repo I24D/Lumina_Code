@@ -1021,7 +1021,12 @@ export class StartTalkManager {
 
     try {
       for (const camera of listVideoInputDevices()) {
-        sources.push({ id: `camera:${camera}`, kind: "camera", label: camera });
+        sources.push({
+          id: `camera:${camera}`,
+          kind: "camera",
+          label: camera,
+          deviceName: camera,
+        });
       }
     } catch {
       // Sin cámaras enumerables se queda solo la pantalla.
@@ -1037,6 +1042,7 @@ export class StartTalkManager {
     deviceName,
     region,
     sourceId,
+    label,
   }: StartTalkVideoStartRequest): void {
     const state = this.requireSession(sessionId);
     if (!state.session) {
@@ -1049,7 +1055,7 @@ export class StartTalkManager {
     state.videoRegion = region;
     state.videoSourceId = sourceId;
     state.videoLabel =
-      source === "camera" ? (deviceName ?? "Cámara") : "Pantalla";
+      label ?? (source === "camera" ? (deviceName ?? "Cámara") : "Pantalla");
     state.videoFramesSent = 0;
     state.videoLastFrameAt = undefined;
     state.videoLastPreviewAt = 0;

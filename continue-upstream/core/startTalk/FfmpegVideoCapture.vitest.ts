@@ -108,6 +108,17 @@ describe("buildStreamArgs", () => {
     expect(valueAfter(args, "-i")).toBe("video=HD Webcam");
   });
 
+  it("pasa el nombre de cámara literal, sin comillas ni escapes", () => {
+    // Los nombres reales llevan espacios y paréntesis ("moto g stylus 5G - 2024
+    // (Windows Virtual Camera)"). Se lanza con un array de argumentos, sin
+    // shell de por medio, así que citarlo lo ROMPERÍA: FFmpeg buscaría un
+    // dispositivo cuyo nombre incluye las comillas.
+    const name = "moto g stylus 5G - 2024 (Windows Virtual Camera)";
+    const args = buildStreamArgs("ffmpeg", "camera", name, undefined);
+
+    expect(valueAfter(args, "-i")).toBe(`video=${name}`);
+  });
+
   it("recorta al monitor pedido, con offsets negativos incluidos", () => {
     // Un monitor a la izquierda del principal tiene X negativa en el
     // escritorio virtual; gdigrab lo acepta y hay que pasarlo tal cual.
