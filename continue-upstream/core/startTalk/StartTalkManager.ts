@@ -20,6 +20,7 @@ import { SoundEventDetector } from "./SoundEventDetector.js";
 import { rmsOfS16, VoiceActivityGate } from "./VoiceActivityGate.js";
 import { BridgeNotificationMonitor } from "./BridgeNotificationMonitor.js";
 import { ClaudeVoiceMonitor } from "./ClaudeVoiceMonitor.js";
+import { CodexVoiceMonitor } from "./CodexVoiceMonitor.js";
 import { PhoneLinkClient } from "./PhoneLinkClient.js";
 import { validateAutomaticReplyText } from "./PhoneLinkNotificationPolicy.js";
 import {
@@ -268,6 +269,12 @@ function readClaudeCodeEnabled(): boolean {
   return flag !== "false" && flag !== "0" && flag !== "off";
 }
 
+/** Reading finished Codex VS Code chat responses is on by default. */
+function readCodexEnabled(): boolean {
+  const flag = String(process.env.START_TALK_READ_CODEX ?? "").toLowerCase();
+  return flag !== "false" && flag !== "0" && flag !== "off";
+}
+
 /**
  * Half-duplex mode is ON by default: while Lumina speaks, the microphone is
  * ignored so she cannot hear (and answer) her own voice. Set
@@ -364,6 +371,7 @@ type SessionState = {
   reconnectTimer?: ReturnType<typeof setTimeout>;
   notificationMonitor?: BridgeNotificationMonitor;
   claudeVoiceMonitor?: ClaudeVoiceMonitor;
+  codexVoiceMonitor?: CodexVoiceMonitor;
   pendingPhoneLinkNotifications: Map<string, StartTalkNotification>;
   phoneLinkReplyInFlight: Set<string>;
   completedPhoneLinkReplies: Set<string>;
@@ -627,6 +635,7 @@ export class StartTalkManager {
     state.isCapturing = true;
     this.startNotificationMonitor(sessionId, state);
     this.startClaudeVoiceMonitor(sessionId, state);
+    this.startCodexVoiceMonitor(sessionId, state);
 
     // Gate de voz: entre el micrófono y la sesión Live. Decide qué reenviar y
     // cuándo abrir/cerrar el turno del usuario, con barge-in dúplex-aware.
@@ -861,6 +870,7 @@ export class StartTalkManager {
     state.video = undefined;
     this.stopNotificationMonitor(state);
     this.stopClaudeVoiceMonitor(state);
+    this.stopCodexVoiceMonitor(state);
     state.session?.close();
 
     // Aprendizaje al cerrar (best-effort, fire-and-forget): manda el transcript
@@ -2057,6 +2067,38 @@ export class StartTalkManager {
   private stopClaudeVoiceMonitor(state: SessionState): void {
     state.claudeVoiceMonitor?.stop();
     state.claudeVoiceMonitor = undefined;
+  }
+
+  /** Reads final answers from the user's visible Codex VS Code chat. */
+  private startCodexVoiceMonitor(sessionId: string, state: SessionState): void {
+    if (
+      state.mode === "interpreter" ||
+      state.codexVoiceMonitor ||
+      !readCodexEnabled()
+    ) {
+      return;
+    }
+
+    const monitor = new CodexVoiceMonitor({
+      onResponse: (response) => {
+        if (this.sessions.get(sessionId) !== state) {
+          return;
+        }
+        this.emit({
+          type: "chatResponse",
+          sessionId,
+          requestId: response.id,
+          text: response.text,
+        });
+      },
+    });
+    state.codexVoiceMonitor = monitor;
+    monitor.start();
+  }
+
+  private stopCodexVoiceMonitor(state: SessionState): void {
+    state.codexVoiceMonitor?.stop();
+    state.codexVoiceMonitor = undefined;
   }
 
   /**

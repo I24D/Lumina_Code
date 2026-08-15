@@ -235,8 +235,8 @@ export type StartTalkCoreEvent =
       notification: StartTalkNotification;
     }
   | {
-      // A finished Claude Code chat response, relayed via the Windows Bridge, to
-      // be read aloud through the same queue as Lumina Code chat responses.
+      // A finished external coding-chat response (Claude Code or Codex), to be
+      // read aloud through the same queue as Lumina Code chat responses.
       type: "chatResponse";
       sessionId: string;
       requestId: string;

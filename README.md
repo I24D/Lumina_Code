@@ -168,6 +168,10 @@ Start Talk busca `GEMINI_API_KEY` en el entorno y en archivos `.env` ascendiendo
 
 **English:** For the known-working reference setup, use Ollama Cloud with `glm-5.2:cloud` for the main coding agent and a separate Gemini API key for Start Talk's real-time voice model. Keep both credentials private and never commit them.
 
+#### Lectura de respuestas de los chats
+
+Mientras Start Talk está activo, también puede leer en voz alta las respuestas finales de Lumina Code, Claude Code y el chat de Codex para VS Code. La integración de Codex sigue únicamente sesiones visibles con origen `codex_vscode`: no reproduce conversaciones antiguas, comentarios de progreso, razonamiento, llamadas de herramientas ni ejecuciones `codex_exec`. Puede desactivarse con `START_TALK_READ_CODEX=false`; la integración de Claude Code puede desactivarse por separado con `START_TALK_READ_CLAUDE_CODE=false`.
+
 Las automatizaciones que interactúan con aplicaciones personales permanecen desactivadas por defecto en el flujo público. Cualquier activación debe ser consciente, explícita y precedida por una revisión de sus permisos.
 
 ### Generar o instalar el VSIX

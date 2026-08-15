@@ -1122,9 +1122,9 @@ export function useStartTalkAudio({
       }
 
       if (event.type === "chatResponse") {
-        // A finished Claude Code chat response, relayed from the Windows Bridge.
-        // Reuse the same dedup + speech queue as Lumina Code chat responses so it
-        // is read aloud once, after the current turn, and never twice.
+        // A finished external coding-chat response (Claude Code or Codex).
+        // Reuse the same dedup + speech queue as Lumina Code chat responses so
+        // it is read aloud once, after the current turn, and never twice.
         enqueueChatResponseRef.current?.({
           requestId: event.requestId,
           text: event.text,
