@@ -1,0 +1,52 @@
+name: CI
+
+# Basic sanity check for the Lumina Code source (continue-upstream/): install
+# dependencies and type-check core + gui. No tests (they need provider API
+# keys that aren't configured as secrets here) and no extension packaging
+# (that step is native-module heavy and Windows-oriented — see
+# ABRIR_LUMINA_CODE_DEV.ps1 for the local dev flow instead).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "continue-upstream/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "continue-upstream/**"
+      - ".github/workflows/ci.yml"
+
+env:
+  HUSKY: "0"
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: continue-upstream
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: continue-upstream/.nvmrc
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build local packages (config-yaml, terminal-security, etc.)
+        run: node scripts/build-packages.js
+
+      - name: Type-check core
+        working-directory: continue-upstream/core
+        run: |
+          npm ci
+          npx tsc --noEmit
+
+      - name: Type-check gui
+        working-directory: continue-upstream/gui
+        run: |
+          npm ci
+          npx tsc --noEmit
