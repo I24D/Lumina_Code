@@ -43,6 +43,24 @@ const PCM_CHUNK_SIZE = 0x8000;
 // message is dropped so a much-later "sí" about something else never fires it.
 const REPLY_CONFIRMATION_WINDOW_MS = 90_000;
 
+/**
+ * Cuánto se espera, tras vaciarse la cola de voz, antes de dar el turno por
+ * cerrado sin haber recibido `turnComplete`. Solo salta si la sesión se cayó a
+ * media respuesta; en el caso normal `turnComplete` llega cuando ella termina
+ * de sonar, no cuando el servidor termina de generar.
+ */
+const TURN_STUCK_TIMEOUT_MS = 8_000;
+
+/**
+ * Techo del watchdog de una tanda de notificaciones. El fijo de 45 s se
+ * disparaba EN MEDIO de una lectura normal: medido contra la API, leer una
+ * respuesta de 3.100 caracteres son 164 s de voz. Ahora se dimensiona con lo
+ * que queda por sonar y este valor solo actúa como tope absoluto.
+ */
+const NOTIFICATION_WATCHDOG_MAX_MS = 300_000;
+/** Margen sobre la duración estimada de la lectura antes de darla por perdida. */
+const ANNOUNCEMENT_WATCHDOG_GRACE_MS = 45_000;
+
 type ChatResponseAnnouncement = {
   requestId: string;
   text: string;
@@ -177,6 +195,13 @@ export function useStartTalkAudio({
   // while the model kept "reading". The watchdog resumes it whenever audio is
   // pending. See resumeOutputContextIfNeeded / ensureOutputWatchdog below.
   const outputWatchdogRef = useRef<ReturnType<typeof setInterval>>();
+  // Último valor enviado a core, para no repetir el mismo informe.
+  const lastPlaybackReportRef = useRef<number>(-1);
+  // Red de seguridad: si la cola de audio se vacía y el servidor nunca manda
+  // turnComplete (caída de sesión a media respuesta), las colas de
+  // notificaciones y de respuestas de chat se quedarían bloqueadas para
+  // siempre y Lumina no volvería a hablar nunca.
+  const turnStuckTimerRef = useRef<ReturnType<typeof setTimeout>>();
   // Coalesces assistant-transcript updates so a long streaming report does not
   // re-render (and re-layout) the growing text on every audio chunk — that
   // main-thread jank was starving the audio scheduler and causing the rasp.
@@ -191,6 +216,7 @@ export function useStartTalkAudio({
   const chatResponseInFlightRef = useRef(false);
   const activeChatResponseRef = useRef<ChatResponseAnnouncement>();
   const chatResponseFlushTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const chatResponseWatchdogRef = useRef<ReturnType<typeof setTimeout>>();
   const seenChatResponseIdsRef = useRef(new Set<string>());
   const serverTurnCompleteRef = useRef(true);
   const lastUserActivityAtRef = useRef(0);
@@ -248,6 +274,9 @@ export function useStartTalkAudio({
     phase: "stopped",
     framesSent: 0,
   });
+  // True cuando core detecta varias voces solapadas: Lumina pasa a hablar solo
+  // si la interpelan o tiene algo que aportar de verdad.
+  const [isCrowded, setIsCrowded] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [speaker, setSpeaker] = useState<SpeakerInfo | null>(null);
   const [lastSoundEvent, setLastSoundEvent] =
@@ -351,6 +380,10 @@ export function useStartTalkAudio({
       clearTimeout(chatResponseFlushTimerRef.current);
       chatResponseFlushTimerRef.current = undefined;
     }
+    if (chatResponseWatchdogRef.current) {
+      clearTimeout(chatResponseWatchdogRef.current);
+      chatResponseWatchdogRef.current = undefined;
+    }
     chatResponseQueueRef.current = [];
     chatResponseInFlightRef.current = false;
     activeChatResponseRef.current = undefined;
@@ -381,6 +414,42 @@ export function useStartTalkAudio({
     isStreamingRef.current = isStreaming;
   }, [isStreaming]);
 
+  /**
+   * Milisegundos de voz que quedan por sonar en la cola. Es el único dato real
+   * de "Lumina sigue hablando": el servidor entrega el audio hasta 3x más
+   * rápido que el tiempo real, así que ni core ni la UI pueden deducirlo de la
+   * hora de llegada de los fragmentos.
+   */
+  const playbackRemainingMs = useCallback(() => {
+    const outputContext = outputContextRef.current;
+    if (!outputContext) {
+      return 0;
+    }
+    return Math.max(
+      0,
+      Math.round((nextPlaybackTimeRef.current - outputContext.currentTime) * 1000),
+    );
+  }, []);
+
+  /**
+   * Le dice a core cuánto le queda por sonar. Core mantiene el micrófono
+   * cerrado mientras tanto, así que su propia voz por los altavoces no puede
+   * abrir un turno y cortarla a media respuesta.
+   */
+  const reportPlayback = useCallback(
+    (remainingMs: number) => {
+      const sessionId = sessionIdRef.current;
+      if (!sessionId || lastPlaybackReportRef.current === remainingMs) {
+        return;
+      }
+      lastPlaybackReportRef.current = remainingMs;
+      void ideMessenger
+        .request("startTalk/reportPlayback", { sessionId, remainingMs })
+        .catch(() => undefined);
+    },
+    [ideMessenger],
+  );
+
   const stopPlayback = useCallback(() => {
     outputSourcesRef.current.forEach((source) => {
       try {
@@ -391,8 +460,10 @@ export function useStartTalkAudio({
     });
     outputSourcesRef.current = [];
     nextPlaybackTimeRef.current = outputContextRef.current?.currentTime ?? 0;
+    // La cola quedó vacía ya: core debe reabrir el micro sin esperar al tick.
+    reportPlayback(0);
     handlePlaybackIdleRef.current();
-  }, []);
+  }, [reportPlayback]);
 
   const stopListening = useCallback(async () => {
     const sessionId = sessionIdRef.current;
@@ -405,8 +476,14 @@ export function useStartTalkAudio({
     settleDelegationApproval(false);
     sessionIdRef.current = null;
     setStatus("idle");
+    setIsCrowded(false);
     setVideoSource(null);
     setVideoState({ phase: "stopped", framesSent: 0 });
+    lastPlaybackReportRef.current = -1;
+    if (turnStuckTimerRef.current) {
+      clearTimeout(turnStuckTimerRef.current);
+      turnStuckTimerRef.current = undefined;
+    }
 
     if (sessionId) {
       await ideMessenger.request("startTalk/stop", { sessionId });
@@ -437,15 +514,17 @@ export function useStartTalkAudio({
 
   // Start a low-frequency watchdog (once) that keeps the output context awake
   // for the whole session, so a mid-report suspend can never leave the voice
-  // permanently silent. Cleared on unmount.
+  // permanently silent. Also feeds core the real playback position. Cleared on
+  // unmount.
   const ensureOutputWatchdog = useCallback(() => {
     if (outputWatchdogRef.current) {
       return;
     }
     outputWatchdogRef.current = setInterval(() => {
       resumeOutputContextIfNeeded();
+      reportPlayback(playbackRemainingMs());
     }, 500);
-  }, [resumeOutputContextIfNeeded]);
+  }, [playbackRemainingMs, reportPlayback, resumeOutputContextIfNeeded]);
 
   // Push the accumulated assistant transcript to the UI at most ~8x/s. During a
   // long spoken report this replaces one React re-render per audio chunk (which
@@ -516,8 +595,15 @@ export function useStartTalkAudio({
       source.start(startAt);
       nextPlaybackTimeRef.current = startAt + audioBuffer.duration;
       outputSourcesRef.current.push(source);
+      // Sigue hablando: cancela la red de seguridad y avisa a core en el acto
+      // en vez de esperar al siguiente tick del watchdog.
+      if (turnStuckTimerRef.current) {
+        clearTimeout(turnStuckTimerRef.current);
+        turnStuckTimerRef.current = undefined;
+      }
+      reportPlayback(playbackRemainingMs());
     },
-    [ensureOutputWatchdog],
+    [ensureOutputWatchdog, playbackRemainingMs, reportPlayback],
   );
 
   const requeueCurrentNotificationBatch = useCallback(() => {
@@ -590,15 +676,32 @@ export function useStartTalkAudio({
     serverTurnCompleteRef.current = false;
     setPendingNotificationCount(notificationQueueRef.current.length);
 
-    notificationWatchdogRef.current = setTimeout(() => {
-      notificationWatchdogRef.current = undefined;
-      if (!notificationInFlightRef.current) {
-        return;
-      }
-      finishCurrentNotificationBatch();
-      serverTurnCompleteRef.current = true;
-      scheduleNotificationFlush(3_000);
-    }, 45_000);
+    // El watchdog solo debe rescatar una tanda que se PERDIÓ, nunca cortar una
+    // lectura que va bien. Por eso se rearma mientras siga sonando voz, con un
+    // tope absoluto por si algo se queda colgado de verdad.
+    const startedAt = Date.now();
+    const armNotificationWatchdog = () => {
+      notificationWatchdogRef.current = setTimeout(() => {
+        notificationWatchdogRef.current = undefined;
+        if (!notificationInFlightRef.current) {
+          return;
+        }
+        const stillSpeaking =
+          outputSourcesRef.current.length > 0 ||
+          !serverTurnCompleteRef.current;
+        if (
+          stillSpeaking &&
+          Date.now() - startedAt < NOTIFICATION_WATCHDOG_MAX_MS
+        ) {
+          armNotificationWatchdog();
+          return;
+        }
+        finishCurrentNotificationBatch();
+        serverTurnCompleteRef.current = true;
+        scheduleNotificationFlush(3_000);
+      }, ANNOUNCEMENT_WATCHDOG_GRACE_MS);
+    };
+    armNotificationWatchdog();
 
     // Ask before replying: if the batch has a reply-eligible direct message,
     // Start Talk reads it and then asks "¿quieres que le responda?". We hold the
@@ -669,6 +772,10 @@ export function useStartTalkAudio({
     }
     activeChatResponseRef.current = undefined;
     chatResponseInFlightRef.current = false;
+    if (chatResponseWatchdogRef.current) {
+      clearTimeout(chatResponseWatchdogRef.current);
+      chatResponseWatchdogRef.current = undefined;
+    }
   }, []);
 
   const tryFlushChatResponse = useCallback(() => {
@@ -693,6 +800,34 @@ export function useStartTalkAudio({
     chatResponseInFlightRef.current = true;
     serverTurnCompleteRef.current = false;
 
+    // Esta ruta no tenía watchdog: si la lectura se perdía (sesión caída,
+    // respuesta que nunca llega), `chatResponseInFlight` se quedaba en true
+    // para siempre y Lumina no volvía a leer NINGUNA respuesta. Como en las
+    // notificaciones, se rearma mientras siga sonando voz.
+    const startedAt = Date.now();
+    const armChatResponseWatchdog = () => {
+      chatResponseWatchdogRef.current = setTimeout(() => {
+        chatResponseWatchdogRef.current = undefined;
+        if (!chatResponseInFlightRef.current) {
+          return;
+        }
+        const stillSpeaking =
+          outputSourcesRef.current.length > 0 ||
+          !serverTurnCompleteRef.current;
+        if (
+          stillSpeaking &&
+          Date.now() - startedAt < NOTIFICATION_WATCHDOG_MAX_MS
+        ) {
+          armChatResponseWatchdog();
+          return;
+        }
+        requeueCurrentChatResponse();
+        serverTurnCompleteRef.current = true;
+        scheduleChatResponseFlush(3_000);
+      }, ANNOUNCEMENT_WATCHDOG_GRACE_MS);
+    };
+    armChatResponseWatchdog();
+
     void ideMessenger
       .request("startTalk/sendText", {
         sessionId,
@@ -715,13 +850,41 @@ export function useStartTalkAudio({
   tryFlushChatResponseRef.current = tryFlushChatResponse;
 
   const handlePlaybackIdle = useCallback(() => {
-    if (outputSourcesRef.current.length > 0 || !serverTurnCompleteRef.current) {
+    if (outputSourcesRef.current.length > 0) {
       return;
     }
+
+    // La cola de voz quedó vacía. Si el servidor todavía no cerró el turno,
+    // esperamos un poco y lo damos por cerrado: sin esto, una sesión que cae a
+    // media respuesta deja `serverTurnComplete` en false para siempre y ni las
+    // notificaciones ni las respuestas de chat se vuelven a leer nunca.
+    if (!serverTurnCompleteRef.current) {
+      reportPlayback(0);
+      if (!turnStuckTimerRef.current) {
+        turnStuckTimerRef.current = setTimeout(() => {
+          turnStuckTimerRef.current = undefined;
+          if (
+            outputSourcesRef.current.length > 0 ||
+            serverTurnCompleteRef.current
+          ) {
+            return;
+          }
+          serverTurnCompleteRef.current = true;
+          handlePlaybackIdleRef.current();
+        }, TURN_STUCK_TIMEOUT_MS);
+      }
+      return;
+    }
+
+    reportPlayback(0);
 
     if (chatResponseInFlightRef.current) {
       activeChatResponseRef.current = undefined;
       chatResponseInFlightRef.current = false;
+      if (chatResponseWatchdogRef.current) {
+        clearTimeout(chatResponseWatchdogRef.current);
+        chatResponseWatchdogRef.current = undefined;
+      }
     }
 
     if (notificationInFlightRef.current) {
@@ -736,6 +899,7 @@ export function useStartTalkAudio({
     scheduleNotificationFlush(450);
   }, [
     finishCurrentNotificationBatch,
+    reportPlayback,
     scheduleChatResponseFlush,
     scheduleNotificationFlush,
   ]);
@@ -1085,6 +1249,20 @@ export function useStartTalkAudio({
         }
         setStatus("speaking");
         await playAudio(event.data, event.mimeType);
+        return;
+      }
+
+      if (event.type === "environment") {
+        setIsCrowded(event.crowded);
+        return;
+      }
+
+      if (event.type === "stayedSilent") {
+        // Decidió que ese turno no era para ella. Es comportamiento correcto:
+        // el turno se cierra sin voz y las colas siguen su curso.
+        assistantTurnActiveRef.current = false;
+        serverTurnCompleteRef.current = true;
+        handlePlaybackIdleRef.current();
         return;
       }
 
@@ -1510,6 +1688,14 @@ export function useStartTalkAudio({
         clearTimeout(assistantTranscriptFlushRef.current);
         assistantTranscriptFlushRef.current = undefined;
       }
+      if (turnStuckTimerRef.current) {
+        clearTimeout(turnStuckTimerRef.current);
+        turnStuckTimerRef.current = undefined;
+      }
+      if (chatResponseWatchdogRef.current) {
+        clearTimeout(chatResponseWatchdogRef.current);
+        chatResponseWatchdogRef.current = undefined;
+      }
       void stopListening();
       void outputContextRef.current?.close();
     };
@@ -1527,6 +1713,7 @@ export function useStartTalkAudio({
     restartListening,
     toolActivities,
     userTranscript,
+    isCrowded,
     videoSource,
     videoState,
     startScreenShare,

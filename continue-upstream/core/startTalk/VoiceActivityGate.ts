@@ -13,12 +13,15 @@
  * abrir/cerrar el turno del usuario mediante señales de actividad manuales
  * (`activityStart` / `activityEnd`).
  *
- * Comportamiento clave (dúplex-aware):
+ * Comportamiento clave:
  * - Idle / escuchando: umbral normal y arranque corto → responde ágil.
- * - Mientras Lumina HABLA: sigue analizando en segundo plano, pero exige voz
- *   real, sostenida y con más energía antes de abrir turno (barge-in). Así el
- *   eco de su propia voz y las muletillas cortas NO la interrumpen; solo una
- *   interrupción deliberada del usuario la corta.
+ * - Mientras Lumina HABLA (`bargeMode`): "keyword" (por defecto) solo la corta
+ *   con una orden corta y fuerte tipo "para"/"espera"; "energy" permite el
+ *   barge-in clásico por voz sostenida; "off" la hace incortable.
+ * - En una sala con varias voces a la vez el turno se cierra igual, por techo
+ *   de duración o por el hueco más profundo disponible. Sin esto el turno no
+ *   se cierra NUNCA y Gemini jamás recibe permiso para responder: Lumina
+ *   parece muda. Ver `maxTurnMs` / `softBoundary*`.
  *
  * No usa ningún modelo de IA local: es DSP puro (energía RMS + histéresis).
  */
@@ -32,7 +35,16 @@ export interface VoiceActivityGateCallbacks {
   onActivityEnd: () => void;
   /** Cambio de estado observable (para UI/telemetría). Opcional. */
   onSpeechState?: (speaking: boolean) => void;
+  /**
+   * Cambia cuando el entorno pasa a tener (o dejar de tener) varias voces
+   * solapadas de forma sostenida. Sirve para que Lumina sepa que está en un
+   * grupo y aplique sus reglas de cuándo intervenir. Opcional.
+   */
+  onEnvironmentChange?: (crowded: boolean) => void;
 }
+
+/** Qué puede interrumpir a Lumina mientras habla. */
+export type BargeInMode = "keyword" | "energy" | "off";
 
 export interface VoiceActivityGateOptions {
   sampleRate: number;
@@ -68,12 +80,48 @@ export interface VoiceActivityGateOptions {
   /** Margen extra tras el fin estimado de reproducción para seguir tratándolo como "hablando" (ms). */
   playbackTailMs: number;
   /**
-   * Half-duplex mode: while Lumina is audibly speaking, ignore the microphone
-   * ENTIRELY so her own voice (speaker echo) can never open a turn. This trades
-   * away barge-in for a guaranteed no-self-listening loop. When false, the
-   * duplex-aware barge-in behaviour (higher thresholds while she speaks) applies.
+   * Qué puede cortar a Lumina mientras habla:
+   * - "keyword": solo una interjección corta y claramente más fuerte que el eco
+   *   de su propia voz ("¡para!", "espera"). Ni la bulla ni su eco la cortan.
+   * - "energy": barge-in clásico por voz sostenida y con más energía.
+   * - "off": half-duplex estricto, el micro se ignora por completo.
    */
-  halfDuplex: boolean;
+  bargeMode: BargeInMode;
+  /**
+   * Cuánto debe superar la interjección al nivel del propio eco para contar.
+   * Mientras Lumina suena, el micro SIEMPRE la está oyendo por los altavoces:
+   * un umbral absoluto no distingue su eco de tu voz, pero un salto claro por
+   * encima del nivel de eco medido sí.
+   */
+  bargeOverEchoRatio: number;
+  /** Duración mínima de la orden corta que puede cortarla (ms). */
+  stopWordMinMs: number;
+  /** Duración máxima de esa orden: por encima ya es habla continua, no una orden. */
+  stopWordMaxMs: number;
+  /** Caída por debajo del umbral que confirma que la orden terminó (ms). */
+  stopWordSilenceMs: number;
+  /** Suavizado del nivel de eco medido mientras Lumina habla (0..1). */
+  echoBaselineAlpha: number;
+  /**
+   * Techo duro de un turno abierto (ms). Sin esto, en una sala con varias
+   * personas hablando el silencio de cierre no llega nunca y el turno queda
+   * abierto para siempre: Gemini no responde y se transmite audio sin parar.
+   */
+  maxTurnMs: number;
+  /**
+   * A partir de aquí se acepta cerrar el turno en un hueco RELATIVO (una bajada
+   * de energía respecto al pico del turno) en vez de exigir silencio real. Es
+   * lo que da límites de turno naturales cuando el ruido de fondo nunca calla.
+   */
+  softBoundaryAfterMs: number;
+  /** Cuánto debe bajar la energía respecto al pico del turno para valer como hueco. */
+  softBoundaryRatio: number;
+  /** Cuánto debe durar ese hueco para cerrar el turno (ms). */
+  softBoundarySilenceMs: number;
+  /** Ventana en la que se mide si el entorno tiene voces solapadas (ms). */
+  crowdedWindowMs: number;
+  /** Fracción de frames con voz dentro de la ventana para declararlo "con gente". */
+  crowdedVoicedRatio: number;
 }
 
 export const DEFAULT_GATE_OPTIONS: VoiceActivityGateOptions = {
@@ -95,7 +143,18 @@ export const DEFAULT_GATE_OPTIONS: VoiceActivityGateOptions = {
   noiseRiseAlpha: 0.04,
   maxNoiseRiseRatio: 1.35,
   playbackTailMs: 250,
-  halfDuplex: false,
+  bargeMode: "keyword",
+  bargeOverEchoRatio: 2.6,
+  stopWordMinMs: 240,
+  stopWordMaxMs: 1_100,
+  stopWordSilenceMs: 200,
+  echoBaselineAlpha: 0.05,
+  maxTurnMs: 12_000,
+  softBoundaryAfterMs: 3_500,
+  softBoundaryRatio: 0.38,
+  softBoundarySilenceMs: 260,
+  crowdedWindowMs: 6_000,
+  crowdedVoicedRatio: 0.85,
 };
 
 type GateState = "idle" | "speaking";
@@ -118,6 +177,29 @@ export class VoiceActivityGate {
   /** Marca temporal (ms epoch) hasta la que consideramos que Lumina sigue sonando. */
   private playbackDeadline = 0;
 
+  /** Duración del turno abierto y pico de energía observado en él. */
+  private turnMs = 0;
+  private turnPeakRms = 0;
+  /** Duración del hueco relativo en curso (cierre suave en entornos ruidosos). */
+  private dipMs = 0;
+
+  /** Detector de interjección corta ("¡para!") mientras Lumina habla. */
+  private stopWordVoicedMs = 0;
+  private stopWordSilenceMs = 0;
+  private stopWordArmed = false;
+  private stopWordFrames: Buffer[] = [];
+  /** Ráfaga ya descartada por larga; no se reevalúa hasta que baje la energía. */
+  private stopWordLockedOut = false;
+  /** Nivel que el micro capta de la propia voz de Lumina por los altavoces. */
+  private echoBaseline = 0;
+  /** Voz sostenida acumulada en modo de barge-in por energía. */
+  private bargeCandidateMs = 0;
+
+  /** Ventana deslizante para saber si hay varias voces solapadas. */
+  private crowdWindow: boolean[] = [];
+  private crowdVoicedCount = 0;
+  private crowded = false;
+
   /** Reloj inyectable para tests deterministas. */
   private readonly now: () => number;
 
@@ -136,12 +218,27 @@ export class VoiceActivityGate {
 
   /**
    * Informa que el modelo emitió audio de salida. Extiende la ventana durante la
-   * que tratamos la entrada del micro como potencial eco (modo barge-in estricto).
+   * que tratamos la entrada del micro como potencial eco.
+   *
+   * Es solo una ESTIMACIÓN por hora de llegada: el servidor entrega el audio
+   * hasta 3x más rápido que el tiempo real, así que esto adelanta la ventana
+   * correctamente pero no sabe si la reproducción real se atrasó o se suspendió.
+   * La verdad la da `setPlaybackRemaining`, que manda la GUI.
    */
   noteAssistantAudio(byteLength: number, sampleRate = 24000): void {
     const durationMs = (byteLength / 2 / sampleRate) * 1000;
     const from = Math.max(this.now(), this.playbackDeadline);
     this.playbackDeadline = from + durationMs;
+  }
+
+  /**
+   * Cuánto audio le queda REALMENTE por sonar a Lumina, según la cola de
+   * reproducción de la GUI. Es autoritativo: si la reproducción se suspendió,
+   * alarga la ventana; si la cortaron, la cierra en el acto.
+   */
+  setPlaybackRemaining(remainingMs: number): void {
+    this.playbackDeadline =
+      remainingMs > 0 ? this.now() + remainingMs : 0;
   }
 
   /** Fuerza (des)activar el estado "Lumina hablando". */
@@ -154,6 +251,11 @@ export class VoiceActivityGate {
     } else {
       this.playbackDeadline = 0;
     }
+  }
+
+  /** True cuando hay varias voces solapadas de forma sostenida. */
+  isCrowded(): boolean {
+    return this.crowded;
   }
 
   private isAssistantActive(): boolean {
@@ -182,29 +284,21 @@ export class VoiceActivityGate {
     const rms = rmsOfS16(frame);
     const duplex = this.isAssistantActive();
 
-    // Half-duplex: while Lumina is audibly speaking, drop the microphone
-    // entirely. Her own voice (speaker echo) can never open a turn, so she
-    // cannot auto-answer herself. Listening resumes automatically once the
-    // playback window (+ tail) elapses.
-    if (this.opts.halfDuplex && duplex) {
-      if (this.state === "speaking") {
-        // A user turn was open when she started speaking: close it cleanly.
-        this.closeTurn();
-      }
-      this.candidateMs = 0;
-      // Do NOT keep her echo in the pre-roll, or it would leak into the next
-      // user turn the moment she stops speaking.
-      this.clearPreRoll();
+    if (duplex) {
+      this.handleAssistantSpeakingFrame(frame, rms);
       return;
     }
 
-    const multiplier = duplex
-      ? this.opts.bargeStartMultiplier
-      : this.opts.startMultiplier;
-    const absFloor = duplex
-      ? this.opts.bargeAbsoluteFloor
-      : this.opts.absoluteFloor;
-    const baseThreshold = Math.max(absFloor, this.noiseFloor * multiplier);
+    this.clearStopWordState();
+    // El nivel de eco solo tiene sentido mientras ella suena: se reaprende
+    // desde cero en cada intervención suya.
+    this.echoBaseline = 0;
+    this.bargeCandidateMs = 0;
+
+    const baseThreshold = Math.max(
+      this.opts.absoluteFloor,
+      this.noiseFloor * this.opts.startMultiplier,
+    );
     // Once speech is a candidate, use a lower continuation threshold. Natural
     // speech contains short low-energy consonants and gaps that should not erase
     // the stronger syllables already observed.
@@ -214,15 +308,13 @@ export class VoiceActivityGate {
         : baseThreshold;
     const voiced = rms >= threshold;
 
+    this.trackCrowd(voiced);
     this.pushPreRoll(frame);
 
     if (this.state === "idle") {
       if (voiced) {
         this.candidateMs += this.opts.frameMs;
-        const sustainNeeded = duplex
-          ? this.opts.startSustainMsBarge
-          : this.opts.startSustainMsIdle;
-        if (this.candidateMs >= sustainNeeded) {
+        if (this.candidateMs >= this.opts.startSustainMsIdle) {
           this.openTurn();
         }
       } else {
@@ -230,10 +322,7 @@ export class VoiceActivityGate {
         // Keep a leaky candidate across brief consonants and syllabic gaps. The
         // noise estimate stays frozen until the candidate fully expires, so soft
         // speech cannot raise its own threshold.
-        this.candidateMs = Math.max(
-          0,
-          this.candidateMs - this.opts.frameMs,
-        );
+        this.candidateMs = Math.max(0, this.candidateMs - this.opts.frameMs);
         if (this.candidateMs === 0) {
           this.adaptNoiseFloor(rms);
         }
@@ -243,6 +332,9 @@ export class VoiceActivityGate {
 
     // state === "speaking": ya cedimos el turno al usuario.
     this.callbacks.onAudio(frame);
+    this.turnMs += this.opts.frameMs;
+    this.turnPeakRms = Math.max(this.turnPeakRms, rms);
+
     if (voiced) {
       this.silenceMs = 0;
     } else {
@@ -250,7 +342,193 @@ export class VoiceActivityGate {
       this.adaptNoiseFloor(rms);
       if (this.silenceMs >= this.opts.endSilenceMs) {
         this.closeTurn();
+        return;
       }
+    }
+
+    // Entornos con varias voces: el silencio real de `endSilenceMs` puede no
+    // llegar jamás. Cerramos en el hueco relativo más profundo disponible y,
+    // como último recurso, por techo de duración. Sin esto Gemini nunca recibe
+    // el turno y Lumina se queda escuchando indefinidamente.
+    if (rms < this.turnPeakRms * this.opts.softBoundaryRatio) {
+      this.dipMs += this.opts.frameMs;
+    } else {
+      this.dipMs = 0;
+    }
+
+    const canUseSoftBoundary = this.turnMs >= this.opts.softBoundaryAfterMs;
+    if (canUseSoftBoundary && this.dipMs >= this.opts.softBoundarySilenceMs) {
+      this.closeTurn();
+      return;
+    }
+
+    if (this.turnMs >= this.opts.maxTurnMs) {
+      this.closeTurn();
+    }
+  }
+
+  /**
+   * Frame recibido mientras Lumina está sonando.
+   *
+   * El problema de fondo: mientras ella habla el micro la está oyendo por los
+   * altavoces SIEMPRE, así que un umbral absoluto no distingue su eco de tu
+   * voz. Aquí medimos continuamente el nivel de ese eco y solo aceptamos como
+   * interrupción un salto claro por encima de él (`bargeOverEchoRatio`) que
+   * además sea CORTO (entre `stopWordMinMs` y `stopWordMaxMs`): el perfil de
+   * una interjección como "¡para!". Su propio eco y la bulla de una sala son
+   * continuos, así que se pasan del máximo y quedan descartados.
+   *
+   * Ojo: esto NO reconoce la palabra literal — para eso haría falta ASR local,
+   * que no tenemos. Reconoce el gesto acústico de cortar a alguien.
+   */
+  private handleAssistantSpeakingFrame(frame: Buffer, rms: number): void {
+    if (this.state === "speaking") {
+      // Había un turno abierto cuando ella empezó a hablar: ciérralo limpio.
+      this.closeTurn();
+    }
+    this.candidateMs = 0;
+    // Su eco NO entra al pre-roll: se filtraría al siguiente turno del usuario
+    // en cuanto deje de hablar.
+    this.clearPreRoll();
+
+    if (this.opts.bargeMode === "off") {
+      this.clearStopWordState();
+      return;
+    }
+
+    if (this.opts.bargeMode === "energy") {
+      const energyThreshold = Math.max(
+        this.opts.bargeAbsoluteFloor,
+        this.noiseFloor * this.opts.bargeStartMultiplier,
+      );
+      if (rms >= energyThreshold) {
+        this.bargeCandidateMs += this.opts.frameMs;
+        if (this.bargeCandidateMs >= this.opts.startSustainMsBarge) {
+          this.bargeCandidateMs = 0;
+          this.openTurn();
+        }
+      } else {
+        this.bargeCandidateMs = 0;
+      }
+      return;
+    }
+
+    // bargeMode === "keyword". La referencia es el nivel del propio eco, que se
+    // siembra con el primer frame de su intervención: un umbral absoluto no
+    // sirve porque el volumen del eco depende de los altavoces y del AGC.
+    if (this.echoBaseline <= 0) {
+      this.echoBaseline = rms;
+    }
+    const threshold = Math.max(
+      this.opts.bargeAbsoluteFloor,
+      this.echoBaseline * this.opts.bargeOverEchoRatio,
+    );
+    const voiced = rms >= threshold;
+
+    // La referencia solo aprende de lo que NO es un salto. Así un grito no se
+    // absorbe a sí mismo dentro de la referencia y deja de ser detectable.
+    if (!voiced) {
+      const alpha = this.opts.echoBaselineAlpha;
+      this.echoBaseline = this.echoBaseline * (1 - alpha) + rms * alpha;
+    }
+
+    if (voiced) {
+      if (this.stopWordLockedOut) {
+        // Ya se descartó esta ráfaga por larga. Mientras siga sonando fuerte no
+        // se vuelve a evaluar: si no, una parrafada se trocearía en trozos del
+        // tamaño de una orden y acabaría colando.
+        return;
+      }
+      if (this.stopWordSilenceMs > 0) {
+        // Volvió a subir antes de confirmarse el final: no era una interjección
+        // corta, es habla continua. Se descarta.
+        this.resetStopWordDetector();
+      }
+      this.stopWordVoicedMs += this.opts.frameMs;
+      this.stopWordFrames.push(Buffer.from(frame));
+      this.stopWordArmed =
+        this.stopWordVoicedMs >= this.opts.stopWordMinMs &&
+        this.stopWordVoicedMs <= this.opts.stopWordMaxMs;
+      if (this.stopWordVoicedMs > this.opts.stopWordMaxMs) {
+        // Demasiado larga para ser una orden: es conversación o su propio eco.
+        this.resetStopWordDetector();
+        this.stopWordLockedOut = true;
+      }
+      return;
+    }
+
+    // Volvió a bajar: la ráfaga terminó y se puede volver a evaluar.
+    this.stopWordLockedOut = false;
+
+    if (!this.stopWordArmed) {
+      this.resetStopWordDetector();
+      return;
+    }
+
+    this.stopWordSilenceMs += this.opts.frameMs;
+    if (this.stopWordSilenceMs < this.opts.stopWordSilenceMs) {
+      return;
+    }
+
+    // Interjección corta y claramente por encima del eco: la cortamos y le
+    // mandamos lo que se dijo para que responda a ello.
+    const spoken = this.stopWordFrames;
+    this.resetStopWordDetector();
+    this.state = "speaking";
+    this.silenceMs = 0;
+    this.turnMs = 0;
+    this.turnPeakRms = 0;
+    this.dipMs = 0;
+    this.callbacks.onActivityStart();
+    this.callbacks.onSpeechState?.(true);
+    for (const buffered of spoken) {
+      this.callbacks.onAudio(buffered);
+      this.turnMs += this.opts.frameMs;
+    }
+  }
+
+  private resetStopWordDetector(): void {
+    this.stopWordVoicedMs = 0;
+    this.stopWordSilenceMs = 0;
+    this.stopWordArmed = false;
+    this.stopWordFrames = [];
+  }
+
+  /** Reset completo, incluido el cerrojo anti-parrafada. */
+  private clearStopWordState(): void {
+    this.resetStopWordDetector();
+    this.stopWordLockedOut = false;
+  }
+
+  /**
+   * Mantiene la ventana deslizante de "cuánto de este rato ha tenido voz".
+   * Una proporción muy alta y sostenida no es una persona hablando (que hace
+   * pausas), es una sala con varias voces solapadas.
+   */
+  private trackCrowd(voiced: boolean): void {
+    const capacity = Math.max(
+      1,
+      Math.floor(this.opts.crowdedWindowMs / this.opts.frameMs),
+    );
+    this.crowdWindow.push(voiced);
+    if (voiced) {
+      this.crowdVoicedCount += 1;
+    }
+    while (this.crowdWindow.length > capacity) {
+      if (this.crowdWindow.shift()) {
+        this.crowdVoicedCount -= 1;
+      }
+    }
+
+    if (this.crowdWindow.length < capacity) {
+      return;
+    }
+
+    const ratio = this.crowdVoicedCount / this.crowdWindow.length;
+    const crowded = ratio >= this.opts.crowdedVoicedRatio;
+    if (crowded !== this.crowded) {
+      this.crowded = crowded;
+      this.callbacks.onEnvironmentChange?.(crowded);
     }
   }
 
@@ -258,11 +536,15 @@ export class VoiceActivityGate {
     this.state = "speaking";
     this.candidateMs = 0;
     this.silenceMs = 0;
+    this.turnMs = 0;
+    this.turnPeakRms = 0;
+    this.dipMs = 0;
     this.callbacks.onActivityStart();
     this.callbacks.onSpeechState?.(true);
     // Vaciar el pre-roll para no perder el ataque de la primera palabra.
     for (const frame of this.preRoll) {
       this.callbacks.onAudio(frame);
+      this.turnMs += this.opts.frameMs;
     }
     this.clearPreRoll();
   }
@@ -271,6 +553,9 @@ export class VoiceActivityGate {
     this.state = "idle";
     this.candidateMs = 0;
     this.silenceMs = 0;
+    this.turnMs = 0;
+    this.turnPeakRms = 0;
+    this.dipMs = 0;
     this.callbacks.onActivityEnd();
     this.callbacks.onSpeechState?.(false);
   }
@@ -287,15 +572,19 @@ export class VoiceActivityGate {
     this.state = "idle";
     this.candidateMs = 0;
     this.silenceMs = 0;
+    this.turnMs = 0;
+    this.turnPeakRms = 0;
+    this.dipMs = 0;
     this.residual = Buffer.alloc(0);
+    this.clearStopWordState();
+    this.echoBaseline = 0;
+    this.bargeCandidateMs = 0;
     this.clearPreRoll();
   }
 
   private adaptNoiseFloor(rms: number): void {
     const rising = rms > this.noiseFloor;
-    const alpha = rising
-      ? this.opts.noiseRiseAlpha
-      : this.opts.noiseFallAlpha;
+    const alpha = rising ? this.opts.noiseRiseAlpha : this.opts.noiseFallAlpha;
     // Learn rising ambience gradually and in bounded steps. A sudden voice onset
     // can open the gate instead of being absorbed as the new noise floor.
     const target = rising

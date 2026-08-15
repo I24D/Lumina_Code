@@ -201,6 +201,17 @@ export type StartTalkVideoPhase =
   | "stopped"
   | "error";
 
+/**
+ * Cuánta voz le queda a Lumina por sonar en la cola de reproducción del
+ * cliente. Es el único dato fiable de "sigue hablando": el servidor entrega el
+ * audio hasta 3x más rápido que el tiempo real, así que core no puede deducirlo
+ * de la hora de llegada de los fragmentos.
+ */
+export interface StartTalkPlaybackReport {
+  sessionId: string;
+  remainingMs: number;
+}
+
 /** Fotograma de vídeo (JPEG base64) provisto por el cliente, si aplica. */
 export interface StartTalkVideoFrameInput {
   sessionId: string;
@@ -245,6 +256,25 @@ export type StartTalkCoreEvent =
   | {
       type: "interrupted";
       sessionId: string;
+    }
+  | {
+      /**
+       * Cambió el entorno acústico: varias voces solapadas de forma sostenida
+       * (o vuelta a la calma). Lumina aplica sus reglas de grupo cuando está
+       * `crowded`: por defecto calla y solo habla si la interpelan.
+       */
+      type: "environment";
+      sessionId: string;
+      crowded: boolean;
+    }
+  | {
+      /**
+       * Decidió que el turno no iba dirigido a ella y gastó el turno en
+       * `stay_silent` en vez de hablar. Es comportamiento correcto, no un fallo.
+       */
+      type: "stayedSilent";
+      sessionId: string;
+      reason?: string;
     }
   | {
       // Voice biometrics identified (or failed to identify) the current speaker.

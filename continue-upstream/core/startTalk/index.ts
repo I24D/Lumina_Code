@@ -11,6 +11,7 @@ export type {
   StartTalkNotification,
   StartTalkNotificationAccess,
   StartTalkNotificationSettingsRequest,
+  StartTalkPlaybackReport,
   StartTalkSessionRequest,
   StartTalkSoundCategory,
   StartTalkTranscriptEntry,

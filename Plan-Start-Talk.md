@@ -1071,6 +1071,121 @@ con fotogramas de pantalla, Gemini responde "Estás usando Visual Studio Code y
 veo el editor de código, la terminal y una ventana de chat en vivo". Core tsc 0,
 67 tests de startTalk en verde, gui build OK, extensión esbuild OK.
 
+### 6.15 Turnos, respuestas largas y cuándo hablar (IMPLEMENTADO, 2026-08-15)
+
+Dos fallos reportados en uso real, los dos reproducidos y medidos antes de
+tocar nada.
+
+#### Fallo A — se quedaba muda con texto largo
+
+Medido contra la API real (misma config que `openLiveSession`), leyendo una
+respuesta de 3.135 caracteres:
+
+| medida | valor |
+|---|---|
+| cobertura del texto | **100%** (no truncaba nada) |
+| audio generado | 164,2 s |
+| ventana de entrega | 54,2 s |
+| **velocidad de entrega** | **3,03x tiempo real** |
+| `generationComplete` | a los 56,6 s |
+| `turnComplete` | a los 166,7 s |
+
+⚠️ **El dato clave: el servidor entrega el audio hasta 3x más rápido que el
+tiempo real.** En una respuesta larga el cliente sostiene ~110 s de voz en
+cola, y de ahí salían todos los síntomas:
+
+1. **`generationComplete` se trataba como fin de turno.** No lo es: significa
+   "terminé de generar", no "terminé de hablar". El orbe pasaba a "escuchando"
+   con ~110 s de voz pendiente y las colas de notificaciones y de respuestas de
+   chat se desincronizaban. Ahora **solo `turnComplete` cierra el turno**.
+2. **La ventana de half-duplex se calculaba por hora de LLEGADA del audio.** Si
+   la reproducción se atrasaba o WebView2 suspendía el contexto, core creía que
+   ya había terminado, reabría el micro, captaba su propia voz por los altavoces
+   y se auto-cortaba — y `interrupted` llama a `stopPlayback()`, que tira la
+   cola ENTERA. De ahí "deja de hablar" a media respuesta.
+   Ahora la GUI informa cada 500 ms cuánta voz le queda en cola
+   (`startTalk/reportPlayback` → `gate.setPlaybackRemaining`). Es autoritativo:
+   si la reproducción se suspende, la ventana se alarga sola.
+3. **El watchdog de notificaciones era fijo de 45 s** — menos que los 164 s que
+   dura una lectura normal, así que saltaba EN MEDIO. Ahora se rearma mientras
+   siga sonando voz, con tope de 300 s.
+4. **La ruta de respuestas de chat no tenía watchdog.** Si una lectura se
+   perdía, `chatResponseInFlight` quedaba en true para siempre y no volvía a
+   leer NINGUNA respuesta. Ahora tiene el mismo watchdog rearmable, más una red
+   de seguridad en la GUI (`TURN_STUCK_TIMEOUT_MS`) por si `turnComplete` no
+   llega nunca.
+5. **La rotación de conexión de 12 min cortaba a media frase.** Ahora se aplaza
+   mientras quede voz en cola y se dispara al vaciarse.
+
+#### Fallo B — muda en una sala con varias voces
+
+Reproducido con test determinista: **60 s de bulla continua daban 1
+`activityStart`, 0 `activityEnd` y 60 s de audio transmitido para nada.**
+
+Causa: el gate solo cerraba turno con 650 ms de silencio real. En una sala con
+gente ese silencio **no llega nunca**, así que jamás se enviaba `activityEnd` y
+Gemini nunca recibía permiso para responder. No es que decidiera callarse: es
+que nadie le daba el turno. Añadido al `VoiceActivityGate`:
+
+- `maxTurnMs` (12 s): techo duro, el turno siempre se cierra.
+- Cierre suave por hueco RELATIVO (`softBoundary*`): a partir de 3,5 s se cierra
+  en la bajada de energía más profunda respecto al pico del turno, que es el
+  límite natural cuando el ruido de fondo nunca calla.
+- Detección de entorno (`crowdedWindowMs` / `crowdedVoicedRatio`) → callback
+  `onEnvironmentChange`. Una persona con pausas naturales NO cuenta (hay test).
+
+#### Cuándo habla: selectiva
+
+El system prompt decía literalmente *"Speak ONLY when the user has just spoken
+to you... Never speak on your own"*: estaba construida para ser reactiva. Ahora:
+
+- Nueva función `stay_silent`. La Live API responde con voz a CADA turno que se
+  le cierra; gastar el turno en una llamada sin audio **es** callarse. Core
+  responde el tool call y emite `stayedSilent`, sin pasar por la GUI (no hay
+  nada que autorizar).
+- Reglas de grupo en el prompt: por defecto calla, habla si la interpelan, si le
+  preguntan, o si tiene algo que aportar de verdad (corregir un dato falso,
+  responder algo que ellos no resolvieron, avisar de algo que le pidieron
+  recordar).
+- Cuando el entorno cambia, core manda un aviso con **`turnComplete: false`**:
+  entra en contexto SIN pedirle respuesta. Verificado: 0/4 veces habló por el
+  aviso.
+
+Verificado contra la API real, 9/9:
+- Conversación ajena y pregunta entre ellos → `stay_silent`.
+- La nombran / pregunta directa → responde.
+- Dato falso ("=== convierte tipos") → *"No, eso es incorrecto. El triple igual
+  compara valor y tipo sin hacer conversión"*.
+- Pregunta que no resuelven → *"El comando es `git reset HEAD~1`"*.
+- Charla trivial y planes personales → calla.
+
+#### Interrupción: solo por orden corta
+
+`bargeMode` sustituye a `halfDuplex`. Por defecto `"keyword"`.
+
+⚠️ **No reconoce la palabra literal** — eso exigiría ASR local, que no hay.
+Reconoce el *gesto acústico* de cortar a alguien: mientras ella suena, el micro
+la está oyendo SIEMPRE por los altavoces, así que un umbral absoluto no
+distingue su eco de tu voz. Se mide el nivel del eco en vivo y solo cuenta un
+salto de 2,6x sobre él que además sea CORTO (240–1100 ms). Su eco y la bulla son
+continuos y se descartan por pasarse del máximo, con cerrojo anti-parrafada para
+que una frase larga no se trocee en pedazos del tamaño de una orden.
+
+`START_TALK_BARGE_IN=keyword|energy|off` (`START_TALK_HALF_DUPLEX=false` se
+sigue respetando y mapea a `energy`).
+
+Archivos: `VoiceActivityGate.ts` (+8 tests), `StartTalkManager.ts`, `types.ts`,
+`index.ts`, `core.ts`, `protocol/core.ts`, `protocol/passThrough.ts` (nuevo
+`startTalk/reportPlayback`), `useStartTalkAudio.ts`,
+`LiveConversationOverlay.tsx`.
+
+Core tsc 0, gui tsc 0, 76 tests de startTalk en verde, gui build + esbuild +
+`start-talk.exe` reconstruidos.
+
+**Pendiente conocido:** cancelación de eco real (AEC). El detector actual es
+energía relativa; con AEC de verdad se podría reabrir el barge-in libre sin
+riesgo de que se auto-corte.
+
 ### 6.12 Próximas prioridades de Start Talk
 
 1. Supervisor 24/7 con autoarranque, health check y recuperación completa de

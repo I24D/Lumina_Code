@@ -1342,14 +1342,20 @@ const MiniState = styled.span<{ $status: StartTalkStatus }>`
   }};
 `;
 
-function getStatusText(status: StartTalkStatus, errorMessage?: string) {
+function getStatusText(
+  status: StartTalkStatus,
+  errorMessage?: string,
+  crowded?: boolean,
+) {
   switch (status) {
     case "connecting":
       return "Conectando con Lumina Live...";
     case "connected":
       return "Preparando el micrófono...";
     case "listening":
-      return "Escuchando...";
+      // Con varias voces a la vez calla por defecto: conviene que se vea, para
+      // que su silencio no parezca que se colgó.
+      return crowded ? "Escuchando (modo grupo)..." : "Escuchando...";
     case "speaking":
       return "Hablando...";
     case "unsupported":
@@ -1541,6 +1547,7 @@ export function LiveConversationOverlay({
     stopSpeaking,
     toolActivities,
     userTranscript,
+    isCrowded,
     videoSource,
     videoState,
     startScreenShare,
@@ -1806,8 +1813,8 @@ export function LiveConversationOverlay({
   }, [orbFullscreen]);
 
   const statusText = useMemo(
-    () => getStatusText(status, errorMessage),
-    [errorMessage, status],
+    () => getStatusText(status, errorMessage, isCrowded),
+    [errorMessage, isCrowded, status],
   );
 
   const isSharingScreen =

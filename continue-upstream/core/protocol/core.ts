@@ -55,6 +55,7 @@ import type {
   StartTalkConnectResponse,
   StartTalkMuteRequest,
   StartTalkNotificationSettingsRequest,
+  StartTalkPlaybackReport,
   StartTalkSessionRequest,
   StartTalkTextInput,
   StartTalkToolResponseInput,
@@ -324,6 +325,7 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "startTalk/stopVideo": [StartTalkSessionRequest, void];
   "startTalk/sendVideoFrame": [StartTalkVideoFrameInput, void];
   "startTalk/listVideoSources": [undefined, StartTalkVideoSourceInfo[]];
+  "startTalk/reportPlayback": [StartTalkPlaybackReport, void];
   // Codebase indexing
   "index/setPaused": [boolean, void];
   "index/forceReIndex": [
