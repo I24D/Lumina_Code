@@ -237,29 +237,36 @@ export async function searchWebForVoice(
 
   const providers: Record<
     string,
-    (q: string, l: VoiceSearchLimits) => Promise<VoiceSearchPayload | null>
+    {
+      run: (q: string, l: VoiceSearchLimits) => Promise<VoiceSearchPayload | null>;
+      keyName: string;
+    }
   > = {
-    tavily: searchTavily,
-    brave: searchBrave,
+    tavily: { run: searchTavily, keyName: "TAVILY_API_KEY" },
+    brave: { run: searchBrave, keyName: "BRAVE_API_KEY" },
   };
 
   const order = resolveProviderOrder();
-  let anyConfigured = false;
+  // Distinguir "no hay clave" de "la búsqueda falló" importa: la primera vez que
+  // esto se rompió en producción, el .env no se encontraba y el error decía
+  // `search_unavailable`, que apunta al proveedor y no al sitio real del fallo.
+  let anyKeyPresent = false;
   for (const name of order) {
-    const run = providers[name];
-    if (!run) {
+    const provider = providers[name];
+    if (!provider) {
       continue;
     }
-    anyConfigured = true;
-    const result = await run(clean, limits);
+    if (!readLuminaEnv(provider.keyName)) {
+      continue;
+    }
+    anyKeyPresent = true;
+    const result = await provider.run(clean, limits);
     if (result) {
       return result;
     }
   }
 
   return {
-    error: anyConfigured
-      ? "search_unavailable"
-      : "no_search_provider_configured",
+    error: anyKeyPresent ? "search_unavailable" : "no_search_api_key",
   };
 }

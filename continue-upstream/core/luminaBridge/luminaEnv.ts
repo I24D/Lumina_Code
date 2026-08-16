@@ -18,30 +18,65 @@ import path from "path";
 
 let cache: Record<string, string> | null = null;
 
-// Canonical fallbacks — the project keeps a single root .env (see memory rule
-// "single .env at repo root"). Kept here so a tool works even when the
-// extension host's cwd is the extension dir rather than the project root.
+// Legacy fallbacks from when the project lived at C:\I24D_WhatsApp. Harmless if
+// absent, kept only so an old checkout still resolves.
 const CANONICAL_ROOTS = [
   "C:\\I24D_WhatsApp",
   "/c/I24D_WhatsApp",
   "/mnt/c/I24D_WhatsApp",
 ];
 
-function candidateEnvFiles(): string[] {
-  const roots = new Set<string>();
-  let current = process.cwd();
+/** Añade `dir` y todos sus ancestros al conjunto de raíces candidatas. */
+function addAncestors(roots: Set<string>, dir: string): void {
+  let current = dir;
   while (true) {
     roots.add(current);
     const parent = path.dirname(current);
     if (parent === current) {
-      break;
+      return;
     }
     current = parent;
+  }
+}
+
+/**
+ * Directorio de ESTE módulo, cuando se puede saber.
+ *
+ * Es la pieza que faltaba: subir desde `process.cwd()` NO sirve en el host de
+ * la extensión, cuyo cwd no tiene por qué estar dentro del repo (se observó
+ * `search_web` devolviendo `search_unavailable` con las claves perfectamente
+ * puestas en el `.env`, solo porque el archivo no se encontraba). El módulo, en
+ * cambio, siempre vive dentro del repo: en fuente bajo `core/luminaBridge/` y
+ * empaquetado bajo `extensions/vscode/out/`. Desde cualquiera de los dos se
+ * llega a la raíz subiendo.
+ */
+function moduleDir(): string | undefined {
+  // El bundle de la extensión es CJS, así que aquí `__dirname` existe y apunta
+  // a `extensions/vscode/out`. En ESM (vitest, fuente directo) no existe, pero
+  // ahí el cwd ya cae dentro del repo y la búsqueda por ancestros basta.
+  return typeof __dirname === "string" ? __dirname : undefined;
+}
+
+function candidateEnvFiles(): string[] {
+  const roots = new Set<string>();
+  // Override explícito: gana sobre cualquier heurística.
+  const explicitRoot = process.env.LUMINA_ROOT?.trim();
+  if (explicitRoot) {
+    roots.add(explicitRoot);
+  }
+  addAncestors(roots, process.cwd());
+  const here = moduleDir();
+  if (here) {
+    addAncestors(roots, here);
   }
   for (const root of CANONICAL_ROOTS) {
     roots.add(root);
   }
-  return [...roots].map((root) => path.join(root, ".env"));
+
+  const files = [...roots].map((root) => path.join(root, ".env"));
+  // Un archivo apuntado a dedo tiene prioridad absoluta.
+  const explicitFile = process.env.LUMINA_ENV_FILE?.trim();
+  return explicitFile ? [explicitFile, ...files] : files;
 }
 
 function loadRootEnv(): Record<string, string> {
