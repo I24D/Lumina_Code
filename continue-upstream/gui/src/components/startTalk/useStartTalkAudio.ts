@@ -36,6 +36,7 @@ import {
   selectPhoneBridgeNotifications,
 } from "./phoneAssistantBridge";
 import { isAffirmativeReply, isNegativeReply } from "./confirmationPhrases";
+import { PcmPlayer } from "./pcmPlayer";
 import { buildChatResponseSpeechPrompt } from "./voiceDelegation";
 
 const PCM_CHUNK_SIZE = 0x8000;
@@ -196,6 +197,13 @@ export function useStartTalkAudio({
   // policy can suspend it mid-playback, which used to make the voice go silent
   // while the model kept "reading". The watchdog resumes it whenever audio is
   // pending. See resumeOutputContextIfNeeded / ensureOutputWatchdog below.
+  // Reproductor por AudioWorklet. Se degrada solo a la ruta clasica si el
+  // WebView no lo soporta o el modulo no carga.
+  const pcmPlayerRef = useRef<PcmPlayer>();
+  const usePcmWorkletRef = useRef(PcmPlayer.isSupported());
+  // Para detectar el instante en que la cola se vacia: con worklet no existe
+  // `source.onended` que avise.
+  const wasPlayingRef = useRef(false);
   const outputWatchdogRef = useRef<ReturnType<typeof setInterval>>();
   // Último valor enviado a core, para no repetir el mismo informe.
   const lastPlaybackReportRef = useRef<number>(-1);
@@ -429,6 +437,12 @@ export function useStartTalkAudio({
    * hora de llegada de los fragmentos.
    */
   const playbackRemainingMs = useCallback(() => {
+    // Con AudioWorklet el dato es EXACTO: el worklet informa de cuantas muestras
+    // le quedan de verdad. En la ruta clasica solo se puede estimar.
+    const player = pcmPlayerRef.current;
+    if (player) {
+      return player.status().remainingMs;
+    }
     const outputContext = outputContextRef.current;
     if (!outputContext) {
       return 0;
@@ -437,6 +451,19 @@ export function useStartTalkAudio({
       0,
       Math.round((nextPlaybackTimeRef.current - outputContext.currentTime) * 1000),
     );
+  }, []);
+
+  /**
+   * Unico punto de verdad de "todavia suena su voz". Con worklet no hay nodos
+   * que contar, asi que preguntar por `outputSources.length` daria cero mientras
+   * ella sigue hablando, y eso desbloquearia las colas a media respuesta.
+   */
+  const hasQueuedAudio = useCallback(() => {
+    const player = pcmPlayerRef.current;
+    if (player) {
+      return player.status().remainingMs > 0;
+    }
+    return outputSourcesRef.current.length > 0;
   }, []);
 
   /**
@@ -459,6 +486,7 @@ export function useStartTalkAudio({
   );
 
   const stopPlayback = useCallback(() => {
+    pcmPlayerRef.current?.stop();
     outputSourcesRef.current.forEach((source) => {
       try {
         source.stop();
@@ -510,6 +538,7 @@ export function useStartTalkAudio({
   // Resume the output context if the WebView/OS suspended it while audio is
   // (about to be) playing. Safe to call often; it no-ops when running.
   const resumeOutputContextIfNeeded = useCallback(() => {
+    pcmPlayerRef.current?.resumeIfNeeded();
     const outputContext = outputContextRef.current;
     if (!outputContext || outputContext.state !== "suspended") {
       return;
@@ -532,8 +561,18 @@ export function useStartTalkAudio({
     }
     outputWatchdogRef.current = setInterval(() => {
       resumeOutputContextIfNeeded();
-      reportPlayback(playbackRemainingMs());
-    }, 500);
+      const remaining = playbackRemainingMs();
+      reportPlayback(remaining);
+
+      // Flanco de bajada: acaba de terminar de hablar. En la ruta clasica lo
+      // disparaba `source.onended`; con worklet no existe ese evento, asi que
+      // sin esto las colas de notificaciones y respuestas nunca avanzarian.
+      const playing = remaining > 0;
+      if (wasPlayingRef.current && !playing) {
+        handlePlaybackIdleRef.current();
+      }
+      wasPlayingRef.current = playing;
+    }, 250);
   }, [playbackRemainingMs, reportPlayback, resumeOutputContextIfNeeded]);
 
   // Push the accumulated assistant transcript to the UI at most ~8x/s. During a
@@ -559,6 +598,30 @@ export function useStartTalkAudio({
 
   const playAudio = useCallback(
     async (data: string, mimeType: string) => {
+      // Ruta preferente: AudioWorklet con anillo. Da cola exacta (de la que
+      // depende core para no reabrir el micro mientras ella habla) y evita
+      // crear un nodo por fragmento: se midieron 4.755 en una sola respuesta.
+      if (usePcmWorkletRef.current) {
+        try {
+          if (!pcmPlayerRef.current) {
+            pcmPlayerRef.current = new PcmPlayer();
+          }
+          ensureOutputWatchdog();
+          await pcmPlayerRef.current.play(data, parseAudioRate(mimeType));
+          if (turnStuckTimerRef.current) {
+            clearTimeout(turnStuckTimerRef.current);
+            turnStuckTimerRef.current = undefined;
+          }
+          reportPlayback(playbackRemainingMs());
+          return;
+        } catch {
+          // Si el worklet no arranca en este WebView, se degrada a la ruta
+          // clasica para el resto de la sesion en vez de quedarse muda.
+          usePcmWorkletRef.current = false;
+          pcmPlayerRef.current = undefined;
+        }
+      }
+
       const AudioContextConstructor = getAudioContextConstructor();
       if (!AudioContextConstructor) {
         setStatus("unsupported");
@@ -650,7 +713,7 @@ export function useStartTalkAudio({
       chatResponseQueueRef.current.length > 0 ||
       chatResponseInFlightRef.current ||
       !canAnnounceNotificationNow({
-        audioSources: outputSourcesRef.current.length,
+        audioSources: hasQueuedAudio() ? 1 : 0,
         serverTurnComplete: serverTurnCompleteRef.current,
         notificationInFlight: notificationInFlightRef.current,
       })
@@ -696,9 +759,7 @@ export function useStartTalkAudio({
         if (!notificationInFlightRef.current) {
           return;
         }
-        const stillSpeaking =
-          outputSourcesRef.current.length > 0 ||
-          !serverTurnCompleteRef.current;
+        const stillSpeaking = hasQueuedAudio() || !serverTurnCompleteRef.current;
         if (
           stillSpeaking &&
           Date.now() - startedAt < NOTIFICATION_WATCHDOG_MAX_MS
@@ -768,6 +829,7 @@ export function useStartTalkAudio({
   }, [
     ideMessenger,
     finishCurrentNotificationBatch,
+    hasQueuedAudio,
     requeueCurrentNotificationBatch,
     scheduleNotificationFlush,
   ]);
@@ -795,7 +857,7 @@ export function useStartTalkAudio({
       chatResponseQueueRef.current.length === 0 ||
       chatResponseInFlightRef.current ||
       notificationInFlightRef.current ||
-      outputSourcesRef.current.length > 0 ||
+      hasQueuedAudio() ||
       !serverTurnCompleteRef.current
     ) {
       return;
@@ -821,9 +883,7 @@ export function useStartTalkAudio({
         if (!chatResponseInFlightRef.current) {
           return;
         }
-        const stillSpeaking =
-          outputSourcesRef.current.length > 0 ||
-          !serverTurnCompleteRef.current;
+        const stillSpeaking = hasQueuedAudio() || !serverTurnCompleteRef.current;
         if (
           stillSpeaking &&
           Date.now() - startedAt < NOTIFICATION_WATCHDOG_MAX_MS
@@ -856,11 +916,16 @@ export function useStartTalkAudio({
         serverTurnCompleteRef.current = true;
         scheduleChatResponseFlush(2_000);
       });
-  }, [ideMessenger, requeueCurrentChatResponse, scheduleChatResponseFlush]);
+  }, [
+    hasQueuedAudio,
+    ideMessenger,
+    requeueCurrentChatResponse,
+    scheduleChatResponseFlush,
+  ]);
   tryFlushChatResponseRef.current = tryFlushChatResponse;
 
   const handlePlaybackIdle = useCallback(() => {
-    if (outputSourcesRef.current.length > 0) {
+    if (hasQueuedAudio()) {
       return;
     }
 
@@ -873,10 +938,7 @@ export function useStartTalkAudio({
       if (!turnStuckTimerRef.current) {
         turnStuckTimerRef.current = setTimeout(() => {
           turnStuckTimerRef.current = undefined;
-          if (
-            outputSourcesRef.current.length > 0 ||
-            serverTurnCompleteRef.current
-          ) {
+          if (hasQueuedAudio() || serverTurnCompleteRef.current) {
             return;
           }
           serverTurnCompleteRef.current = true;
@@ -909,6 +971,7 @@ export function useStartTalkAudio({
     scheduleNotificationFlush(450);
   }, [
     finishCurrentNotificationBatch,
+    hasQueuedAudio,
     reportPlayback,
     scheduleChatResponseFlush,
     scheduleNotificationFlush,
@@ -1713,6 +1776,8 @@ export function useStartTalkAudio({
         chatResponseWatchdogRef.current = undefined;
       }
       void stopListening();
+      void pcmPlayerRef.current?.close();
+      pcmPlayerRef.current = undefined;
       void outputContextRef.current?.close();
     };
   }, [clearSessionRecoveryTimer, stopListening]);
