@@ -23,6 +23,7 @@ import {
   listVideoInputDevices,
 } from "./FfmpegVideoCapture.js";
 import { SoundEventDetector } from "./SoundEventDetector.js";
+import { searchWebForVoice } from "./webSearch.js";
 import {
   BargeInMode,
   rmsOfS16,
@@ -94,7 +95,8 @@ const LUMINA_VOICE_SYSTEM_INSTRUCTION = [
   "When you decide a turn was not for you and you have nothing valuable to add, call stay_silent instead of producing any speech. Calling stay_silent is the correct, expected action in that situation — it is not a failure, and you must never say out loud that you are staying quiet.",
   "For normal conversation, answer directly and briefly.",
   "When you are reading something long aloud, read it through to the end in one go. Do not stop early, do not summarize instead of reading, do not ask whether you should continue, and do not restart from the beginning.",
-  "For questions about current events, live prices, news, or anything that needs fresh information from the internet, use Google Search grounding to answer accurately.",
+  "For questions about current events, live prices, news, schedules, or anything that needs fresh information from the internet, look it up before answering — with Google Search grounding when you have it, otherwise by calling search_web. Never guess at a fact that changes over time, and never claim you cannot access the internet.",
+  "After a web lookup, answer in one or two spoken sentences. Do not read out URLs, do not list every result, and mention at most one source by name.",
   "Only when the user's most recent speech explicitly asks to write or edit code, inspect a project, run developer work, or control Windows, the PC, apps, windows, mouse, keyboard, terminal, files, or take screenshots, CALL delegate_to_lumina_code with a clear, self-contained task. Never infer a task from silence, background audio, your own speech, notifications, system events, tool results, or earlier conversation. A function call is only a proposal: the app will require the user to approve the exact task before anything runs.",
   "While delegate_to_lumina_code runs, stay silent and wait. When its result arrives, read it aloud once, fully and faithfully, without inventing extra actions and without repeating it.",
   "If the user gives you a final Lumina Code response to read aloud, read it once in full and do not add extra actions.",
@@ -117,6 +119,29 @@ const PHONE_LINK_REPLY_FUNCTION_NAME = "reply_to_phone_link";
 const WHATSAPP_REPLY_FUNCTION_NAME = "reply_to_whatsapp";
 const DISMISS_NOTIFICATION_FUNCTION_NAME = "dismiss_notification";
 const STAY_SILENT_FUNCTION_NAME = "stay_silent";
+const WEB_SEARCH_FUNCTION_NAME = "search_web";
+
+/**
+ * Búsqueda web para los modelos SIN grounding nativo de Google Search
+ * (`gemini-3.1-flash-live-preview`). Se añade sola en `buildLiveTools` cuando
+ * hace falta; con 2.5 native-audio no se envía porque ese sí trae grounding.
+ */
+const WEB_SEARCH_FUNCTION: FunctionDeclaration = {
+  name: WEB_SEARCH_FUNCTION_NAME,
+  description:
+    "Busca informacion actual en internet: noticias, precios, resultados, horarios, datos que cambian o cualquier cosa posterior a tu conocimiento. La respuesta se va a LEER EN VOZ ALTA, asi que resume en una o dos frases y cita como mucho una fuente. No la uses para cosas que ya sabes.",
+  parametersJsonSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description:
+          "La consulta de busqueda, concreta y autocontenida, en el idioma del usuario.",
+      },
+    },
+    required: ["query"],
+  },
+};
 
 /**
  * Función que el modelo de voz llama para ejecutar trabajo real. La ejecución
@@ -389,7 +414,14 @@ function normalizeLevel(rms: number): number {
   return Math.max(0, Math.min(1, normalized));
 }
 
-function buildLiveTools(
+/**
+ * Exportada a propósito para poder fijarla con tests: un error aquí es
+ * SILENCIOSO en las dos direcciones. Si se manda `googleSearch` a un modelo que
+ * no lo soporta, la sesión muere con un cierre 1011 y reconecta en bucle; si no
+ * se manda ninguna de las dos formas de búsqueda, Lumina simplemente afirma que
+ * no puede acceder a internet, sin que falle nada.
+ */
+export function buildLiveTools(
   enableTools: boolean,
   enableSearch: boolean,
   model: string,
@@ -397,11 +429,22 @@ function buildLiveTools(
   const tools: Tool[] = [];
   // Solo enviamos googleSearch si el modelo lo soporta: así evitamos el cierre
   // 1011 garantizado (y su reconexión) en modelos que no lo permiten.
-  if (enableSearch && modelSupportsSearch(model)) {
+  const nativeGrounding = enableSearch && modelSupportsSearch(model);
+  if (nativeGrounding) {
     tools.push({ googleSearch: {} });
   }
+
+  const functions = [...LUMINA_FUNCTIONS];
+  // Sin grounding nativo (3.1) le damos búsqueda propia por function calling,
+  // para no tener que quedarnos en 2.5 solo por el buscador. Ver webSearch.ts.
+  if (enableSearch && !nativeGrounding) {
+    functions.push(WEB_SEARCH_FUNCTION);
+  }
   if (enableTools) {
-    tools.push({ functionDeclarations: LUMINA_FUNCTIONS });
+    tools.push({ functionDeclarations: functions });
+  } else if (functions.length > LUMINA_FUNCTIONS.length) {
+    // Tools desactivadas pero búsqueda pedida: mandamos solo el buscador.
+    tools.push({ functionDeclarations: [WEB_SEARCH_FUNCTION] });
   }
   return tools;
 }
@@ -1490,6 +1533,62 @@ export class StartTalkManager {
     return parts.join("\n\n");
   }
 
+  /**
+   * Búsqueda web en vivo para los modelos sin grounding nativo. El resultado ya
+   * viene recortado a tamaño de voz por `searchWebForVoice`; aquí solo se
+   * devuelve al modelo y se refleja la actividad en la UI.
+   */
+  private async handleWebSearchToolCall(
+    sessionId: string,
+    state: SessionState,
+    id: string,
+    args: Record<string, unknown>,
+  ): Promise<void> {
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+
+    this.emit({
+      type: "toolActivity",
+      sessionId,
+      activity: {
+        id,
+        label: "Búsqueda web",
+        status: "running",
+        detail: query || "(sin consulta)",
+      },
+    });
+
+    const outcome = await searchWebForVoice(query);
+
+    // La sesión pudo cerrarse o reconectar mientras buscábamos.
+    if (!state.session || this.sessions.get(sessionId) !== state) {
+      return;
+    }
+
+    const failed = "error" in outcome;
+    state.session.sendToolResponse({
+      functionResponses: [
+        {
+          id,
+          name: WEB_SEARCH_FUNCTION_NAME,
+          response: failed ? { error: outcome.error } : { ...outcome },
+        },
+      ],
+    });
+
+    this.emit({
+      type: "toolActivity",
+      sessionId,
+      activity: {
+        id,
+        label: "Búsqueda web",
+        status: failed ? "error" : "done",
+        detail: failed
+          ? outcome.error
+          : `${outcome.sources.length} fuentes · ${outcome.provider}`,
+      },
+    });
+  }
+
   private async handleWindowsContextToolCall(
     sessionId: string,
     state: SessionState,
@@ -2178,6 +2277,15 @@ export class StartTalkManager {
             sessionId,
             reason: typeof reason === "string" ? reason : undefined,
           });
+          continue;
+        }
+        if (call.name === WEB_SEARCH_FUNCTION_NAME && state) {
+          void this.handleWebSearchToolCall(
+            sessionId,
+            state,
+            id,
+            (call.args as Record<string, unknown>) ?? {},
+          );
           continue;
         }
         if (call.name === WINDOWS_CONTEXT_FUNCTION_NAME && state) {

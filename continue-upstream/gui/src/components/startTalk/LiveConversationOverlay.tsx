@@ -104,19 +104,27 @@ const miniSize: PanelSize = {
   height: 88,
 };
 
+// El orden importa: el primero es el que se usa por defecto.
+//
+// 3.1 va primero desde que se midió que 2.5 TRUNCA las lecturas largas de forma
+// intermitente: con el mismo texto de 3.135 caracteres, 2.5 leyó el 84% y el
+// 98% en dos pasadas, mientras 3.1 leyó el 100% en ambas. 2.5 además entrega el
+// audio a 3,6x tiempo real en ~4.400 fragmentos (3.1: 2,7-3,0x en ~550), lo que
+// carga mucho más el puente. Perder el grounding nativo de Google ya no es un
+// problema: sin él se le pasa la función `search_web` (ver webSearch.ts).
 const liveModelOptions: StartTalkModelOption[] = [
   {
-    // `-latest` alias auto-tracks the newest 2.5 native-audio release, so the
-    // voice stays current without re-pinning a dated preview. It is the only
-    // Live tier that supports Google Search grounding (see modelSupportsSearch).
-    description: "Voz natural + búsqueda web en vivo (siempre la más reciente)",
-    label: "Native Audio (2.5)",
-    model: "gemini-2.5-flash-native-audio-latest",
-  },
-  {
-    description: "Voz avanzada de última generación (sin búsqueda web)",
+    description: "Lecturas largas completas + búsqueda web propia",
     label: "Flash Live (3.1)",
     model: "gemini-3.1-flash-live-preview",
+  },
+  {
+    // `-latest` auto-sigue la última release 2.5 native-audio. Es el único nivel
+    // con grounding nativo de Google Search (ver modelSupportsSearch), pero
+    // trunca lecturas largas.
+    description: "Voz natural con grounding de Google (corta textos largos)",
+    label: "Native Audio (2.5)",
+    model: "gemini-2.5-flash-native-audio-latest",
   },
 ];
 
