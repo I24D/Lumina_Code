@@ -432,6 +432,37 @@ const SessionStrip = styled.div<{ $roomy: boolean }>`
   }
 `;
 
+/**
+ * Franja de diagnóstico. Deliberadamente discreta: son datos para afinar, no
+ * información que el usuario necesite en cada turno. Aparece solo cuando ya hay
+ * al menos un turno medido.
+ */
+const MetricsStrip = styled.div<{ $roomy: boolean }>`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  width: ${({ $roomy }) =>
+    $roomy ? "min(calc(100% - 48px), 1180px)" : "min(100%, 760px)"};
+  box-sizing: border-box;
+  align-self: center;
+  padding: ${({ $roomy }) => ($roomy ? "0 0 8px" : "0 14px 6px")};
+  color: var(--live-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+`;
+
+const Metric = styled.span`
+  display: inline-flex;
+  gap: 4px;
+  white-space: nowrap;
+
+  b {
+    color: var(--live-text);
+    font-weight: 600;
+  }
+`;
+
 const SettingField = styled.div`
   position: relative;
   display: grid;
@@ -1556,6 +1587,7 @@ export function LiveConversationOverlay({
     toolActivities,
     userTranscript,
     isCrowded,
+    sessionMetrics,
     videoSource,
     videoState,
     startScreenShare,
@@ -2223,6 +2255,52 @@ export function LiveConversationOverlay({
             ) : null}
           </SettingField>
         </SessionStrip>
+
+        {sessionMetrics && sessionMetrics.turns > 0 ? (
+          <MetricsStrip $roomy={isRoomy} aria-label="Diagnóstico de la sesión">
+            <Metric>
+              respuesta{" "}
+              <b>
+                {sessionMetrics.medianResponseLatencyMs !== undefined
+                  ? `${(sessionMetrics.medianResponseLatencyMs / 1000).toFixed(1)} s`
+                  : "—"}
+              </b>
+            </Metric>
+            {sessionMetrics.meanDeliveryRate !== undefined ? (
+              <Metric>
+                entrega <b>{sessionMetrics.meanDeliveryRate.toFixed(1)}x</b>
+              </Metric>
+            ) : null}
+            <Metric>
+              turnos <b>{sessionMetrics.turns}</b>
+            </Metric>
+            {sessionMetrics.falseStarts > 0 ? (
+              <Metric>
+                falsos inicios <b>{sessionMetrics.falseStarts}</b>
+              </Metric>
+            ) : null}
+            {sessionMetrics.silentTurns > 0 ? (
+              <Metric>
+                calló <b>{sessionMetrics.silentTurns}</b>
+              </Metric>
+            ) : null}
+            {sessionMetrics.interruptions > 0 ? (
+              <Metric>
+                cortes <b>{sessionMetrics.interruptions}</b>
+              </Metric>
+            ) : null}
+            {sessionMetrics.searches > 0 ? (
+              <Metric>
+                búsquedas <b>{sessionMetrics.searches}</b>
+              </Metric>
+            ) : null}
+            {sessionMetrics.reconnects > 0 ? (
+              <Metric>
+                reconexiones <b>{sessionMetrics.reconnects}</b>
+              </Metric>
+            ) : null}
+          </MetricsStrip>
+        ) : null}
 
         <Stage $large={isLarge} $roomy={isRoomy}>
           <HeroRegion $roomy={isRoomy}>

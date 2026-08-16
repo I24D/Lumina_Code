@@ -23,6 +23,7 @@ import {
   listVideoInputDevices,
 } from "./FfmpegVideoCapture.js";
 import { SoundEventDetector } from "./SoundEventDetector.js";
+import { TurnMetricsTracker } from "./TurnMetrics.js";
 import { searchWebForVoice } from "./webSearch.js";
 import {
   BargeInMode,
@@ -491,6 +492,8 @@ type SessionState = {
   enableTools: boolean;
   announceNotifications: boolean;
   gate?: VoiceActivityGate;
+  /** Métricas por turno: latencia de respuesta, falsos inicios, entrega. */
+  metrics: TurnMetricsTracker;
   /** True cuando hay varias voces solapadas: cambia cómo decide intervenir. */
   crowded: boolean;
   /**
@@ -615,6 +618,7 @@ export class StartTalkManager {
       phoneLinkReplyInFlight: new Set(),
       completedPhoneLinkReplies: new Set(),
       captureRestartAttempts: 0,
+      metrics: new TurnMetricsTracker(),
       crowded: false,
       playbackRemainingMs: 0,
       playbackReportedAt: 0,
@@ -820,6 +824,7 @@ export class StartTalkManager {
           // A new user turn begins: reset the biometric audio buffer.
           state.turnAudio = [];
           state.turnAudioBytes = 0;
+          state.metrics.onActivityStart();
           this.safeRealtimeInput(state, { activityStart: {} });
           // El usuario va a preguntar algo: si la última vista de la pantalla
           // ya es vieja, se refresca para que responda sobre lo de ahora.
@@ -839,6 +844,7 @@ export class StartTalkManager {
           });
         },
         onActivityEnd: () => {
+          state.metrics.onActivityEnd();
           this.safeRealtimeInput(state, { activityEnd: {} });
           if (captureBiometrics) {
             this.identifyTurnSpeaker(sessionId, state);
@@ -999,6 +1005,7 @@ export class StartTalkManager {
       return;
     }
     state.crowded = crowded;
+    state.metrics.onCrowded(crowded);
 
     if (state.mode === "interpreter") {
       return;
@@ -1545,6 +1552,7 @@ export class StartTalkManager {
     args: Record<string, unknown>,
   ): Promise<void> {
     const query = typeof args.query === "string" ? args.query.trim() : "";
+    state.metrics.onSearch();
 
     this.emit({
       type: "toolActivity",
@@ -2185,6 +2193,7 @@ export class StartTalkManager {
     this.clearCaptureRestartTimer(state);
     state.isReconnecting = true;
     state.reconnectAttempts += 1;
+    state.metrics.onReconnect();
     state.capture?.stop();
     state.gate?.reset(false);
     this.emit({
@@ -2271,6 +2280,7 @@ export class StartTalkManager {
               },
             ],
           });
+          state?.metrics.onStayedSilent();
           const reason = (call.args as { reason?: unknown } | undefined)?.reason;
           this.emit({
             type: "stayedSilent",
@@ -2361,6 +2371,7 @@ export class StartTalkManager {
       // El usuario cortó a Lumina de forma deliberada: dejamos de tratar la
       // entrada como eco de inmediato.
       state?.gate?.setAssistantSpeaking(false);
+      state?.metrics.onInterrupted();
       this.emit({ type: "interrupted", sessionId });
     }
 
@@ -2368,6 +2379,8 @@ export class StartTalkManager {
       serverContent.interimInputTranscription?.text ??
       serverContent.inputTranscription?.text;
     if (inputText) {
+      // Sirve para distinguir un turno real de un falso positivo del gate.
+      state?.metrics.onUserTranscript(inputText);
       this.emit({
         type: "transcript",
         sessionId,
@@ -2407,10 +2420,9 @@ export class StartTalkManager {
         // Lumina está sonando: extendemos la ventana de "hablando" para que el
         // gate exija barge-in real y no la interrumpa con su propio eco.
         const pcmBytes = Buffer.byteLength(part.inlineData.data, "base64");
-        state?.gate?.noteAssistantAudio(
-          pcmBytes,
-          parseSampleRateFromMime(part.inlineData.mimeType),
-        );
+        const pcmRate = parseSampleRateFromMime(part.inlineData.mimeType);
+        state?.gate?.noteAssistantAudio(pcmBytes, pcmRate);
+        state?.metrics.onAssistantAudio(pcmBytes, pcmRate);
         this.emit({
           type: "audio",
           sessionId,
@@ -2444,6 +2456,15 @@ export class StartTalkManager {
     // "escuchando" mientras ella seguía hablando y las colas de notificaciones
     // y de respuestas de chat se desincronizaban.
     if (serverContent.turnComplete) {
+      const turn = state?.metrics.onTurnComplete();
+      if (turn && state) {
+        this.emit({
+          type: "turnMetrics",
+          sessionId,
+          turn,
+          session: state.metrics.sessionMetrics(),
+        });
+      }
       if (state?.isCapturing) {
         this.emitListening(sessionId, state);
       } else {
@@ -2528,6 +2549,7 @@ export class StartTalkManager {
     }
 
     state.captureRestartAttempts += 1;
+    state.metrics.onCaptureRestart();
     const delayMs = getStartTalkRetryDelayMs(state.captureRestartAttempts);
     this.emit({
       type: "status",

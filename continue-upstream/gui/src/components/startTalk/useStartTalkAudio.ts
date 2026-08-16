@@ -3,9 +3,11 @@ import type {
   StartTalkFunctionCall,
   StartTalkNotification,
   StartTalkNotificationAccess,
+  StartTalkSessionMetrics,
   StartTalkSoundCategory,
   StartTalkTranscriptEntry,
   StartTalkTranslationConfig,
+  StartTalkTurnMetrics,
   StartTalkVideoPhase,
   StartTalkVideoSource,
   StartTalkVideoSourceInfo,
@@ -277,6 +279,12 @@ export function useStartTalkAudio({
   // True cuando core detecta varias voces solapadas: Lumina pasa a hablar solo
   // si la interpelan o tiene algo que aportar de verdad.
   const [isCrowded, setIsCrowded] = useState(false);
+  // Instrumentación: sin estos números, cada ajuste del VAD o cambio de modelo
+  // se evalúa a oído — que ya falló de forma medible en este proyecto.
+  const [lastTurnMetrics, setLastTurnMetrics] =
+    useState<StartTalkTurnMetrics | null>(null);
+  const [sessionMetrics, setSessionMetrics] =
+    useState<StartTalkSessionMetrics | null>(null);
   const [micLevel, setMicLevel] = useState(0);
   const [speaker, setSpeaker] = useState<SpeakerInfo | null>(null);
   const [lastSoundEvent, setLastSoundEvent] =
@@ -477,6 +485,8 @@ export function useStartTalkAudio({
     sessionIdRef.current = null;
     setStatus("idle");
     setIsCrowded(false);
+    setLastTurnMetrics(null);
+    setSessionMetrics(null);
     setVideoSource(null);
     setVideoState({ phase: "stopped", framesSent: 0 });
     lastPlaybackReportRef.current = -1;
@@ -1257,6 +1267,12 @@ export function useStartTalkAudio({
         return;
       }
 
+      if (event.type === "turnMetrics") {
+        setLastTurnMetrics(event.turn);
+        setSessionMetrics(event.session);
+        return;
+      }
+
       if (event.type === "stayedSilent") {
         // Decidió que ese turno no era para ella. Es comportamiento correcto:
         // el turno se cierra sin voz y las colas siguen su curso.
@@ -1714,6 +1730,8 @@ export function useStartTalkAudio({
     toolActivities,
     userTranscript,
     isCrowded,
+    lastTurnMetrics,
+    sessionMetrics,
     videoSource,
     videoState,
     startScreenShare,

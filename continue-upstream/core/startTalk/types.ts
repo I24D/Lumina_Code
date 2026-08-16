@@ -194,6 +194,13 @@ export interface StartTalkVideoStartRequest {
   label?: string;
 }
 
+import type {
+  StartTalkSessionMetrics,
+  StartTalkTurnMetrics,
+} from "./TurnMetrics.js";
+
+export type { StartTalkSessionMetrics, StartTalkTurnMetrics };
+
 /** Fase del stream de vídeo, para que la UI no mienta sobre lo que Lumina ve. */
 export type StartTalkVideoPhase =
   | "starting"
@@ -275,6 +282,17 @@ export type StartTalkCoreEvent =
       type: "stayedSilent";
       sessionId: string;
       reason?: string;
+    }
+  | {
+      /**
+       * Un turno se cerró: latencia de respuesta, velocidad de entrega, falsos
+       * inicios. Sirve para afinar el VAD y comparar modelos con datos en vez
+       * de a oído.
+       */
+      type: "turnMetrics";
+      sessionId: string;
+      turn: StartTalkTurnMetrics;
+      session: StartTalkSessionMetrics;
     }
   | {
       // Voice biometrics identified (or failed to identify) the current speaker.
