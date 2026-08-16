@@ -1186,6 +1186,96 @@ Core tsc 0, gui tsc 0, 76 tests de startTalk en verde, gui build + esbuild +
 energía relativa; con AEC de verdad se podría reabrir el barge-in libre sin
 riesgo de que se auto-corte.
 
+### 6.16 Modelo, búsqueda propia, métricas y AudioWorklet (IMPLEMENTADO, 2026-08-16)
+
+Tres fases a partir de una revisión técnica externa. Lo medible se midió antes.
+
+#### A. El modelo que corría no era el que creíamos
+
+La UI SIEMPRE manda modelo, así que `DEFAULT_LIVE_MODEL` de core era código
+muerto y todas las sesiones corrían `gemini-2.5-flash-native-audio-latest`.
+Medido con el mismo texto de 3.135 caracteres, dos pasadas por modelo:
+
+| | 2.5 native-audio | 3.1 flash-live |
+|---|---|---|
+| cobertura | **84% / 98%** | **100% / 100%** |
+| fragmentos | 3.999 / 4.755 | 529 / 565 |
+| velocidad | 3,64x / 3,57x | 3,03x / 2,73x |
+| generationComplete | 46 s / 56 s | 57 s / 65 s |
+| turnComplete | 163 s / 193 s | 167 s / 175 s |
+
+⚠️ **2.5 trunca lecturas largas de forma intermitente.** En la primera pasada
+cortó a media frase en el punto séptimo y nunca leyó el cierre. Es una SEGUNDA
+causa, independiente de la cola de reproducción (§6.15), del mismo síntoma. Y
+manda ~9x más fragmentos por el puente para el mismo audio.
+
+3.1 pasa a ser el primero de `liveModelOptions` (el orden decide el default).
+
+#### B. Búsqueda propia para 3.1
+
+2.5 estaba primero solo por ser el único nivel con grounding nativo de Google
+Search; mandar `googleSearch` a 3.1 es un cierre 1011 garantizado. Ahora, sin
+grounding nativo, `buildLiveTools` añade la función `search_web`
+(`webSearch.ts`), con Tavily del `.env` raíz, Brave de reserva y el orden
+tomado de `SEARCH_PROVIDERS`.
+
+Está moldeada para VOZ, que es lo que la diferencia de
+`tools/implementations/searchWeb.ts` (ese devuelve hasta 8.000 caracteres por
+resultado, correcto para texto e inútil para leer en alto): respuesta
+sintetizada de Tavily a 700 caracteres, 3 fuentes como mucho, extractos a 220,
+URLs repetidas descartadas.
+
+Verificado en vivo: "¿A cuánto está el bitcoin ahora mismo?" dispara
+`search_web` con query "precio actual bitcoin", resuelve en 2,4 s y responde
+*"está en aproximadamente sesenta y cuatro mil ciento dieciocho dólares, según
+Binance"* — una fuente citada, sin leer URLs. "¿Cuánto es siete por ocho?" no
+busca.
+
+⚠️ `buildLiveTools` está EXPORTADA para poder fijarla con tests: fallar ahí es
+silencioso en las dos direcciones — `googleSearch` en un modelo incompatible
+mata la sesión en bucle de reconexión, y quedarse sin ninguna búsqueda solo
+hace que Lumina afirme que no puede acceder a internet.
+
+#### C. Métricas por turno (`TurnMetrics.ts`)
+
+Hasta ahora cada mejora se evaluaba a oído, y eso ya falló dos veces de forma
+medible en este proyecto (mpdecimate sin `-fps_mode vfr`; la entrega a 3x que
+se creía en tiempo real). Se registran por turno: latencia de respuesta (fin
+del turno del usuario → su primer audio), velocidad de entrega, segundos y
+fragmentos, interrupciones y **falsos inicios** (turno abierto por el gate sin
+transcripción del usuario = tasa de falsos positivos del VAD).
+
+Responder con `stay_silent` NO cuenta como falso inicio: ensuciaría justo la
+métrica que sirve para afinar el gate. Percentiles por rango más cercano, así
+el número reportado siempre es un valor observado. La UI muestra una franja de
+diagnóstico discreta; los contadores en cero no se pintan.
+
+#### D. Reproducción por AudioWorklet (`pcmPlayer.ts`)
+
+Sustituye un `AudioBufferSourceNode` por fragmento. Tres motivos medidos:
+la cola solo se podía ESTIMAR y core depende de ese número para no reabrir el
+micro mientras ella habla; 4.755 nodos en una sola respuesta pasando por el
+hilo principal de React; y los underrun eran invisibles.
+
+El worklet posee un anillo acotado de 30 s y va informando de sus muestras
+reales; lo que no cabe se retiene en el hilo principal. Contexto a 24 kHz (tasa
+nativa de Gemini) para no remuestrear en la ruta normal.
+
+⚠️ El worklet va INLINE y se carga por Blob URL a propósito: un asset suelto
+habría que añadirlo al build de Vite y volver a copiarlo al ensamblar
+`orb-frontend` — justo el paso que se olvida y deja el exe con una versión
+vieja sin que nada falle visiblemente.
+
+⚠️ `hasQueuedAudio()` es el ÚNICO punto de verdad de "sigue sonando su voz".
+Con worklet no hay nodos que contar: preguntar por `outputSources.length` daría
+cero a media frase y soltaría las colas antes de tiempo. La ruta clásica queda
+como fallback automático si el worklet no arranca.
+
+**Pendiente de esta tanda:** AEC real en WebView2 (getUserMedia con
+`echoCancellation` + captura en el WebView), Silero VAD en modo observación,
+Smart Turn, embeddings de hablante con sherpa-onnx, modos de conversación
+(Solo yo / Conversación / Reunión / Pulsar) y modo reunión con Diart.
+
 ### 6.12 Próximas prioridades de Start Talk
 
 1. Supervisor 24/7 con autoarranque, health check y recuperación completa de
