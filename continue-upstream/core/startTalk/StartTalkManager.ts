@@ -345,24 +345,13 @@ function readCodexEnabled(): boolean {
 
 /**
  * Qué puede cortar a Lumina mientras habla. Por defecto "keyword": solo una
- * interjección corta y claramente más fuerte que el eco de su propia voz. Con
- * START_TALK_BARGE_IN=energy vuelve el barge-in clásico por voz sostenida y con
- * =off se vuelve incortable por micrófono.
- *
- * Compatibilidad: START_TALK_HALF_DUPLEX=false seguía significando "quiero
- * poder interrumpirla", así que se mapea a "energy".
+ * interjección corta y claramente más fuerte que el eco de su propia voz.
+ * `energy` recupera el barge-in por voz sostenida y `off` la hace incortable
+ * por micrófono.
  */
 function resolveBargeMode(): BargeInMode {
-  const explicit = String(process.env.START_TALK_BARGE_IN ?? "").toLowerCase();
-  if (explicit === "energy" || explicit === "keyword" || explicit === "off") {
-    return explicit;
-  }
-
-  const legacy = String(process.env.START_TALK_HALF_DUPLEX ?? "").toLowerCase();
-  if (legacy === "false" || legacy === "0" || legacy === "off") {
-    return "energy";
-  }
-  return "keyword";
+  const mode = String(process.env.START_TALK_BARGE_IN ?? "").toLowerCase();
+  return mode === "energy" || mode === "off" ? mode : "keyword";
 }
 
 /**

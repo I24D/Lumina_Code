@@ -39,8 +39,6 @@ import { isAffirmativeReply, isNegativeReply } from "./confirmationPhrases";
 import { PcmPlayer } from "./pcmPlayer";
 import { buildChatResponseSpeechPrompt } from "./voiceDelegation";
 
-const PCM_CHUNK_SIZE = 0x8000;
-
 // How long, after Start Talk asks "¿quieres que le responda?", a spoken
 // confirmation still triggers the delegated reply. After this the pending
 // message is dropped so a much-later "sí" about something else never fires it.
@@ -69,52 +67,9 @@ type ChatResponseAnnouncement = {
   text: string;
 };
 
-type AudioContextConstructor = typeof AudioContext;
-type AudioWindow = Window &
-  typeof globalThis & {
-    webkitAudioContext?: AudioContextConstructor;
-  };
-
-function getAudioContextConstructor(): AudioContextConstructor | undefined {
-  const audioWindow = window as AudioWindow;
-  return audioWindow.AudioContext ?? audioWindow.webkitAudioContext;
-}
-
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let index = 0; index < binary.length; index += PCM_CHUNK_SIZE) {
-    const chunk = binary.slice(index, index + PCM_CHUNK_SIZE);
-    for (let chunkIndex = 0; chunkIndex < chunk.length; chunkIndex++) {
-      bytes[index + chunkIndex] = chunk.charCodeAt(chunkIndex);
-    }
-  }
-
-  return bytes.buffer;
-}
-
 function parseAudioRate(mimeType: string): number {
   const rate = mimeType.match(/rate=(\d+)/)?.[1];
   return rate ? Number(rate) : 24000;
-}
-
-function pcm16Base64ToAudioBuffer(
-  audioContext: AudioContext,
-  base64: string,
-  sampleRate: number,
-) {
-  const pcmBuffer = base64ToArrayBuffer(base64);
-  const view = new DataView(pcmBuffer);
-  const frameCount = Math.floor(pcmBuffer.byteLength / 2);
-  const audioBuffer = audioContext.createBuffer(1, frameCount, sampleRate);
-  const channel = audioBuffer.getChannelData(0);
-
-  for (let index = 0; index < frameCount; index++) {
-    channel[index] = view.getInt16(index * 2, true) / 0x8000;
-  }
-
-  return audioBuffer;
 }
 
 function mergeTranscriptChunk(current: string, next: string) {
@@ -190,19 +145,14 @@ export function useStartTalkAudio({
   const assistantTurnActiveRef = useRef(false);
   const assistantTranscriptRef = useRef("");
   const isStreamingRef = useRef(isStreaming);
-  const outputContextRef = useRef<AudioContext | null>(null);
-  const nextPlaybackTimeRef = useRef(0);
-  const outputSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   // Keeps the output AudioContext alive across long reports: WebView2/OS power
   // policy can suspend it mid-playback, which used to make the voice go silent
   // while the model kept "reading". The watchdog resumes it whenever audio is
   // pending. See resumeOutputContextIfNeeded / ensureOutputWatchdog below.
-  // Reproductor por AudioWorklet. Se degrada solo a la ruta clasica si el
-  // WebView no lo soporta o el modulo no carga.
+  // Unica ruta de reproduccion: AudioWorklet con anillo (ver pcmPlayer.ts).
   const pcmPlayerRef = useRef<PcmPlayer>();
-  const usePcmWorkletRef = useRef(PcmPlayer.isSupported());
-  // Para detectar el instante en que la cola se vacia: con worklet no existe
-  // `source.onended` que avise.
+  // Para detectar el instante en que la cola se vacia: el worklet no emite un
+  // evento tipo `source.onended`, asi que el flanco se detecta por sondeo.
   const wasPlayingRef = useRef(false);
   const outputWatchdogRef = useRef<ReturnType<typeof setInterval>>();
   // Último valor enviado a core, para no repetir el mismo informe.
@@ -436,35 +386,19 @@ export function useStartTalkAudio({
    * rápido que el tiempo real, así que ni core ni la UI pueden deducirlo de la
    * hora de llegada de los fragmentos.
    */
+  /**
+   * Voz que le queda por sonar. El worklet informa de sus muestras reales, asi
+   * que el dato es exacto — y core depende de el para no reabrir el microfono
+   * mientras ella todavia habla.
+   */
   const playbackRemainingMs = useCallback(() => {
-    // Con AudioWorklet el dato es EXACTO: el worklet informa de cuantas muestras
-    // le quedan de verdad. En la ruta clasica solo se puede estimar.
-    const player = pcmPlayerRef.current;
-    if (player) {
-      return player.status().remainingMs;
-    }
-    const outputContext = outputContextRef.current;
-    if (!outputContext) {
-      return 0;
-    }
-    return Math.max(
-      0,
-      Math.round((nextPlaybackTimeRef.current - outputContext.currentTime) * 1000),
-    );
+    return pcmPlayerRef.current?.status().remainingMs ?? 0;
   }, []);
 
-  /**
-   * Unico punto de verdad de "todavia suena su voz". Con worklet no hay nodos
-   * que contar, asi que preguntar por `outputSources.length` daria cero mientras
-   * ella sigue hablando, y eso desbloquearia las colas a media respuesta.
-   */
-  const hasQueuedAudio = useCallback(() => {
-    const player = pcmPlayerRef.current;
-    if (player) {
-      return player.status().remainingMs > 0;
-    }
-    return outputSourcesRef.current.length > 0;
-  }, []);
+  /** Unico punto de verdad de "todavia suena su voz". */
+  const hasQueuedAudio = useCallback(() => playbackRemainingMs() > 0, [
+    playbackRemainingMs,
+  ]);
 
   /**
    * Le dice a core cuánto le queda por sonar. Core mantiene el micrófono
@@ -487,15 +421,6 @@ export function useStartTalkAudio({
 
   const stopPlayback = useCallback(() => {
     pcmPlayerRef.current?.stop();
-    outputSourcesRef.current.forEach((source) => {
-      try {
-        source.stop();
-      } catch {
-        // Source may have already finished.
-      }
-    });
-    outputSourcesRef.current = [];
-    nextPlaybackTimeRef.current = outputContextRef.current?.currentTime ?? 0;
     // La cola quedó vacía ya: core debe reabrir el micro sin esperar al tick.
     reportPlayback(0);
     handlePlaybackIdleRef.current();
@@ -535,26 +460,17 @@ export function useStartTalkAudio({
     stopPlayback,
   ]);
 
-  // Resume the output context if the WebView/OS suspended it while audio is
-  // (about to be) playing. Safe to call often; it no-ops when running.
+  /** WebView2 y la política de energía del sistema pueden suspender el audio. */
   const resumeOutputContextIfNeeded = useCallback(() => {
     pcmPlayerRef.current?.resumeIfNeeded();
-    const outputContext = outputContextRef.current;
-    if (!outputContext || outputContext.state !== "suspended") {
-      return;
-    }
-    const hasPending =
-      outputSourcesRef.current.length > 0 ||
-      nextPlaybackTimeRef.current > outputContext.currentTime + 0.01;
-    if (hasPending) {
-      void outputContext.resume().catch(() => undefined);
-    }
   }, []);
 
-  // Start a low-frequency watchdog (once) that keeps the output context awake
-  // for the whole session, so a mid-report suspend can never leave the voice
-  // permanently silent. Also feeds core the real playback position. Cleared on
-  // unmount.
+  /**
+   * Sondeo único de la reproducción: mantiene el contexto despierto (un
+   * suspend a mitad dejaba la voz muda para siempre), alimenta a core con la
+   * cola real, y detecta el flanco en que ella termina de hablar. Ese flanco
+   * hay que sondearlo porque el worklet no emite un evento de fin.
+   */
   const ensureOutputWatchdog = useCallback(() => {
     if (outputWatchdogRef.current) {
       return;
@@ -564,9 +480,6 @@ export function useStartTalkAudio({
       const remaining = playbackRemainingMs();
       reportPlayback(remaining);
 
-      // Flanco de bajada: acaba de terminar de hablar. En la ruta clasica lo
-      // disparaba `source.onended`; con worklet no existe ese evento, asi que
-      // sin esto las colas de notificaciones y respuestas nunca avanzarian.
       const playing = remaining > 0;
       if (wasPlayingRef.current && !playing) {
         handlePlaybackIdleRef.current();
@@ -598,78 +511,24 @@ export function useStartTalkAudio({
 
   const playAudio = useCallback(
     async (data: string, mimeType: string) => {
-      // Ruta preferente: AudioWorklet con anillo. Da cola exacta (de la que
-      // depende core para no reabrir el micro mientras ella habla) y evita
-      // crear un nodo por fragmento: se midieron 4.755 en una sola respuesta.
-      if (usePcmWorkletRef.current) {
-        try {
-          if (!pcmPlayerRef.current) {
-            pcmPlayerRef.current = new PcmPlayer();
-          }
-          ensureOutputWatchdog();
-          await pcmPlayerRef.current.play(data, parseAudioRate(mimeType));
-          if (turnStuckTimerRef.current) {
-            clearTimeout(turnStuckTimerRef.current);
-            turnStuckTimerRef.current = undefined;
-          }
-          reportPlayback(playbackRemainingMs());
-          return;
-        } catch {
-          // Si el worklet no arranca en este WebView, se degrada a la ruta
-          // clasica para el resto de la sesion en vez de quedarse muda.
-          usePcmWorkletRef.current = false;
-          pcmPlayerRef.current = undefined;
+      try {
+        if (!pcmPlayerRef.current) {
+          pcmPlayerRef.current = new PcmPlayer();
         }
-      }
-
-      const AudioContextConstructor = getAudioContextConstructor();
-      if (!AudioContextConstructor) {
+        ensureOutputWatchdog();
+        await pcmPlayerRef.current.play(data, parseAudioRate(mimeType));
+      } catch (error) {
         setStatus("unsupported");
-        setErrorMessage("Audio playback is not available in this WebView.");
+        setErrorMessage(
+          error instanceof Error
+            ? `No se pudo reproducir el audio: ${error.message}`
+            : "No se pudo reproducir el audio en esta ventana.",
+        );
         return;
       }
 
-      const outputContext =
-        outputContextRef.current ?? new AudioContextConstructor();
-      outputContextRef.current = outputContext;
-      ensureOutputWatchdog();
-
-      if (outputContext.state === "suspended") {
-        await outputContext.resume().catch(() => undefined);
-      }
-
-      const audioBuffer = pcm16Base64ToAudioBuffer(
-        outputContext,
-        data,
-        parseAudioRate(mimeType),
-      );
-      const source = outputContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(outputContext.destination);
-      source.onended = () => {
-        outputSourcesRef.current = outputSourcesRef.current.filter(
-          (item) => item !== source,
-        );
-        handlePlaybackIdleRef.current();
-      };
-
-      // Gapless while streaming continuously (nextPlaybackTime stays ahead of
-      // the clock). But if we fell behind — a fresh turn, or a main-thread
-      // stall during a long report drained the queue — scheduling at exactly
-      // currentTime risks the buffer landing in the past on the next stall,
-      // which is what produced the rasping. Re-arm with a small lead so brief
-      // jank can't corrupt playback. The extra latency only appears after an
-      // underrun and is imperceptible.
-      const OUTPUT_LEAD_SECONDS = 0.12;
-      let startAt = nextPlaybackTimeRef.current;
-      if (startAt < outputContext.currentTime + 0.005) {
-        startAt = outputContext.currentTime + OUTPUT_LEAD_SECONDS;
-      }
-      source.start(startAt);
-      nextPlaybackTimeRef.current = startAt + audioBuffer.duration;
-      outputSourcesRef.current.push(source);
       // Sigue hablando: cancela la red de seguridad y avisa a core en el acto
-      // en vez de esperar al siguiente tick del watchdog.
+      // en vez de esperar al siguiente tick del sondeo.
       if (turnStuckTimerRef.current) {
         clearTimeout(turnStuckTimerRef.current);
         turnStuckTimerRef.current = undefined;
@@ -1778,7 +1637,6 @@ export function useStartTalkAudio({
       void stopListening();
       void pcmPlayerRef.current?.close();
       pcmPlayerRef.current = undefined;
-      void outputContextRef.current?.close();
     };
   }, [clearSessionRecoveryTimer, stopListening]);
 

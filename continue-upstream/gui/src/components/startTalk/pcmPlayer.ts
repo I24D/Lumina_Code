@@ -191,11 +191,6 @@ export class PcmPlayer {
   private workletFree = 0;
   private underrunCount = 0;
 
-  static isSupported(): boolean {
-    const Ctor = getAudioContextConstructor();
-    return Boolean(Ctor && typeof AudioWorkletNode !== "undefined");
-  }
-
   /** Arranca el contexto y el worklet. Idempotente y seguro concurrentemente. */
   async ensureStarted(): Promise<void> {
     if (this.node) {

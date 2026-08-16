@@ -1,30 +1,30 @@
 /**
  * luminaEnv.ts — Read Lumina capability keys from the single root `.env`.
  *
- * Lumina Code's real-world capabilities (web research, image/video generation)
- * are powered by provider keys that live in the ONE canonical env file at the
- * project root (`c:/I24D_WhatsApp/.env`). The VS Code extension host doesn't
- * auto-load a project `.env`, so this helper resolves keys itself:
- *   1. process.env (if the launcher already exported it), then
- *   2. the nearest `.env` walking up from cwd, then
- *   3. the canonical root path as a last resort.
+ * Lumina Code's real-world capabilities (web research, voice search, image and
+ * video generation) are powered by provider keys that live in the ONE `.env` at
+ * the repo root. The VS Code extension host does not auto-load it, so this
+ * helper resolves the file itself, in this order:
  *
- * Values are parsed once and cached. This is deliberately dependency-light so
- * every tool (searchWeb → Tavily, image/video gen) shares one source of truth.
+ *   1. `process.env` (if the launcher already exported the key),
+ *   2. `LUMINA_ENV_FILE` / `LUMINA_ROOT` if they are set,
+ *   3. the nearest `.env` walking up from `process.cwd()`,
+ *   4. the nearest `.env` walking up from THIS module's own directory.
+ *
+ * Step 4 is not redundant. The extension host's cwd has no reason to be inside
+ * the repo, and when it was not, every key came back undefined with a perfectly
+ * good `.env` on disk — `search_web` reported `search_unavailable` for exactly
+ * this reason. The module always lives inside the repo: in source under
+ * `core/luminaBridge/`, and bundled under `extensions/vscode/out/`.
+ *
+ * Values are parsed once and cached. Deliberately dependency-light so every
+ * consumer shares one source of truth.
  */
 import * as dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 
 let cache: Record<string, string> | null = null;
-
-// Legacy fallbacks from when the project lived at C:\I24D_WhatsApp. Harmless if
-// absent, kept only so an old checkout still resolves.
-const CANONICAL_ROOTS = [
-  "C:\\I24D_WhatsApp",
-  "/c/I24D_WhatsApp",
-  "/mnt/c/I24D_WhatsApp",
-];
 
 /** Añade `dir` y todos sus ancestros al conjunto de raíces candidatas. */
 function addAncestors(roots: Set<string>, dir: string): void {
@@ -68,9 +68,6 @@ function candidateEnvFiles(): string[] {
   const here = moduleDir();
   if (here) {
     addAncestors(roots, here);
-  }
-  for (const root of CANONICAL_ROOTS) {
-    roots.add(root);
   }
 
   const files = [...roots].map((root) => path.join(root, ".env"));
