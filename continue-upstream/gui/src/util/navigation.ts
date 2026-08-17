@@ -5,6 +5,7 @@ export type ConfigTab =
   | "tools"
   | "configs"
   | "indexing"
+  | "privacy"
   | "settings"
   | "help";
 
@@ -31,6 +32,7 @@ export const CONFIG_ROUTES = {
   TOOLS: buildConfigRoute("tools"),
   CONFIGS: buildConfigRoute("configs"),
   INDEXING: buildConfigRoute("indexing"),
+  PRIVACY: buildConfigRoute("privacy"),
   SETTINGS: buildConfigRoute("settings"),
   HELP: buildConfigRoute("help"),
 } as const;

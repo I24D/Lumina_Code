@@ -534,7 +534,23 @@ const AtMentionDropdown = forwardRef((props: AtMentionDropdownProps, ref) => {
           {allItems.length ? (
             allItems.map((item, index) => {
               const isSelected = index === selectedIndex;
+              // Encabezado de categoría al cambiar de grupo. Va aquí y no en
+              // una lista aparte para no romper la navegación por índice del
+              // teclado, que direcciona `allItems` directamente.
+              const categoryHeader =
+                item.category && item.category !== allItems[index - 1]?.category
+                  ? item.category
+                  : undefined;
               return (
+                <div key={`group-${index}`}>
+                  {categoryHeader ? (
+                    <div
+                      className="px-1 pb-0.5 pt-1.5 text-[0.85em] font-semibold tracking-wide"
+                      style={{ color: lightGray }}
+                    >
+                      {categoryHeader}
+                    </div>
+                  ) : null}
                 <ItemDiv
                   as="button"
                   ref={(el) => (itemRefs.current[index] = el)}
@@ -561,6 +577,14 @@ const AtMentionDropdown = forwardRef((props: AtMentionDropdownProps, ref) => {
                       <span title={item.id} className="whitespace-nowrap">
                         {item.title}
                       </span>
+                      {item.argsHint ? (
+                        <span
+                          className="ml-1.5 whitespace-nowrap opacity-50"
+                          style={{ color: lightGray }}
+                        >
+                          {item.argsHint}
+                        </span>
+                      ) : null}
                       {"  "}
                     </div>
                     <span
@@ -579,6 +603,11 @@ const AtMentionDropdown = forwardRef((props: AtMentionDropdownProps, ref) => {
                       className="ml-2 flex items-center overflow-hidden overflow-ellipsis whitespace-nowrap"
                     >
                       {item.description}
+                      {item.badge ? (
+                        <span className="ml-2 flex-shrink-0 rounded px-1.5 py-0.5 text-[0.9em] opacity-80 [background-color:var(--vscode-badge-background)] [color:var(--vscode-badge-foreground)]">
+                          {item.badge}
+                        </span>
+                      ) : null}
                       {item.type === "contextProvider" &&
                         item.contextProvider?.type === "submenu" && (
                           <ArrowRightIcon
@@ -609,6 +638,7 @@ const AtMentionDropdown = forwardRef((props: AtMentionDropdownProps, ref) => {
                     </span>
                   </span>
                 </ItemDiv>
+                </div>
               );
             })
           ) : (

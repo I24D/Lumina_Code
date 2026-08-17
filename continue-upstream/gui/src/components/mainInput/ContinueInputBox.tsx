@@ -6,9 +6,18 @@ import {
   SlashCommandSource,
 } from "core";
 import { memo, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { defaultBorderRadius, vscBackground } from "..";
-import { useAppSelector } from "../../redux/hooks";
+import { buildConfigRoute } from "../../util/navigation";
+import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectSlashCommandComboBoxInputs } from "../../redux/selectors";
+import { selectSelectedChatModel } from "../../redux/slices/configSlice";
+import { newSession, setMode } from "../../redux/slices/sessionSlice";
+import { cancelStream } from "../../redux/thunks/cancelStream";
+import {
+  buildBuiltInSlashCommands,
+  groupSlashCommands,
+} from "./builtInSlashCommands";
 import { ContextItemsPeek } from "./belowMainInput/ContextItemsPeek";
 import { RulesPeek } from "./belowMainInput/RulesPeek";
 import { GradientBorder } from "./GradientBorder";
@@ -53,7 +62,11 @@ const EDIT_ALLOWED_SLASH_COMMAND_SOURCES: SlashCommandSource[] = [
 ];
 
 function ContinueInputBox(props: ContinueInputBoxProps) {
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const isStreaming = useAppSelector((state) => state.session.isStreaming);
+  const mode = useAppSelector((state) => state.session.mode);
+  const selectedModel = useAppSelector(selectSelectedChatModel);
   const availableSlashCommands = useAppSelector(
     selectSlashCommandComboBoxInputs,
   );
@@ -63,16 +76,41 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
   const isInEdit = useAppSelector((store) => store.session.isInEdit);
   const editModeState = useAppSelector((state) => state.editModeState);
 
+  const builtInCommands = useMemo(
+    () =>
+      buildBuiltInSlashCommands({
+        newSession: () => {
+          dispatch(newSession(undefined));
+        },
+        openConfigTab: (tabId) => {
+          // La página de ajustes selecciona pestaña por `?tab=`; usar el mismo
+          // constructor tipado que el resto de la app.
+          navigate(buildConfigRoute(tabId));
+        },
+        setMode: (mode) => {
+          dispatch(setMode(mode));
+        },
+        currentMode: mode,
+        stopStreaming: () => {
+          dispatch(cancelStream());
+        },
+        isStreaming,
+        currentModel: selectedModel?.title,
+      }),
+    [dispatch, navigate, mode, isStreaming, selectedModel?.title],
+  );
+
   const filteredSlashCommands = useMemo(() => {
     if (isInEdit) {
+      // En modo edición los comandos de sesión no aplican: solo prompts.
       return availableSlashCommands.filter((cmd) =>
         cmd.slashCommandSource
           ? EDIT_ALLOWED_SLASH_COMMAND_SOURCES.includes(cmd.slashCommandSource)
           : false,
       );
     }
-    return availableSlashCommands;
-  }, [isInEdit, availableSlashCommands]);
+    return groupSlashCommands([...builtInCommands, ...availableSlashCommands]);
+  }, [isInEdit, availableSlashCommands, builtInCommands]);
 
   const filteredContextProviders = useMemo(() => {
     if (isInEdit) {

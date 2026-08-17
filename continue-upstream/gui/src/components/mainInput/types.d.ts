@@ -27,4 +27,10 @@ export interface ComboBoxItem {
   action?: () => void;
   subActions?: ComboBoxSubAction[];
   slashCommandSource?: SlashCommandSource;
+  /** Encabezado bajo el que se agrupa en el desplegable (SESIÓN, MODELO, …). */
+  category?: string;
+  /** Argumentos que acepta, mostrados tenues tras el nombre: `[nivel]`. */
+  argsHint?: string;
+  /** Etiqueta corta a la derecha: "instantáneo", "4 opciones". */
+  badge?: string;
 }
