@@ -9,8 +9,12 @@ import type { ComboBoxItem } from "./types";
 
 function makeContext(overrides = {}) {
   return {
-    newSession: vi.fn(),
+    saveAndStartNewSession: vi.fn(),
+    clearCurrentSession: vi.fn(),
+    compactConversation: vi.fn(),
+    historyLength: 4,
     openConfigTab: vi.fn(),
+    navigateTo: vi.fn(),
     setMode: vi.fn(),
     currentMode: "agent",
     stopStreaming: vi.fn(),
@@ -40,14 +44,40 @@ describe("buildBuiltInSlashCommands", () => {
     expect(new Set(titles).size).toBe(titles.length);
   });
 
-  it("/new abre una sesión nueva", () => {
+  it("/new archiva la conversación y /clear la descarta", () => {
+    // La diferencia importa: son los dos gestos distintos que ofrece OpenClaw,
+    // y confundirlos haría perder historial sin avisar.
     const context = makeContext();
-    const command = buildBuiltInSlashCommands(context).find(
-      (c) => c.title === "/new",
-    )!;
-    command.action!();
+    const commands = buildBuiltInSlashCommands(context);
 
-    expect(context.newSession).toHaveBeenCalledTimes(1);
+    commands.find((c) => c.title === "/new")!.action!();
+    expect(context.saveAndStartNewSession).toHaveBeenCalledTimes(1);
+    expect(context.clearCurrentSession).not.toHaveBeenCalled();
+
+    commands.find((c) => c.title === "/clear")!.action!();
+    expect(context.clearCurrentSession).toHaveBeenCalledTimes(1);
+    expect(context.saveAndStartNewSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("/compact avisa cuando no hay nada que compactar", () => {
+    const empty = buildBuiltInSlashCommands(
+      makeContext({ historyLength: 0 }),
+    ).find((c) => c.title === "/compact")!;
+    expect(empty.description).toMatch(/nada que compactar/i);
+
+    const full = buildBuiltInSlashCommands(
+      makeContext({ historyLength: 12 }),
+    ).find((c) => c.title === "/compact")!;
+    expect(full.description).toContain("12");
+  });
+
+  it("/usage navega a las estadísticas", () => {
+    const context = makeContext();
+    buildBuiltInSlashCommands(context)
+      .find((c) => c.title === "/usage")!
+      .action!();
+
+    expect(context.navigateTo).toHaveBeenCalledWith("/stats");
   });
 
   it("/privacy abre justo la pestaña de privacidad", () => {

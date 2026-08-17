@@ -18,10 +18,18 @@ import type { ComboBoxItem } from "./types";
 
 /** Contexto que necesitan las acciones para hacer su trabajo. */
 export interface SlashCommandContext {
-  /** Vacía el historial y empieza de cero. */
-  newSession: () => void;
+  /** Guarda la conversación actual en el historial y abre una nueva. */
+  saveAndStartNewSession: () => void;
+  /** Descarta la conversación actual sin guardarla. */
+  clearCurrentSession: () => void;
+  /** Resume el contexto para liberar ventana sin perder el hilo. */
+  compactConversation: () => void;
+  /** Cuántos mensajes hay ahora, para saber si hay algo que compactar. */
+  historyLength: number;
   /** Abre una pestaña concreta de los ajustes. */
   openConfigTab: (tabId: ConfigTab) => void;
+  /** Navega a una ruta de la aplicación. */
+  navigateTo: (route: string) => void;
   /** Cambia el modo de la sesión (chat / agent / plan). */
   setMode: (mode: "chat" | "agent" | "plan") => void;
   /** Modo actual, para mostrarlo en la descripción. */
@@ -52,12 +60,34 @@ export function buildBuiltInSlashCommands(
     // ---- SESIÓN ----
     {
       title: "/new",
-      description: "Empezar una sesión nueva",
+      description: "Guardar esta conversación y empezar otra",
       type: "action",
       category: SLASH_CATEGORY.session,
       badge: "instantáneo",
       icon: "plus",
-      action: context.newSession,
+      action: context.saveAndStartNewSession,
+    },
+    {
+      title: "/clear",
+      // Distinto de /new a propósito: aquí NO se guarda. Es el equivalente a
+      // vaciar la pizarra en vez de archivarla.
+      description: "Borrar esta conversación sin guardarla",
+      type: "action",
+      category: SLASH_CATEGORY.session,
+      badge: "instantáneo",
+      icon: "trash",
+      action: context.clearCurrentSession,
+    },
+    {
+      title: "/compact",
+      description:
+        context.historyLength > 1
+          ? `Resumir el contexto (${context.historyLength} mensajes)`
+          : "Nada que compactar todavía",
+      type: "action",
+      category: SLASH_CATEGORY.session,
+      icon: "sparkles",
+      action: context.compactConversation,
     },
     {
       title: "/stop",
@@ -129,6 +159,38 @@ export function buildBuiltInSlashCommands(
       category: SLASH_CATEGORY.tools,
       icon: "cog",
       action: () => context.openConfigTab("settings"),
+    },
+    {
+      title: "/skills",
+      description: "Habilidades reutilizables que Lumina puede ejecutar",
+      type: "action",
+      category: SLASH_CATEGORY.tools,
+      icon: "academic",
+      action: () => context.openConfigTab("skills"),
+    },
+    {
+      title: "/mcp",
+      description: "Servidores MCP y configuraciones cargadas",
+      type: "action",
+      category: SLASH_CATEGORY.tools,
+      icon: "document",
+      action: () => context.openConfigTab("configs"),
+    },
+    {
+      title: "/indexing",
+      description: "Estado del índice del código base",
+      type: "action",
+      category: SLASH_CATEGORY.tools,
+      icon: "database",
+      action: () => context.openConfigTab("indexing"),
+    },
+    {
+      title: "/usage",
+      description: "Tokens y coste por día",
+      type: "action",
+      category: SLASH_CATEGORY.tools,
+      icon: "chart",
+      action: () => context.navigateTo("/stats"),
     },
     {
       title: "/help",

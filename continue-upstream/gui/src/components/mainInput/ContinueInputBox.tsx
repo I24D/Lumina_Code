@@ -14,6 +14,8 @@ import { selectSlashCommandComboBoxInputs } from "../../redux/selectors";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import { newSession, setMode } from "../../redux/slices/sessionSlice";
 import { cancelStream } from "../../redux/thunks/cancelStream";
+import { saveCurrentSession } from "../../redux/thunks/session";
+import { useCompactConversation } from "../../util/compactConversation";
 import {
   buildBuiltInSlashCommands,
   groupSlashCommands,
@@ -67,6 +69,8 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
   const isStreaming = useAppSelector((state) => state.session.isStreaming);
   const mode = useAppSelector((state) => state.session.mode);
   const selectedModel = useAppSelector(selectSelectedChatModel);
+  const historyLength = useAppSelector((state) => state.session.history.length);
+  const compact = useCompactConversation();
   const availableSlashCommands = useAppSelector(
     selectSlashCommandComboBoxInputs,
   );
@@ -79,14 +83,29 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
   const builtInCommands = useMemo(
     () =>
       buildBuiltInSlashCommands({
-        newSession: () => {
+        saveAndStartNewSession: () => {
+          // Archiva la conversación en el historial antes de abrir otra.
+          void dispatch(
+            saveCurrentSession({ openNewSession: true, generateTitle: true }),
+          );
+        },
+        clearCurrentSession: () => {
+          // Sin guardar: es "vaciar la pizarra", no "archivarla".
           dispatch(newSession(undefined));
         },
+        compactConversation: () => {
+          // Compacta desde el último mensaje, que es lo que libera ventana.
+          if (historyLength > 1) {
+            void compact(historyLength - 1);
+          }
+        },
+        historyLength,
         openConfigTab: (tabId) => {
           // La página de ajustes selecciona pestaña por `?tab=`; usar el mismo
           // constructor tipado que el resto de la app.
           navigate(buildConfigRoute(tabId));
         },
+        navigateTo: (route) => navigate(route),
         setMode: (mode) => {
           dispatch(setMode(mode));
         },
@@ -97,7 +116,15 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
         isStreaming,
         currentModel: selectedModel?.title,
       }),
-    [dispatch, navigate, mode, isStreaming, selectedModel?.title],
+    [
+      dispatch,
+      navigate,
+      mode,
+      isStreaming,
+      selectedModel?.title,
+      historyLength,
+      compact,
+    ],
   );
 
   const filteredSlashCommands = useMemo(() => {
