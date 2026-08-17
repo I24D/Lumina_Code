@@ -12,9 +12,12 @@ import { buildConfigRoute } from "../../util/navigation";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectSlashCommandComboBoxInputs } from "../../redux/selectors";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
-import { newSession, setMode } from "../../redux/slices/sessionSlice";
+import {
+  clearSessionHistory,
+  setMode,
+} from "../../redux/slices/sessionSlice";
 import { cancelStream } from "../../redux/thunks/cancelStream";
-import { saveCurrentSession } from "../../redux/thunks/session";
+import { saveCurrentSession, updateSession } from "../../redux/thunks/session";
 import { useCompactConversation } from "../../util/compactConversation";
 import {
   buildBuiltInSlashCommands,
@@ -70,6 +73,8 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
   const mode = useAppSelector((state) => state.session.mode);
   const selectedModel = useAppSelector(selectSelectedChatModel);
   const historyLength = useAppSelector((state) => state.session.history.length);
+  const sessionId = useAppSelector((state) => state.session.id);
+  const title = useAppSelector((state) => state.session.title);
   const compact = useCompactConversation();
   const availableSlashCommands = useAppSelector(
     selectSlashCommandComboBoxInputs,
@@ -90,14 +95,37 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
           );
         },
         clearCurrentSession: () => {
-          // Sin guardar: es "vaciar la pizarra", no "archivarla".
-          dispatch(newSession(undefined));
+          // Vacía ESTA conversación en su sitio. `newSession` no vale: genera
+          // un id nuevo, así que te deja en otra conversación y la anterior
+          // sigue ahí llena.
+          dispatch(clearSessionHistory());
+          // Y se persiste el vaciado, o al recargar vuelven los mensajes.
+          // `saveCurrentSession` no sirve aquí: se rinde cuando el historial
+          // está vacío, que es justo este caso.
+          void dispatch(
+            updateSession({
+              sessionId,
+              title,
+              workspaceDirectory: window.workspacePaths?.[0] || "",
+              history: [],
+              mode,
+              chatModelTitle: selectedModel?.title ?? null,
+            }),
+          );
         },
         compactConversation: () => {
-          // Compacta desde el último mensaje, que es lo que libera ventana.
-          if (historyLength > 1) {
-            void compact(historyLength - 1);
+          if (historyLength === 0) {
+            return;
           }
+          // El compactado de core lee la sesión DEL DISCO
+          // (`historyManager.load`), no del estado en vivo. Sin guardar antes,
+          // resume una versión vieja y parece que no hace nada.
+          void dispatch(
+            saveCurrentSession({ openNewSession: false, generateTitle: false }),
+          )
+            .unwrap()
+            .then(() => compact(historyLength - 1))
+            .catch(() => undefined);
         },
         historyLength,
         openConfigTab: (tabId) => {
@@ -123,6 +151,8 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
       isStreaming,
       selectedModel?.title,
       historyLength,
+      sessionId,
+      title,
       compact,
     ],
   );

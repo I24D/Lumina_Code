@@ -709,6 +709,25 @@ export const sessionSlice = createSlice({
         state.id = uuidv4();
       }
     },
+    /**
+     * Vacía los mensajes SIN abrir otra conversación.
+     *
+     * Es lo que distingue "limpiar el chat" de "empezar una sesión nueva":
+     * `newSession` genera un `id` nuevo, así que la conversación anterior sigue
+     * existiendo y apareces en otra distinta. Aquí se conservan `id` y título —
+     * es la misma conversación, vaciada.
+     */
+    clearSessionHistory: (state) => {
+      state.streamAborter.abort();
+      state.streamAborter = new AbortController();
+      state.isStreaming = false;
+      state.symbols = {};
+      state.inlineErrorMessage = undefined;
+      state.isPruned = false;
+      state.contextPercentage = undefined;
+      state.compactionLoading = {};
+      state.history = [];
+    },
     updateSessionTitle: (state, { payload }: PayloadAction<string>) => {
       state.title = payload;
     },
@@ -1054,6 +1073,7 @@ export const {
   setAppliedRulesAtIndex,
   setInactive,
   streamUpdate,
+  clearSessionHistory,
   newSession,
   updateSessionTitle,
   addHighlightedCode,
