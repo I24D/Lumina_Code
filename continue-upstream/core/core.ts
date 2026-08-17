@@ -101,6 +101,14 @@ import {
   type StartTalkGeminiConfigStore,
 } from "./startTalk/env.js";
 import {
+  applyVerdict,
+  clearGoal,
+  createGoal,
+  getGoal,
+  parseGoalVerdict,
+  setGoal,
+} from "./goals/sessionGoal.js";
+import {
   CAPABILITIES,
   getPermissions,
   resetPermissions,
@@ -937,6 +945,29 @@ export class Core {
     );
 
     on("privacy/resetPermissions", async () => resetPermissions());
+
+    on("goals/get", async (msg) => getGoal(msg.data.sessionId));
+
+    on("goals/set", async (msg) =>
+      setGoal(
+        createGoal(msg.data.sessionId, msg.data.text, msg.data.maxTurns),
+      ),
+    );
+
+    // El juicio del turno lo hace el cliente con el modelo de chat; aquí solo
+    // se parsea de forma defensiva y se aplica el techo de turnos, que es la
+    // parte que no puede quedar en manos de la respuesta de un modelo.
+    on("goals/applyVerdict", async (msg) => {
+      const goal = getGoal(msg.data.sessionId);
+      if (!goal) {
+        return undefined;
+      }
+      return setGoal(applyVerdict(goal, parseGoalVerdict(msg.data.raw)));
+    });
+
+    on("goals/clear", async (msg) => {
+      clearGoal(msg.data.sessionId);
+    });
 
     on("index/forceReIndex", async ({ data }) => {
       const { config } = await this.configHandler.loadConfig();

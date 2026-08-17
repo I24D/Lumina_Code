@@ -83,6 +83,10 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "privacy/getPermissions",
     "privacy/setPermission",
     "privacy/resetPermissions",
+    "goals/get",
+    "goals/set",
+    "goals/applyVerdict",
+    "goals/clear",
     // Codebase
     "index/setPaused",
     "index/forceReIndex",

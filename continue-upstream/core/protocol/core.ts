@@ -64,6 +64,7 @@ import type {
   StartTalkVideoSourceInfo,
   StartTalkVideoStartRequest,
 } from "../startTalk/index.js";
+import type { SessionGoal } from "../goals/sessionGoal.js";
 import type {
   CapabilityDefinition,
   LuminaCapability,
@@ -340,6 +341,17 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     PermissionMap,
   ];
   "privacy/resetPermissions": [undefined, PermissionMap];
+  // Metas de sesión: el agente sigue trabajando hasta cumplirlas.
+  "goals/get": [{ sessionId: string }, SessionGoal | undefined];
+  "goals/set": [
+    { sessionId: string; text: string; maxTurns?: number },
+    SessionGoal,
+  ];
+  "goals/applyVerdict": [
+    { sessionId: string; raw: string },
+    SessionGoal | undefined,
+  ];
+  "goals/clear": [{ sessionId: string }, void];
   // Codebase indexing
   "index/setPaused": [boolean, void];
   "index/forceReIndex": [
