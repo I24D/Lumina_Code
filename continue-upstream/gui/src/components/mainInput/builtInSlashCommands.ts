@@ -24,6 +24,10 @@ export interface SlashCommandContext {
   clearCurrentSession: () => void;
   /** Resume el contexto para liberar ventana sin perder el hilo. */
   compactConversation: () => void;
+  /** Fija o retira la meta de la sesión. */
+  toggleSessionGoal: () => void;
+  /** Meta activa, para describirla en el comando. */
+  goalSummary?: string;
   /** Cuántos mensajes hay ahora, para saber si hay algo que compactar. */
   historyLength: number;
   /** Abre una pestaña concreta de los ajustes. */
@@ -77,6 +81,17 @@ export function buildBuiltInSlashCommands(
       badge: "instantáneo",
       icon: "trash",
       action: context.clearCurrentSession,
+    },
+    {
+      title: "/goal",
+      argsHint: "[meta]",
+      description: context.goalSummary
+        ? `Meta actual: ${context.goalSummary}`
+        : "Fijar una meta: sigue trabajando hasta cumplirla",
+      type: "action",
+      category: SLASH_CATEGORY.session,
+      icon: "flag",
+      action: context.toggleSessionGoal,
     },
     {
       title: "/compact",

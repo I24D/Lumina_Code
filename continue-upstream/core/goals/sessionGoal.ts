@@ -16,14 +16,12 @@
  *   - `blocked` detiene el bucle en el acto: si el agente dice que no puede
  *     avanzar, insistir solo gasta dinero.
  *
- * El módulo es puro salvo la persistencia: el juicio se hace fuera y aquí solo
- * se decide qué hacer con él, para que se pueda testear sin modelo.
+ * El módulo es PURO: el juicio se hace fuera y aquí solo se decide qué hacer
+ * con él, para que se pueda testear sin modelo. El disco vive en `goalStore.ts`
+ * y esa separación no es cosmética — la GUI importa este archivo desde el
+ * webview, y un `import fs` aquí arrastraría `core/util/paths.ts` al navegador
+ * y dejaría la ventana en negro. Ver la cabecera de `goalStore.ts`.
  */
-import fs from "node:fs";
-import path from "node:path";
-
-import { getContinueGlobalPath } from "../util/paths.js";
-
 export type SessionGoalStatus =
   | "active"
   | "completed"
@@ -61,10 +59,6 @@ export interface GoalEvaluation {
 export const DEFAULT_MAX_TURNS = 12;
 /** Tope absoluto: ni el usuario puede pedir más, por seguridad de cuota. */
 export const MAX_ALLOWED_TURNS = 50;
-
-function goalsFilePath(): string {
-  return path.join(getContinueGlobalPath(), "lumina-session-goals.json");
-}
 
 /** Meta terminada: ni sigue trabajando ni admite más turnos. */
 export function isGoalFinished(goal: SessionGoal): boolean {
@@ -221,83 +215,4 @@ export function createGoal(
     createdAt: now,
     updatedAt: now,
   };
-}
-
-// ---- Persistencia ----------------------------------------------------------
-
-type GoalStore = Record<string, SessionGoal>;
-
-let cache: GoalStore | null = null;
-
-function isGoal(value: unknown): value is SessionGoal {
-  const goal = value as SessionGoal | undefined;
-  return Boolean(
-    goal &&
-      typeof goal.sessionId === "string" &&
-      typeof goal.text === "string" &&
-      typeof goal.turnsUsed === "number" &&
-      typeof goal.maxTurns === "number",
-  );
-}
-
-function load(): GoalStore {
-  if (cache) {
-    return cache;
-  }
-  try {
-    const file = goalsFilePath();
-    if (!fs.existsSync(file)) {
-      cache = {};
-      return cache;
-    }
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
-    const store: GoalStore = {};
-    if (parsed && typeof parsed === "object") {
-      for (const [key, value] of Object.entries(parsed)) {
-        if (isGoal(value)) {
-          // Se re-acota al leer: un archivo tocado a mano no puede saltarse el
-          // tope de turnos.
-          store[key] = {
-            ...value,
-            maxTurns: Math.max(1, Math.min(MAX_ALLOWED_TURNS, value.maxTurns)),
-          };
-        }
-      }
-    }
-    cache = store;
-  } catch {
-    cache = {};
-  }
-  return cache;
-}
-
-function persist(store: GoalStore): void {
-  try {
-    fs.writeFileSync(goalsFilePath(), JSON.stringify(store, null, 2), "utf8");
-  } catch {
-    // Disco no disponible: la meta sigue viva en memoria para esta sesión.
-  }
-}
-
-export function getGoal(sessionId: string): SessionGoal | undefined {
-  return load()[sessionId];
-}
-
-export function setGoal(goal: SessionGoal): SessionGoal {
-  const store = { ...load(), [goal.sessionId]: goal };
-  cache = store;
-  persist(store);
-  return goal;
-}
-
-export function clearGoal(sessionId: string): void {
-  const store = { ...load() };
-  delete store[sessionId];
-  cache = store;
-  persist(store);
-}
-
-/** Limpia la caché (tests, o tras editar el archivo por fuera). */
-export function resetGoalCache(): void {
-  cache = null;
 }

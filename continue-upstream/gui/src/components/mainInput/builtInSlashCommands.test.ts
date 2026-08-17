@@ -13,6 +13,8 @@ function makeContext(overrides = {}) {
     clearCurrentSession: vi.fn(),
     compactConversation: vi.fn(),
     historyLength: 4,
+    toggleSessionGoal: vi.fn(),
+    goalSummary: undefined as string | undefined,
     openConfigTab: vi.fn(),
     navigateTo: vi.fn(),
     setMode: vi.fn(),
@@ -69,6 +71,18 @@ describe("buildBuiltInSlashCommands", () => {
       makeContext({ historyLength: 12 }),
     ).find((c) => c.title === "/compact")!;
     expect(full.description).toContain("12");
+  });
+
+  it("/goal muestra la meta activa cuando la hay", () => {
+    const sin = buildBuiltInSlashCommands(makeContext()).find(
+      (c) => c.title === "/goal",
+    )!;
+    expect(sin.description).toMatch(/fijar una meta/i);
+
+    const con = buildBuiltInSlashCommands(
+      makeContext({ goalSummary: "que pasen los tests" }),
+    ).find((c) => c.title === "/goal")!;
+    expect(con.description).toContain("que pasen los tests");
   });
 
   it("/usage navega a las estadísticas", () => {

@@ -5,8 +5,10 @@ import {
   RuleMetadata,
   SlashCommandSource,
 } from "core";
-import { memo, useMemo } from "react";
+import type { SessionGoal } from "core/goals/sessionGoal";
+import { memo, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { defaultBorderRadius, vscBackground } from "..";
 import { buildConfigRoute } from "../../util/navigation";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
@@ -76,6 +78,29 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
   const sessionId = useAppSelector((state) => state.session.id);
   const title = useAppSelector((state) => state.session.title);
   const compact = useCompactConversation();
+  const ideMessenger = useContext(IdeMessengerContext);
+  // Meta de la sesión. Se refresca al cambiar de sesión y tras cada turno,
+  // porque el bucle la va actualizando por su cuenta en core.
+  const [sessionGoal, setSessionGoal] = useState<SessionGoal | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) {
+      setSessionGoal(null);
+      return;
+    }
+    let cancelled = false;
+    void ideMessenger
+      .request("goals/get", { sessionId })
+      .then((res) => {
+        if (!cancelled && res.status !== "error") {
+          setSessionGoal(res.content ?? null);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [ideMessenger, sessionId, historyLength, isStreaming]);
   const availableSlashCommands = useAppSelector(
     selectSlashCommandComboBoxInputs,
   );
@@ -128,6 +153,35 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
             .catch(() => undefined);
         },
         historyLength,
+        goalSummary: sessionGoal?.text,
+        toggleSessionGoal: () => {
+          if (!sessionId) {
+            return;
+          }
+          // Con meta puesta el comando la retira; sin ella, la pide. Un solo
+          // comando para los dos gestos, como el resto de la paleta.
+          if (sessionGoal) {
+            void ideMessenger
+              .request("goals/clear", { sessionId })
+              .then(() => setSessionGoal(null))
+              .catch(() => undefined);
+            return;
+          }
+          const text = window.prompt(
+            "¿Qué debe conseguir Lumina antes de parar?",
+          );
+          if (!text?.trim()) {
+            return;
+          }
+          void ideMessenger
+            .request("goals/set", { sessionId, text: text.trim() })
+            .then((res) => {
+              if (res.status !== "error") {
+                setSessionGoal(res.content);
+              }
+            })
+            .catch(() => undefined);
+        },
         openConfigTab: (tabId) => {
           // La página de ajustes selecciona pestaña por `?tab=`; usar el mismo
           // constructor tipado que el resto de la app.
@@ -154,6 +208,8 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
       sessionId,
       title,
       compact,
+      ideMessenger,
+      sessionGoal,
     ],
   );
 

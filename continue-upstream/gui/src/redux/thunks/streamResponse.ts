@@ -11,6 +11,7 @@ import {
   updateHistoryItemAtIndex,
 } from "../slices/sessionSlice";
 import { ThunkApiType } from "../store";
+import { pursueSessionGoal } from "./pursueSessionGoal";
 import { streamNormalInput } from "./streamNormalInput";
 import { streamThunkWrapper } from "./streamThunkWrapper";
 import { updateFileSymbolsFromFiles } from "./updateFileSymbols";
@@ -100,5 +101,10 @@ export const streamResponseThunk = createAsyncThunk<
         );
       }),
     );
+
+    // Terminado el turno: si la sesión tiene una meta activa, se verifica y, si
+    // falta trabajo, el agente se relanza solo. El techo de turnos vive en core
+    // y es lo que garantiza que esto termine. Ver pursueSessionGoal.
+    await dispatch(pursueSessionGoal());
   },
 );

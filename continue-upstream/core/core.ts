@@ -100,13 +100,11 @@ import {
   selectStartTalkGeminiEnv,
   type StartTalkGeminiConfigStore,
 } from "./startTalk/env.js";
+import { clearGoal, getGoal, setGoal } from "./goals/goalStore.js";
 import {
   applyVerdict,
-  clearGoal,
   createGoal,
-  getGoal,
   parseGoalVerdict,
-  setGoal,
 } from "./goals/sessionGoal.js";
 import {
   CAPABILITIES,
