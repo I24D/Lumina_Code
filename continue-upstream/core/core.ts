@@ -100,6 +100,12 @@ import {
   selectStartTalkGeminiEnv,
   type StartTalkGeminiConfigStore,
 } from "./startTalk/env.js";
+import {
+  CAPABILITIES,
+  getPermissions,
+  resetPermissions,
+  setPermission,
+} from "./privacy/permissions.js";
 import { StartTalkManager } from "./startTalk/index.js";
 import {
   WhatsAppAutoResponder,
@@ -920,6 +926,17 @@ export class Core {
     on("startTalk/reportPlayback", async (msg) => {
       this.startTalkManager.reportPlayback(msg.data);
     });
+
+    on("privacy/getPermissions", async () => ({
+      capabilities: CAPABILITIES,
+      permissions: getPermissions(),
+    }));
+
+    on("privacy/setPermission", async (msg) =>
+      setPermission(msg.data.capability, msg.data.policy),
+    );
+
+    on("privacy/resetPermissions", async () => resetPermissions());
 
     on("index/forceReIndex", async ({ data }) => {
       const { config } = await this.configHandler.loadConfig();

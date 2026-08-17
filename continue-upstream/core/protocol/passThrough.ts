@@ -80,6 +80,9 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "startTalk/sendVideoFrame",
     "startTalk/listVideoSources",
     "startTalk/reportPlayback",
+    "privacy/getPermissions",
+    "privacy/setPermission",
+    "privacy/resetPermissions",
     // Codebase
     "index/setPaused",
     "index/forceReIndex",

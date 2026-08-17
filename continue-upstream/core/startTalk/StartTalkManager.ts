@@ -17,6 +17,10 @@ import {
   listDisplayMonitors,
   listVideoInputDevices,
 } from "./FfmpegVideoCapture.js";
+import {
+  isCapabilityAvailable,
+  type LuminaCapability,
+} from "../privacy/permissions.js";
 import { SoundEventDetector } from "./SoundEventDetector.js";
 import { TurnMetricsTracker } from "./TurnMetrics.js";
 import { searchWebForVoice } from "./webSearch.js";
@@ -116,6 +120,21 @@ const WHATSAPP_REPLY_FUNCTION_NAME = "reply_to_whatsapp";
 const DISMISS_NOTIFICATION_FUNCTION_NAME = "dismiss_notification";
 const STAY_SILENT_FUNCTION_NAME = "stay_silent";
 const WEB_SEARCH_FUNCTION_NAME = "search_web";
+
+/**
+ * Qué capacidad ejerce cada función. Se consulta antes de despachar, así que
+ * bloquear una capacidad en Privacidad la apaga de verdad — no basta con
+ * quitarla del prompt, porque el modelo puede pedirla igualmente y la sesión
+ * puede llevar horas abierta cuando el usuario cambia de opinión.
+ */
+const CAPABILITY_BY_FUNCTION: Record<string, LuminaCapability | undefined> = {
+  [DELEGATE_FUNCTION_NAME]: "computerControl",
+  [WINDOWS_CONTEXT_FUNCTION_NAME]: "systemContext",
+  [PHONE_LINK_REPLY_FUNCTION_NAME]: "notificationReplies",
+  [WHATSAPP_REPLY_FUNCTION_NAME]: "notificationReplies",
+  [DISMISS_NOTIFICATION_FUNCTION_NAME]: "notifications",
+  [WEB_SEARCH_FUNCTION_NAME]: "webSearch",
+};
 
 /**
  * Búsqueda web para los modelos SIN grounding nativo de Google Search
@@ -631,9 +650,15 @@ export class StartTalkManager {
     // reconexión (openLiveSession se llama también en el reconnect por goAway).
     // En modo intérprete no se carga memoria (irrelevante y contaminaría).
     if (!isInterpreter) {
+      // Memoria y estado del sistema son datos personales: si están
+      // bloqueados no se cargan siquiera, así que nunca entran al prompt.
       const [memoryBlock, windowsContext] = await Promise.all([
-        loadVoiceMemoryBlock(state.memoryUserId).catch(() => ""),
-        loadWindowsSystemContext().catch(() => undefined),
+        isCapabilityAvailable("voiceMemory")
+          ? loadVoiceMemoryBlock(state.memoryUserId).catch(() => "")
+          : Promise.resolve(""),
+        isCapabilityAvailable("systemContext")
+          ? loadWindowsSystemContext().catch(() => undefined)
+          : Promise.resolve(undefined),
       ]);
       state.memoryBlock = memoryBlock;
       state.windowsContext = windowsContext;
@@ -782,6 +807,11 @@ export class StartTalkManager {
     const state = this.requireSession(sessionId);
     if (!state.session) {
       throw new Error("Start Talk session is reconnecting.");
+    }
+    if (!isCapabilityAvailable("microphone")) {
+      throw new Error(
+        "El micrófono está bloqueado en Privacidad, búsqueda y servicios.",
+      );
     }
 
     state.isCapturing = true;
@@ -1147,6 +1177,21 @@ export class StartTalkManager {
       throw new Error("Start Talk session is reconnecting.");
     }
 
+    // Cámara y pantalla son sensores: si el usuario los bloqueó, no se abren
+    // aunque la UI lo pida. El fallo va por `videoState` para que se vea el
+    // motivo en la tarjeta de visión en vez de morir en silencio.
+    if (!isCapabilityAvailable(source === "camera" ? "camera" : "screen")) {
+      this.emitVideoState(
+        sessionId,
+        state,
+        "error",
+        source === "camera"
+          ? "La cámara está bloqueada en Privacidad, búsqueda y servicios."
+          : "Compartir pantalla está bloqueado en Privacidad, búsqueda y servicios.",
+      );
+      return;
+    }
+
     state.video?.stop();
     state.videoSource = source;
     state.videoDeviceName = deviceName;
@@ -1449,6 +1494,23 @@ export class StartTalkManager {
     args: Record<string, unknown>,
   ): Promise<void> {
     const query = typeof args.query === "string" ? args.query.trim() : "";
+
+    // La consulta sale del equipo, así que el permiso se comprueba aquí y no
+    // solo al construir las tools: la sesión puede llevar horas abierta cuando
+    // el usuario decide revocarlo.
+    if (!isCapabilityAvailable("webSearch")) {
+      state.session?.sendToolResponse({
+        functionResponses: [
+          {
+            id,
+            name: WEB_SEARCH_FUNCTION_NAME,
+            response: { error: "web_search_blocked_by_user" },
+          },
+        ],
+      });
+      return;
+    }
+
     state.metrics.onSearch();
 
     this.emit({
@@ -2187,6 +2249,33 @@ export class StartTalkManager {
           );
           continue;
         }
+        // Puerta de permisos, ANTES de despachar. Cada función que ejerce una
+        // capacidad sensible se deniega aquí si el usuario la bloqueó, sin que
+        // el manejador correspondiente llegue a ejecutarse.
+        const required = CAPABILITY_BY_FUNCTION[call.name];
+        if (required && !isCapabilityAvailable(required)) {
+          state?.session?.sendToolResponse({
+            functionResponses: [
+              {
+                id,
+                name: call.name,
+                response: { error: `blocked_by_user:${required}` },
+              },
+            ],
+          });
+          this.emit({
+            type: "toolActivity",
+            sessionId,
+            activity: {
+              id,
+              label: "Permiso denegado",
+              status: "error",
+              detail: `${required} está bloqueado en Privacidad`,
+            },
+          });
+          continue;
+        }
+
         if (call.name === WINDOWS_CONTEXT_FUNCTION_NAME && state) {
           void this.handleWindowsContextToolCall(sessionId, state, id);
           continue;
@@ -2431,7 +2520,10 @@ export class StartTalkManager {
     if (
       !state.announceNotifications ||
       state.mode === "interpreter" ||
-      state.notificationMonitor
+      state.notificationMonitor ||
+      // Bloquear notificaciones tiene que impedir que el monitor arranque, no
+      // solo que se lean: si no, se seguirían sondeando en segundo plano.
+      !isCapabilityAvailable("notifications")
     ) {
       return;
     }

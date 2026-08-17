@@ -64,6 +64,12 @@ import type {
   StartTalkVideoSourceInfo,
   StartTalkVideoStartRequest,
 } from "../startTalk/index.js";
+import type {
+  CapabilityDefinition,
+  LuminaCapability,
+  PermissionMap,
+  PermissionPolicy,
+} from "../privacy/permissions.js";
 import { ContinueErrorReason } from "../util/errors";
 
 export enum OnboardingModes {
@@ -324,6 +330,16 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "startTalk/sendVideoFrame": [StartTalkVideoFrameInput, void];
   "startTalk/listVideoSources": [undefined, StartTalkVideoSourceInfo[]];
   "startTalk/reportPlayback": [StartTalkPlaybackReport, void];
+  // Privacidad: permisos de las capacidades reales de Lumina.
+  "privacy/getPermissions": [
+    undefined,
+    { capabilities: CapabilityDefinition[]; permissions: PermissionMap },
+  ];
+  "privacy/setPermission": [
+    { capability: LuminaCapability; policy: PermissionPolicy },
+    PermissionMap,
+  ];
+  "privacy/resetPermissions": [undefined, PermissionMap];
   // Codebase indexing
   "index/setPaused": [boolean, void];
   "index/forceReIndex": [

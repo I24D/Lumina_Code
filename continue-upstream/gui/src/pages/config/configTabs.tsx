@@ -7,6 +7,7 @@ import {
   DocumentIcon,
   PencilIcon,
   QuestionMarkCircleIcon,
+  ShieldCheckIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import { ConfigSection } from "./components/ConfigSection";
@@ -14,6 +15,7 @@ import { ConfigsSection } from "./sections/ConfigsSection";
 import { HelpSection } from "./sections/HelpSection";
 import { IndexingSettingsSection } from "./sections/IndexingSettingsSection";
 import { ModelsSection } from "./sections/ModelsSection";
+import { PrivacySection } from "./sections/PrivacySection";
 import { RulesSection } from "./sections/RulesSection";
 import { SkillsSection } from "./sections/SkillsSection";
 import { ToolsSection } from "./sections/ToolsSection";
@@ -134,6 +136,18 @@ export const bottomTabSections: TabSection[] = [
   {
     id: "bottom",
     tabs: [
+      {
+        id: "privacy",
+        label: "Privacidad",
+        component: (
+          <ConfigSection>
+            <PrivacySection />
+          </ConfigSection>
+        ),
+        icon: (
+          <ShieldCheckIcon className="xs:h-4 xs:w-4 h-3 w-3 flex-shrink-0" />
+        ),
+      },
       {
         id: "settings",
         label: "Settings",
