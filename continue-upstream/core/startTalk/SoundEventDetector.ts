@@ -15,7 +15,7 @@
  * No AI model is involved — everything is deterministic and unit-testable.
  * Emits a debounced result so callers are not flooded with per-window events.
  */
-import { fftInPlace } from "./AudioProcessor.js";
+import { fftInPlace } from "./fft.js";
 import type { StartTalkSoundCategory } from "./types.js";
 
 const WINDOW_SIZE = 512;

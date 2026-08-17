@@ -165,18 +165,15 @@ describe("TurnMetricsTracker", () => {
     expect(session.p90ResponseLatencyMs).toBe(1000);
   });
 
-  it("cuenta reconexiones, reinicios y búsquedas de la sesión", () => {
+  it("cuenta reconexiones, reinicios de vídeo y búsquedas de la sesión", () => {
     const { tracker } = makeTracker();
 
     tracker.onReconnect();
-    tracker.onCaptureRestart();
-    tracker.onCaptureRestart();
     tracker.onVideoRestart();
     tracker.onSearch();
 
     const session = tracker.sessionMetrics();
     expect(session.reconnects).toBe(1);
-    expect(session.captureRestarts).toBe(2);
     expect(session.videoRestarts).toBe(1);
     expect(session.searches).toBe(1);
   });

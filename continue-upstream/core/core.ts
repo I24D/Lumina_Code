@@ -866,14 +866,6 @@ export class Core {
       this.startTalkManager.startCapture(msg.data);
     });
 
-    on("startTalk/switchAudioDevice", async (msg) => {
-      this.startTalkManager.switchAudioDevice(msg.data);
-    });
-
-    on("startTalk/listAudioDevices", async () => {
-      return this.startTalkManager.listAudioDevices();
-    });
-
     on("startTalk/setMuted", async (msg) => {
       this.startTalkManager.setMuted(msg.data);
     });

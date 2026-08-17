@@ -36,6 +36,11 @@ import {
   selectPhoneBridgeNotifications,
 } from "./phoneAssistantBridge";
 import { isAffirmativeReply, isNegativeReply } from "./confirmationPhrases";
+import {
+  MicCapture,
+  listMicrophones,
+  type MicCaptureSettings,
+} from "./micCapture";
 import { PcmPlayer } from "./pcmPlayer";
 import { buildChatResponseSpeechPrompt } from "./voiceDelegation";
 
@@ -151,6 +156,14 @@ export function useStartTalkAudio({
   // pending. See resumeOutputContextIfNeeded / ensureOutputWatchdog below.
   // Unica ruta de reproduccion: AudioWorklet con anillo (ver pcmPlayer.ts).
   const pcmPlayerRef = useRef<PcmPlayer>();
+  // Microfono: se abre AQUI, en el WebView, para que Chromium pueda cancelar el
+  // eco de la voz de Lumina usando la reproduccion como referencia.
+  const micCaptureRef = useRef<MicCapture>();
+  const micDevicesRef = useRef<Array<{ deviceId: string; label: string }>>([]);
+  const selectedMicIdRef = useRef<string | undefined>(undefined);
+  const startMicCaptureRef = useRef<(deviceId?: string) => Promise<void>>(
+    async () => undefined,
+  );
   // Para detectar el instante en que la cola se vacia: el worklet no emite un
   // evento tipo `source.onended`, asi que el flanco se detecta por sondeo.
   const wasPlayingRef = useRef(false);
@@ -243,6 +256,11 @@ export function useStartTalkAudio({
     useState<StartTalkTurnMetrics | null>(null);
   const [sessionMetrics, setSessionMetrics] =
     useState<StartTalkSessionMetrics | null>(null);
+  // Lo que Chromium aplicó REALMENTE al micrófono. Se expone porque pedir
+  // cancelación de eco no garantiza obtenerla, y conviene poder verlo.
+  const [micSettings, setMicSettings] = useState<MicCaptureSettings | null>(
+    null,
+  );
   const [micLevel, setMicLevel] = useState(0);
   const [speaker, setSpeaker] = useState<SpeakerInfo | null>(null);
   const [lastSoundEvent, setLastSoundEvent] =
@@ -431,6 +449,7 @@ export function useStartTalkAudio({
 
     recoverActiveSessionRef.current = false;
     clearSessionRecoveryTimer();
+    void micCaptureRef.current?.stop();
     stopPlayback();
     resetNotificationQueue();
     resetChatResponseQueue();
@@ -438,6 +457,7 @@ export function useStartTalkAudio({
     sessionIdRef.current = null;
     setStatus("idle");
     setIsCrowded(false);
+    setMicSettings(null);
     setLastTurnMetrics(null);
     setSessionMetrics(null);
     setVideoSource(null);
@@ -1447,27 +1467,82 @@ export function useStartTalkAudio({
     });
   }, [ideMessenger, isMuted]);
 
+  /**
+   * Micrófonos del sistema, según el propio WebView. Antes los enumeraba core
+   * con FFmpeg; ahora el micrófono lo abre el WebView para poder cancelar el
+   * eco, así que es él quien conoce los dispositivos.
+   */
   const listAudioDevices = useCallback(async (): Promise<string[]> => {
-    const res = await ideMessenger.request(
-      "startTalk/listAudioDevices",
-      undefined,
-    );
-    return res.status === "error" ? [] : (res.content ?? []);
-  }, [ideMessenger]);
+    try {
+      const mics = await listMicrophones();
+      micDevicesRef.current = mics;
+      return mics.map((mic) => mic.label);
+    } catch {
+      return [];
+    }
+  }, []);
 
   const switchAudioDevice = useCallback(
-    async (deviceName: string) => {
-      const sessionId = sessionIdRef.current;
-      if (!sessionId) {
+    async (deviceLabel: string) => {
+      const target = micDevicesRef.current.find(
+        (mic) => mic.label === deviceLabel,
+      );
+      if (!target || !micCaptureRef.current) {
         return;
       }
-      await ideMessenger.request("startTalk/switchAudioDevice", {
-        sessionId,
-        deviceName,
+      selectedMicIdRef.current = target.deviceId;
+      await startMicCaptureRef.current(target.deviceId);
+    },
+    [],
+  );
+
+  /**
+   * Abre el micrófono en el WebView y bombea su PCM a core.
+   *
+   * Aquí es donde ocurre la cancelación de eco: Chromium tiene la señal que se
+   * está reproduciendo (la voz de Lumina suena en este mismo WebView) y la usa
+   * como referencia. FFmpeg no podía hacerlo porque captura del dispositivo y
+   * nunca ve lo que sale por los altavoces.
+   */
+  const startMicCapture = useCallback(
+    async (deviceId?: string) => {
+      if (!micCaptureRef.current) {
+        micCaptureRef.current = new MicCapture();
+      }
+
+      const applied = await micCaptureRef.current.start(deviceId, {
+        onAudio: (pcm) => {
+          const sessionId = sessionIdRef.current;
+          if (!sessionId) {
+            return;
+          }
+          // Int16Array -> base64, que es lo que viaja por el puente.
+          const bytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += 0x8000) {
+            binary += String.fromCharCode(
+              ...bytes.subarray(i, i + 0x8000),
+            );
+          }
+          void ideMessenger
+            .request("startTalk/sendAudio", {
+              sessionId,
+              data: btoa(binary),
+              mimeType: "audio/pcm;rate=16000",
+            })
+            .catch(() => undefined);
+        },
+        onError: (message) => {
+          setErrorMessage(message);
+        },
       });
+
+      setMicSettings(applied);
+      selectedMicIdRef.current = applied.deviceId;
     },
     [ideMessenger],
   );
+  startMicCaptureRef.current = startMicCapture;
 
   const exportTranscript = useCallback(async (): Promise<
     StartTalkTranscriptEntry[]
@@ -1529,6 +1604,10 @@ export function useStartTalkAudio({
       if (captureResponse.status === "error") {
         throw new Error(captureResponse.error);
       }
+
+      // El micrófono se abre después de que core tenga el gate armado, para no
+      // perder PCM en el hueco.
+      await startMicCapture(selectedMicIdRef.current);
 
       sessionRecoveryAttemptsRef.current = 0;
       recoverActiveSessionRef.current = true;
@@ -1635,6 +1714,8 @@ export function useStartTalkAudio({
         chatResponseWatchdogRef.current = undefined;
       }
       void stopListening();
+      void micCaptureRef.current?.stop();
+      micCaptureRef.current = undefined;
       void pcmPlayerRef.current?.close();
       pcmPlayerRef.current = undefined;
     };
@@ -1654,6 +1735,7 @@ export function useStartTalkAudio({
     userTranscript,
     isCrowded,
     lastTurnMetrics,
+    micSettings,
     sessionMetrics,
     videoSource,
     videoState,

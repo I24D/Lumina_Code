@@ -6,7 +6,7 @@ import {
 import os from "node:os";
 import type { Readable } from "node:stream";
 
-import { resolveFfmpegPath } from "./FfmpegMicrophoneCapture.js";
+import { resolveFfmpegPath } from "./ffmpegPath.js";
 import type { StartTalkVideoRegion, StartTalkVideoSource } from "./types.js";
 
 export type VideoCaptureHandlers = {

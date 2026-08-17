@@ -11,11 +11,6 @@ import {
 } from "@google/genai";
 import { v4 as uuidv4 } from "uuid";
 
-import { AudioProcessor } from "./AudioProcessor.js";
-import {
-  FfmpegMicrophoneCapture,
-  listAudioInputDevices,
-} from "./FfmpegMicrophoneCapture.js";
 import {
   FfmpegVideoCapture,
   grabSingleFrame,
@@ -313,12 +308,6 @@ function modelSupportsSearch(model: string): boolean {
   return !SEARCH_INCOMPATIBLE_MODELS.some((m) => model.includes(m));
 }
 
-/** DSP cleanup of mic audio is on by default; opt out with START_TALK_AUDIO_DSP=false. */
-function audioDspEnabled(): boolean {
-  const flag = String(process.env.START_TALK_AUDIO_DSP ?? "").toLowerCase();
-  return flag !== "false" && flag !== "0" && flag !== "off";
-}
-
 /** Non-speech sound-event detection is opt-in (START_TALK_SOUND_EVENTS=true). */
 function soundEventsEnabled(): boolean {
   const flag = String(process.env.START_TALK_SOUND_EVENTS ?? "").toLowerCase();
@@ -457,7 +446,6 @@ function toGeminiThinkingLevel(level: StartTalkThinkingLevel): ThinkingLevel {
 
 type SessionState = {
   apiKey: string;
-  audioProcessor?: AudioProcessor;
   // Raw PCM of the in-progress user turn, buffered only when voice biometrics
   // is enabled, so we can identify the speaker when the turn ends.
   turnAudio: Buffer[];
@@ -470,10 +458,6 @@ type SessionState = {
   voiceStyle?: string;
   // Throttle timestamp (ms epoch) for "level" visualizer events.
   lastLevelEmit: number;
-  capture?: FfmpegMicrophoneCapture;
-  captureDeviceName?: string;
-  captureRestartAttempts: number;
-  captureRestartTimer?: ReturnType<typeof setTimeout>;
   connectionEpoch?: number;
   connectionRotationTimer?: ReturnType<typeof setTimeout>;
   enableSearch: boolean;
@@ -606,7 +590,6 @@ export class StartTalkManager {
       pendingPhoneLinkNotifications: new Map(),
       phoneLinkReplyInFlight: new Set(),
       completedPhoneLinkReplies: new Set(),
-      captureRestartAttempts: 0,
       metrics: new TurnMetricsTracker(),
       crowded: false,
       playbackRemainingMs: 0,
@@ -687,27 +670,6 @@ export class StartTalkManager {
     };
   }
 
-  /** Lists microphone input devices for the current platform. */
-  listAudioDevices(): string[] {
-    try {
-      return listAudioInputDevices();
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Hot-swaps the capture device without dropping the Live session: stops the
-   * current microphone stream and restarts capture on the new device.
-   */
-  switchAudioDevice({ sessionId, deviceName }: StartTalkCaptureRequest): void {
-    const state = this.sessions.get(sessionId);
-    if (!state || !state.session) {
-      return;
-    }
-    this.startCapture({ sessionId, deviceName });
-  }
-
   /** Push-to-talk / mute: when muted, the mic stream is not forwarded. */
   setMuted({ sessionId, muted }: StartTalkMuteRequest): void {
     const state = this.sessions.get(sessionId);
@@ -747,14 +709,46 @@ export class StartTalkManager {
     });
   }
 
-  sendAudio({ sessionId, data, mimeType }: StartTalkAudioChunk): void {
-    const state = this.requireSession(sessionId);
-    this.safeRealtimeInput(state, {
-      audio: {
-        data,
-        mimeType,
-      },
-    });
+  /**
+   * PCM del micrófono capturado en el WebView (s16le mono 16 kHz, base64).
+   *
+   * No se reenvía tal cual a la Live API: pasa por el mismo `VoiceActivityGate`
+   * que decide cuándo abrir y cerrar el turno. Ese gate es el que evita que
+   * Gemini responda a cualquier ruido y el que cierra el turno en salas con
+   * varias voces, así que saltárselo rompería las dos cosas.
+   */
+  sendAudio({ sessionId, data }: StartTalkAudioChunk): void {
+    const state = this.sessions.get(sessionId);
+    if (!state || !state.session || !state.isCapturing) {
+      return;
+    }
+    // Push-to-talk: mientras esté silenciado, el audio se descarta entero.
+    if (state.muted) {
+      return;
+    }
+
+    const pcm = Buffer.from(data, "base64");
+    if (pcm.length === 0) {
+      return;
+    }
+
+    this.emitMicLevel(sessionId, state, pcm);
+    if (state.soundDetector) {
+      const event = state.soundDetector.process(pcm);
+      if (
+        event &&
+        event.category !== "silence" &&
+        event.category !== "speech"
+      ) {
+        this.emit({
+          type: "soundEvent",
+          sessionId,
+          category: event.category,
+          confidence: event.confidence,
+        });
+      }
+    }
+    state.gate?.process(pcm);
   }
 
   sendText({ sessionId, text }: StartTalkTextInput): void {
@@ -779,25 +773,17 @@ export class StartTalkManager {
     }
   }
 
-  startCapture({ sessionId, deviceName }: StartTalkCaptureRequest): void {
-    this.startCaptureInternal({ sessionId, deviceName }, true);
-  }
-
-  private startCaptureInternal(
-    { sessionId, deviceName }: StartTalkCaptureRequest,
-    resetRestartAttempts: boolean,
-  ): void {
+  /**
+   * Abre el turno de escucha. El micrófono en sí lo abre el WebView (ver
+   * micCapture.ts): aquí solo se arma el gate que recibirá su PCM y se
+   * arrancan los monitores de la sesión.
+   */
+  startCapture({ sessionId }: StartTalkCaptureRequest): void {
     const state = this.requireSession(sessionId);
     if (!state.session) {
       throw new Error("Start Talk session is reconnecting.");
     }
 
-    this.clearCaptureRestartTimer(state);
-    if (resetRestartAttempts) {
-      state.captureRestartAttempts = 0;
-    }
-    state.capture?.stop();
-    state.captureDeviceName = deviceName;
     state.isCapturing = true;
     this.startNotificationMonitor(sessionId, state);
     this.startClaudeVoiceMonitor(sessionId, state);
@@ -848,87 +834,14 @@ export class StartTalkManager {
     state.gate = gate;
     state.crowded = false;
 
-    // Fresh DSP chain per capture (cleans mic PCM before the gate). Opt-out with
-    // START_TALK_AUDIO_DSP=false. A fresh instance avoids carrying stale filter
-    // state across reconnects.
-    state.audioProcessor = audioDspEnabled() ? new AudioProcessor() : undefined;
-    // Optional non-speech sound-event detection (opt-in).
+    // Detección opcional de sonidos no vocales (opt-in).
     state.soundDetector = soundEventsEnabled()
       ? new SoundEventDetector()
       : undefined;
 
-    const capture = new FfmpegMicrophoneCapture();
-    state.capture = capture;
-
-    capture.start(deviceName, {
-      onAudio: (chunk) => {
-        if (!this.sessions.has(sessionId) || !state.session) {
-          return;
-        }
-        state.captureRestartAttempts = 0;
-        // Push-to-talk: while muted, drop the mic stream entirely.
-        if (state.muted) {
-          return;
-        }
-
-        const cleaned = state.audioProcessor
-          ? state.audioProcessor.process(chunk)
-          : chunk;
-        if (cleaned.length === 0) {
-          return;
-        }
-
-        this.emitMicLevel(sessionId, state, cleaned);
-        if (state.soundDetector) {
-          const event = state.soundDetector.process(cleaned);
-          if (
-            event &&
-            event.category !== "silence" &&
-            event.category !== "speech"
-          ) {
-            this.emit({
-              type: "soundEvent",
-              sessionId,
-              category: event.category,
-              confidence: event.confidence,
-            });
-          }
-        }
-        gate.process(cleaned);
-      },
-      onError: (message) => {
-        if (!this.sessions.has(sessionId) || state.isReconnecting) {
-          return;
-        }
-
-        this.emit({
-          type: "error",
-          sessionId,
-          message,
-        });
-      },
-      onStop: (reason) => {
-        if (state.capture === capture) {
-          state.capture = undefined;
-        }
-
-        if (!this.sessions.has(sessionId)) {
-          return;
-        }
-
-        if (state.isReconnecting || reason === "requested") {
-          return;
-        }
-
-        this.emit({
-          type: "error",
-          sessionId,
-          message: "Microphone capture stopped; restarting automatically.",
-        });
-        this.scheduleCaptureRestart(sessionId, state);
-      },
-    });
-
+    // El micrófono se abre en el WebView, no aquí: solo allí existe la señal de
+    // reproducción que necesita la cancelación de eco. El PCM llega por
+    // `sendAudio` y entra al gate por `ingestMicAudio`. Ver micCapture.ts.
     this.emitListening(sessionId, state);
 
     // Start Talk stays silent on connect. She speaks only when the user speaks
@@ -1019,9 +932,6 @@ export class StartTalkManager {
   endAudio({ sessionId }: StartTalkSessionRequest): void {
     const state = this.requireSession(sessionId);
     state.isCapturing = false;
-    this.clearCaptureRestartTimer(state);
-    state.capture?.stop();
-    state.capture = undefined;
     // Cierra un turno abierto (activityEnd) si lo hubiera; con VAD manual no
     // usamos audioStreamEnd.
     state.gate?.reset();
@@ -1108,11 +1018,9 @@ export class StartTalkManager {
 
     this.clearReconnectTimer(state);
     this.clearConnectionRotationTimer(state);
-    this.clearCaptureRestartTimer(state);
     this.sessions.delete(sessionId);
     this.closingSessionIds.add(sessionId);
     state.isCapturing = false;
-    state.capture?.stop();
     state.gate?.reset(false);
     state.gate = undefined;
     state.video?.stop();
@@ -2179,11 +2087,9 @@ export class StartTalkManager {
     }
 
     this.clearConnectionRotationTimer(state);
-    this.clearCaptureRestartTimer(state);
     state.isReconnecting = true;
     state.reconnectAttempts += 1;
     state.metrics.onReconnect();
-    state.capture?.stop();
     state.gate?.reset(false);
     this.emit({
       type: "status",
@@ -2214,13 +2120,7 @@ export class StartTalkManager {
       state.reconnectAttempts = 0;
 
       if (state.isCapturing) {
-        this.startCaptureInternal(
-          {
-            sessionId,
-            deviceName: state.captureDeviceName,
-          },
-          true,
-        );
+        this.startCapture({ sessionId });
       }
     } catch (error) {
       state.lastConnectionError =
@@ -2522,72 +2422,6 @@ export class StartTalkManager {
 
     clearTimeout(state.reconnectTimer);
     state.reconnectTimer = undefined;
-  }
-
-  private scheduleCaptureRestart(
-    sessionId: string,
-    state: SessionState,
-  ): void {
-    if (
-      this.sessions.get(sessionId) !== state ||
-      !state.isCapturing ||
-      state.isReconnecting ||
-      state.captureRestartTimer
-    ) {
-      return;
-    }
-
-    state.captureRestartAttempts += 1;
-    state.metrics.onCaptureRestart();
-    const delayMs = getStartTalkRetryDelayMs(state.captureRestartAttempts);
-    this.emit({
-      type: "status",
-      sessionId,
-      status: "connecting",
-      message: "Restoring microphone capture...",
-      model: state.model,
-    });
-
-    state.captureRestartTimer = setTimeout(() => {
-      state.captureRestartTimer = undefined;
-      if (
-        this.sessions.get(sessionId) !== state ||
-        !state.isCapturing ||
-        state.isReconnecting ||
-        !state.session
-      ) {
-        return;
-      }
-
-      try {
-        this.startCaptureInternal(
-          {
-            sessionId,
-            deviceName: state.captureDeviceName,
-          },
-          false,
-        );
-      } catch (error) {
-        this.emit({
-          type: "error",
-          sessionId,
-          message:
-            error instanceof Error
-              ? error.message
-              : "Microphone capture restart failed.",
-        });
-        this.scheduleCaptureRestart(sessionId, state);
-      }
-    }, delayMs);
-  }
-
-  private clearCaptureRestartTimer(state: SessionState): void {
-    if (!state.captureRestartTimer) {
-      return;
-    }
-
-    clearTimeout(state.captureRestartTimer);
-    state.captureRestartTimer = undefined;
   }
 
   private startNotificationMonitor(

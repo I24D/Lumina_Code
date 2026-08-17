@@ -295,8 +295,6 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "startTalk/sendAudio": [StartTalkAudioChunk, void];
   "startTalk/sendText": [StartTalkTextInput, void];
   "startTalk/startCapture": [StartTalkCaptureRequest, void];
-  "startTalk/switchAudioDevice": [StartTalkCaptureRequest, void];
-  "startTalk/listAudioDevices": [undefined, string[]];
   "startTalk/setMuted": [StartTalkMuteRequest, void];
   "startTalk/setNotificationAnnouncements": [
     StartTalkNotificationSettingsRequest,

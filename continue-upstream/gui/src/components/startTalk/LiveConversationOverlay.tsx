@@ -1587,6 +1587,7 @@ export function LiveConversationOverlay({
     toolActivities,
     userTranscript,
     isCrowded,
+    micSettings,
     sessionMetrics,
     videoSource,
     videoState,
@@ -2256,48 +2257,63 @@ export function LiveConversationOverlay({
           </SettingField>
         </SessionStrip>
 
-        {sessionMetrics && sessionMetrics.turns > 0 ? (
+        {micSettings || (sessionMetrics && sessionMetrics.turns > 0) ? (
           <MetricsStrip $roomy={isRoomy} aria-label="Diagnóstico de la sesión">
-            <Metric>
-              respuesta{" "}
-              <b>
-                {sessionMetrics.medianResponseLatencyMs !== undefined
-                  ? `${(sessionMetrics.medianResponseLatencyMs / 1000).toFixed(1)} s`
-                  : "—"}
-              </b>
-            </Metric>
-            {sessionMetrics.meanDeliveryRate !== undefined ? (
-              <Metric>
-                entrega <b>{sessionMetrics.meanDeliveryRate.toFixed(1)}x</b>
+            {micSettings ? (
+              <Metric
+                title={
+                  micSettings.echoCancellation
+                    ? "Chromium cancela el eco de su propia voz: puede escucharte mientras habla."
+                    : "Este micrófono no aceptó cancelación de eco. Puede oírse a sí misma por los altavoces."
+                }
+              >
+                eco <b>{micSettings.echoCancellation ? "cancelado" : "sin AEC"}</b>
               </Metric>
             ) : null}
-            <Metric>
-              turnos <b>{sessionMetrics.turns}</b>
-            </Metric>
-            {sessionMetrics.falseStarts > 0 ? (
-              <Metric>
-                falsos inicios <b>{sessionMetrics.falseStarts}</b>
-              </Metric>
-            ) : null}
-            {sessionMetrics.silentTurns > 0 ? (
-              <Metric>
-                calló <b>{sessionMetrics.silentTurns}</b>
-              </Metric>
-            ) : null}
-            {sessionMetrics.interruptions > 0 ? (
-              <Metric>
-                cortes <b>{sessionMetrics.interruptions}</b>
-              </Metric>
-            ) : null}
-            {sessionMetrics.searches > 0 ? (
-              <Metric>
-                búsquedas <b>{sessionMetrics.searches}</b>
-              </Metric>
-            ) : null}
-            {sessionMetrics.reconnects > 0 ? (
-              <Metric>
-                reconexiones <b>{sessionMetrics.reconnects}</b>
-              </Metric>
+            {sessionMetrics && sessionMetrics.turns > 0 ? (
+              <>
+                <Metric>
+                  respuesta{" "}
+                  <b>
+                    {sessionMetrics.medianResponseLatencyMs !== undefined
+                      ? `${(sessionMetrics.medianResponseLatencyMs / 1000).toFixed(1)} s`
+                      : "—"}
+                  </b>
+                </Metric>
+                {sessionMetrics.meanDeliveryRate !== undefined ? (
+                  <Metric>
+                    entrega <b>{sessionMetrics.meanDeliveryRate.toFixed(1)}x</b>
+                  </Metric>
+                ) : null}
+                <Metric>
+                  turnos <b>{sessionMetrics.turns}</b>
+                </Metric>
+                {sessionMetrics.falseStarts > 0 ? (
+                  <Metric>
+                    falsos inicios <b>{sessionMetrics.falseStarts}</b>
+                  </Metric>
+                ) : null}
+                {sessionMetrics.silentTurns > 0 ? (
+                  <Metric>
+                    calló <b>{sessionMetrics.silentTurns}</b>
+                  </Metric>
+                ) : null}
+                {sessionMetrics.interruptions > 0 ? (
+                  <Metric>
+                    cortes <b>{sessionMetrics.interruptions}</b>
+                  </Metric>
+                ) : null}
+                {sessionMetrics.searches > 0 ? (
+                  <Metric>
+                    búsquedas <b>{sessionMetrics.searches}</b>
+                  </Metric>
+                ) : null}
+                {sessionMetrics.reconnects > 0 ? (
+                  <Metric>
+                    reconexiones <b>{sessionMetrics.reconnects}</b>
+                  </Metric>
+                ) : null}
+              </>
             ) : null}
           </MetricsStrip>
         ) : null}

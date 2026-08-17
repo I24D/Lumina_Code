@@ -56,7 +56,6 @@ export interface StartTalkSessionMetrics {
   interruptions: number;
   silentTurns: number;
   reconnects: number;
-  captureRestarts: number;
   videoRestarts: number;
   searches: number;
   /** Mediana de latencia de respuesta; la media la distorsiona un solo pico. */
@@ -112,7 +111,6 @@ export class TurnMetricsTracker {
     interruptions: 0,
     silentTurns: 0,
     reconnects: 0,
-    captureRestarts: 0,
     videoRestarts: 0,
     searches: 0,
   };
@@ -173,10 +171,6 @@ export class TurnMetricsTracker {
 
   onReconnect(): void {
     this.totals.reconnects += 1;
-  }
-
-  onCaptureRestart(): void {
-    this.totals.captureRestarts += 1;
   }
 
   onVideoRestart(): void {
