@@ -1,0 +1,22 @@
+{
+  "name": "start-talk-host",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Host standalone de Start Talk: arranca el core de Lumina headless + el puente del orbe, sin depender de VS Code.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.cjs"
+  },
+  "dependencies": {
+    "uuid": "^11.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.12",
+    "esbuild": "^0.24.0",
+    "typescript": "~5.8.3"
+  }
+}

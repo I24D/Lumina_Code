@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2021"],
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      // `core` sigue viviendo en Lumina-Code; el host lo consume como libreria.
+      // Si mueves Lumina-Code, ajusta SOLO estas dos lineas.
+      "core": ["../../Lumina-Code/continue-upstream/core/index.d.ts"],
+      "core/*": ["../../Lumina-Code/continue-upstream/core/*"]
+    },
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}
