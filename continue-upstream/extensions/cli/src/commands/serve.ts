@@ -26,6 +26,7 @@ import {
   loadOrCreateSessionById,
 } from "../session.js";
 import { messageQueue } from "../stream/messageQueue.js";
+import { listChildSessions } from "../subagent/childSession.js";
 import { constructSystemMessage } from "../systemMessage.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { reportFailureTool } from "../tools/reportFailure.js";
@@ -222,6 +223,14 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       state.pendingPermission,
     );
     res.json(stateSnapshot);
+  });
+
+  // GET /session/:id/children - Return work delegated to subagents.
+  // This mirrors the parent/child session concept used by OpenCode while
+  // keeping child records out of the top-level Lumina chat history.
+  app.get("/session/:id/children", (req: Request, res: Response) => {
+    state.lastActivity = Date.now();
+    res.json(listChildSessions(req.params.id));
   });
 
   // POST /message - Queue a message and potentially interrupt

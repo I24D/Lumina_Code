@@ -103,7 +103,10 @@ export const subagentTool = async (): Promise<Tool> => {
       const output = [
         result.response,
         "<task_metadata>",
-        `status: ${result.success ? "completed" : "failed"}`,
+        `status: ${result.status}`,
+        `session_id: ${result.sessionId}`,
+        `parent_session_id: ${result.parentSessionId}`,
+        result.error ? `error: ${result.error}` : "",
         "</task_metadata>",
       ]
         .filter(Boolean)

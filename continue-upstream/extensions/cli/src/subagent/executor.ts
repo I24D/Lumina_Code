@@ -1,4 +1,4 @@
-import type { ChatHistoryItem } from "core";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { services } from "../services/index.js";
 import { serviceContainer } from "../services/ServiceContainer.js";
@@ -7,6 +7,13 @@ import { ModelServiceState, SERVICE_NAMES } from "../services/types.js";
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 import { escapeEvents } from "../util/cli.js";
 import { logger } from "../util/logger.js";
+
+import {
+  type ChildSessionRecord,
+  type ChildSessionStatus,
+  createChildSession,
+  saveChildSession,
+} from "./childSession.js";
 
 /**
  * Options for executing a subagent
@@ -24,8 +31,32 @@ export interface SubAgentExecutionOptions {
  */
 export interface SubAgentResult {
   success: boolean;
+  status: ChildSessionStatus;
   response: string;
+  sessionId: string;
+  parentSessionId: string;
   error?: string;
+}
+
+const subagentExecutionContext = new AsyncLocalStorage<{
+  sessionId: string;
+}>();
+
+let subagentExecutionTail: Promise<void> = Promise.resolve();
+
+async function runSubagentExclusive<T>(task: () => Promise<T>): Promise<T> {
+  const previous = subagentExecutionTail;
+  let release: () => void = () => undefined;
+  subagentExecutionTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+  }
 }
 
 /**
@@ -54,20 +85,31 @@ async function buildAgentSystemMessage(
 /**
  * Execute a subagent in a child session
  */
-// eslint-disable-next-line complexity
-export async function executeSubAgent(
+async function executeSubAgentInChildSession(
   options: SubAgentExecutionOptions,
+  childSession: ChildSessionRecord,
 ): Promise<SubAgentResult> {
-  const { agent: subAgent, prompt, abortController, onOutputUpdate } = options;
-
-  const mainAgentPermissionsState =
-    await serviceContainer.get<ToolPermissionServiceState>(
-      SERVICE_NAMES.TOOL_PERMISSIONS,
-    );
+  const {
+    agent: subAgent,
+    abortController,
+    onOutputUpdate,
+    parentSessionId,
+  } = options;
 
   try {
+    const mainAgentPermissionsState =
+      await serviceContainer.get<ToolPermissionServiceState>(
+        SERVICE_NAMES.TOOL_PERMISSIONS,
+      );
+
+    childSession.status = "running";
+    saveChildSession(childSession);
+
     logger.debug("Starting subagent execution", {
       agent: subAgent.model?.name,
+      sessionId: childSession.sessionId,
+      parentSessionId,
+      inheritedPermissionMode: mainAgentPermissionsState.currentMode,
     });
 
     const { model, llmApi } = subAgent;
@@ -75,18 +117,9 @@ export async function executeSubAgent(
       throw new Error("Model or LLM API not available");
     }
 
-    // allow all tools for now
-    // todo: eventually we want to show the same prompt in a dialog whether asking whether that tool call is allowed or not
-
-    serviceContainer.set<ToolPermissionServiceState>(
-      SERVICE_NAMES.TOOL_PERMISSIONS,
-      {
-        ...mainAgentPermissionsState,
-        permissions: {
-          policies: [{ tool: "*", permission: "allow" }],
-        },
-      },
-    );
+    // Security invariant: a delegated task must never gain more authority than
+    // its parent.  The stream reads the existing permission state from the
+    // service container, so no override is needed here.
 
     // Build agent system message
     const systemMessage = await buildAgentSystemMessage(subAgent, services);
@@ -111,15 +144,7 @@ export async function executeSubAgent(
       chatHistorySvc.isReady = () => false;
     }
 
-    const chatHistory = [
-      {
-        message: {
-          role: "user",
-          content: prompt,
-        },
-        contextItems: [],
-      },
-    ] as ChatHistoryItem[];
+    const chatHistory = childSession.history;
 
     const escapeHandler = () => {
       abortController.abort();
@@ -170,12 +195,21 @@ export async function executeSubAgent(
 
       logger.debug("Subagent execution completed", {
         agent: model?.name,
+        sessionId: childSession.sessionId,
         responseLength: response.length,
       });
 
+      childSession.status = abortController.signal.aborted
+        ? "canceled"
+        : "completed";
+      saveChildSession(childSession);
+
       return {
-        success: true,
+        success: childSession.status === "completed",
+        status: childSession.status,
         response,
+        sessionId: childSession.sessionId,
+        parentSessionId,
       };
     } finally {
       if (escapeHandler) {
@@ -191,23 +225,69 @@ export async function executeSubAgent(
       if (chatHistorySvc && originalIsReady) {
         chatHistorySvc.isReady = originalIsReady;
       }
-
-      // Restore original main agent tool permissions
-      serviceContainer.set<ToolPermissionServiceState>(
-        SERVICE_NAMES.TOOL_PERMISSIONS,
-        mainAgentPermissionsState,
-      );
     }
   } catch (error: any) {
     logger.error("Subagent execution failed", {
       agent: subAgent.model?.name,
+      sessionId: childSession.sessionId,
       error: error.message,
     });
 
+    childSession.status = abortController.signal.aborted
+      ? "canceled"
+      : "failed";
+    childSession.error = error.message;
+    saveChildSession(childSession);
+
     return {
       success: false,
+      status: childSession.status,
       response: "",
+      sessionId: childSession.sessionId,
+      parentSessionId,
       error: error.message,
     };
   }
+}
+
+/**
+ * Execute a subagent as a traceable child of the active session.
+ *
+ * The current stream implementation temporarily swaps two process-global
+ * services (system message and chat history readiness).  Until those services
+ * become request-scoped, serialize this critical section so parallel tool calls
+ * cannot leak state into one another. Nested delegation is rejected explicitly
+ * instead of deadlocking on the queue.
+ */
+export async function executeSubAgent(
+  options: SubAgentExecutionOptions,
+): Promise<SubAgentResult> {
+  const agentName = options.agent.model?.name || "subagent";
+  const childSession = createChildSession(
+    options.parentSessionId,
+    agentName,
+    options.prompt,
+  );
+
+  const activeContext = subagentExecutionContext.getStore();
+  if (activeContext) {
+    const error = `Nested subagents are not yet supported (active child session: ${activeContext.sessionId})`;
+    childSession.status = "failed";
+    childSession.error = error;
+    saveChildSession(childSession);
+    return {
+      success: false,
+      status: childSession.status,
+      response: "",
+      sessionId: childSession.sessionId,
+      parentSessionId: options.parentSessionId,
+      error,
+    };
+  }
+
+  return runSubagentExclusive(() =>
+    subagentExecutionContext.run({ sessionId: childSession.sessionId }, () =>
+      executeSubAgentInChildSession(options, childSession),
+    ),
+  );
 }

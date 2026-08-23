@@ -87,7 +87,10 @@ describe("subagentTool", () => {
     } as any);
     vi.mocked(executeSubAgent).mockResolvedValue({
       success: true,
+      status: "completed",
       response: "subagent-output",
+      sessionId: "child-session-id",
+      parentSessionId: "parent-session-id",
     } as any);
 
     const tool = await subagentTool();
@@ -115,7 +118,7 @@ describe("subagentTool", () => {
     );
 
     expect(result).toBe(
-      "subagent-output\n<task_metadata>\nstatus: completed\n</task_metadata>",
+      "subagent-output\n<task_metadata>\nstatus: completed\nsession_id: child-session-id\nparent_session_id: parent-session-id\n</task_metadata>",
     );
   });
 });

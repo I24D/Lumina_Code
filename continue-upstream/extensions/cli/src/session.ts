@@ -32,7 +32,7 @@ export interface ExtendedSessionMetadata extends BaseSessionMetadata {
 /**
  * Get the session storage directory
  */
-function getSessionDir(): string {
+export function getSessionDir(): string {
   // For tests, use the test directory if we're in test mode
   if (process.env.CONTINUE_CLI_TEST && process.env.HOME) {
     const sessionDir = path.join(process.env.HOME, ".continue", "sessions");
