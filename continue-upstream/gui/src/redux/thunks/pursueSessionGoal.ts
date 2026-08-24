@@ -1,4 +1,4 @@
-import { createAsyncThunk } from "@reduxjs/toolkit";
+import type { ThunkAction, UnknownAction } from "@reduxjs/toolkit";
 import type { SessionGoal } from "core/goals/sessionGoal";
 import {
   buildContinuationPrompt,
@@ -7,7 +7,7 @@ import {
 
 import { textToEditorState } from "../../components/startTalk/voiceDelegation";
 import { selectSelectedChatModel } from "../slices/configSlice";
-import { ThunkApiType } from "../store";
+import type { RootState, ThunkExtrasType } from "../store";
 import { streamResponseThunk } from "./streamResponse";
 
 /**
@@ -47,18 +47,29 @@ export function buildRecentConversation(
     .join("\n\n");
 }
 
-export const pursueSessionGoal = createAsyncThunk<void, void, ThunkApiType>(
-  "goals/pursue",
-  async (_, { dispatch, extra, getState }) => {
+export function pursueSessionGoal(): ThunkAction<
+  Promise<void>,
+  RootState,
+  ThunkExtrasType,
+  UnknownAction
+> {
+  return async (dispatch, getState, extra) => {
     const state = getState();
     const sessionId = state.session.id;
     if (!sessionId || state.session.history.length === 0) {
       return;
     }
 
-    const goalResult = await extra.ideMessenger.request("goals/get", {
-      sessionId,
-    });
+    let goalResult;
+    try {
+      goalResult = await extra.ideMessenger.request("goals/get", {
+        sessionId,
+      });
+    } catch {
+      // Older hosts and transient bridge failures must not turn an otherwise
+      // successful chat response into a rejected request.
+      return;
+    }
     if (goalResult.status === "error" || !goalResult.content) {
       return;
     }
@@ -121,5 +132,5 @@ export const pursueSessionGoal = createAsyncThunk<void, void, ThunkApiType>(
         modifiers: { noContext: false, useCodebase: false },
       }),
     );
-  },
-);
+  };
+}

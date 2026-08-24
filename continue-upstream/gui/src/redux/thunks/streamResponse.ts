@@ -27,6 +27,7 @@ export const streamResponseThunk = createAsyncThunk<
 >(
   "chat/streamResponse",
   async ({ editorState, modifiers, index }, { dispatch, extra, getState }) => {
+    let streamSucceeded = false;
     await dispatch(
       streamThunkWrapper(async () => {
         const state = getState();
@@ -99,8 +100,16 @@ export const streamResponseThunk = createAsyncThunk<
             }),
           ),
         );
+        streamSucceeded = true;
       }),
     );
+
+    // A failed stream is already reported by streamThunkWrapper. It must not
+    // be judged as goal progress, otherwise unchanged history can produce a
+    // false "complete" verdict and consume another goal turn.
+    if (!streamSucceeded) {
+      return;
+    }
 
     // Terminado el turno: si la sesión tiene una meta activa, se verifica y, si
     // falta trabajo, el agente se relanza solo. El techo de turnos vive en core

@@ -197,11 +197,16 @@ async function gatherContextItems({
     if (currentFileResponse.status === "success") {
       const currentFile = currentFileResponse.content[0];
       if (currentFile?.uri?.value) {
-        currentFile.id = {
-          providerTitle: "file",
-          itemId: currentFile.uri.value,
-        };
-        contextItems.unshift(currentFile);
+        // Responses can be backed by Redux state and therefore frozen in
+        // development. Never decorate a protocol response in place: Session
+        // Goals can resolve the same current-file item on consecutive turns.
+        contextItems.unshift({
+          ...currentFile,
+          id: {
+            providerTitle: "file",
+            itemId: currentFile.uri.value,
+          },
+        });
       }
     }
   }
