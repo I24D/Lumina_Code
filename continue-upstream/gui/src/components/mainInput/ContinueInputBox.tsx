@@ -130,10 +130,24 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
     () =>
       buildBuiltInSlashCommands({
         saveAndStartNewSession: () => {
+          // `saveCurrentSession` deliberately does nothing for an empty
+          // history. `/new`, however, must always create a fresh session (and
+          // therefore a fresh id), even before the first message is sent.
+          if (historyLength === 0) {
+            dispatch(newSession());
+            return;
+          }
           // Archiva la conversación en el historial antes de abrir otra.
           void dispatch(
             saveCurrentSession({ openNewSession: true, generateTitle: true }),
-          );
+          )
+            .unwrap()
+            .catch((error) => {
+              ideMessenger.post("showToast", [
+                "error",
+                `No se pudo iniciar una sesión nueva: ${error instanceof Error ? error.message : String(error)}`,
+              ]);
+            });
         },
         clearCurrentSession: () => {
           // Vacía ESTA conversación en su sitio. `newSession` no vale: genera
@@ -155,7 +169,11 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
           );
         },
         compactConversation: () => {
-          if (historyLength === 0) {
+          if (historyLength < 2) {
+            ideMessenger.post("showToast", [
+              "info",
+              "Se necesitan al menos dos mensajes para compactar la conversación.",
+            ]);
             return;
           }
           // El compactado de core lee la sesión DEL DISCO
@@ -166,7 +184,12 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
           )
             .unwrap()
             .then(() => compact(historyLength - 1))
-            .catch(() => undefined);
+            .catch((error) => {
+              ideMessenger.post("showToast", [
+                "error",
+                `No se pudo guardar la conversación antes de compactarla: ${error instanceof Error ? error.message : String(error)}`,
+              ]);
+            });
         },
         historyLength,
         goalSummary: sessionGoal?.text,

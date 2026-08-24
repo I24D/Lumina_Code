@@ -675,18 +675,15 @@ export class Core {
         throw new Error("No chat model selected");
       }
 
-      try {
-        await compactConversation({
-          sessionId: msg.data.sessionId,
-          index: msg.data.index,
-          historyManager,
-          currentModel,
-        });
-        return undefined;
-      } catch (error) {
-        Logger.error(`Error compacting conversation: ${error}`);
-        return undefined;
-      }
+      // Let protocol errors propagate to the GUI. Swallowing them made
+      // `/compact` reload an unchanged conversation and look successful.
+      await compactConversation({
+        sessionId: msg.data.sessionId,
+        index: msg.data.index,
+        historyManager,
+        currentModel,
+      });
+      return undefined;
     });
 
     // Autocomplete

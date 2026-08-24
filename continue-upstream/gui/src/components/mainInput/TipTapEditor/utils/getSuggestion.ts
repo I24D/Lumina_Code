@@ -204,16 +204,25 @@ export function getSlashCommandDropdownOptions(
   const items = async ({ query }: { query: string }) => {
     const options = [...availableSlashCommandsRef.current];
 
+    // TipTap's Suggestion extension excludes the trigger character from
+    // `query` (typing `/new` produces `new`). Built-in Lumina actions keep the
+    // slash in their display title, while prompt commands historically do not.
+    // Normalize both sides so either representation remains searchable.
+    const normalizedQuery = query.replace(/^\/+/, "").toLowerCase();
+
     const filteredCommands =
-      query.length > 0
+      normalizedQuery.length > 0
         ? options.filter((slashCommand) => {
-            const sc = slashCommand.title.toLowerCase();
-            const iv = query.toLowerCase();
-            return sc.startsWith(iv);
+            const normalizedTitle = slashCommand.title
+              .replace(/^\/+/, "")
+              .toLowerCase();
+            return normalizedTitle.startsWith(normalizedQuery);
           })
         : options;
 
-    const commandItems = (filteredCommands || []).map((provider) => ({
+    const commandItems: Array<ComboBoxItem & { name: string }> = (
+      filteredCommands || []
+    ).map((provider) => ({
       name: provider.title,
       description: provider.description,
       id: provider.title,
@@ -222,6 +231,10 @@ export function getSlashCommandDropdownOptions(
       type: (provider.type ?? SlashCommand.name) as ComboBoxItemType,
       content: provider.content,
       action: provider.action,
+      category: provider.category,
+      argsHint: provider.argsHint,
+      badge: provider.badge,
+      icon: provider.icon,
     }));
 
     if (query.length === 0 && commandItems.length === 0) {
