@@ -8,11 +8,17 @@ export interface RuntimeHealth {
   status: "ok";
   apiVersion: string;
   sessionId: string;
+  workingDirectory: string;
 }
 
 export interface RuntimeClientOptions {
   baseUrl: string;
   fetch?: typeof globalThis.fetch;
+}
+
+export interface RuntimeEventSubscriptionOptions {
+  signal?: AbortSignal;
+  onOpen?: () => void;
 }
 
 /** Typed client for the operations defined by the runtime OpenAPI contract. */
@@ -121,5 +127,46 @@ export class LuminaRuntimeClient {
 
   parseEvent(data: string): RuntimeEvent {
     return JSON.parse(data) as RuntimeEvent;
+  }
+
+  /** Consume the versioned SSE stream until it closes or is aborted. */
+  async subscribeEvents(
+    listener: (event: RuntimeEvent) => void | Promise<void>,
+    options: RuntimeEventSubscriptionOptions = {},
+  ): Promise<void> {
+    const response = await this.fetchImpl(this.eventUrl(), {
+      headers: { Accept: "text/event-stream" },
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Runtime API ${response.status}: ${body}`);
+    }
+    if (!response.body) {
+      throw new Error("Runtime API event stream has no response body");
+    }
+
+    options.onOpen?.();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      const frames = buffer.split(/\r?\n\r?\n/);
+      buffer = frames.pop() ?? "";
+
+      for (const frame of frames) {
+        const data = frame
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trimStart())
+          .join("\n");
+        if (data) await listener(this.parseEvent(data));
+      }
+
+      if (done) break;
+    }
   }
 }

@@ -25,6 +25,7 @@ export function createServeRuntimeApiRouter(options: ServeRuntimeApiOptions) {
 
   return createRuntimeApiRouter({
     sessionId: state.session.sessionId,
+    workingDirectory: process.cwd(),
     getState: () => {
       state.lastActivity = Date.now();
       syncSessionHistory();

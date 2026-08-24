@@ -1,4 +1,4 @@
-export const RUNTIME_API_VERSION = "1.0.0";
+export const RUNTIME_API_VERSION = "1.1.0";
 
 export const runtimeOpenApiDocument = {
   openapi: "3.1.0",

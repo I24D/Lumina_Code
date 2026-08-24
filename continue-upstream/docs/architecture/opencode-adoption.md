@@ -124,9 +124,21 @@ Programmatic hooks are overlaid into the real HookService, so they participate
 in the same blocking and context flow rather than being metadata only. See
 [plugin-api.md](plugin-api.md).
 
-## Next ports
+### Agent Client Protocol
 
-1. Add ACP support after the versioned runtime API is stable.
+`cn acp` exposes Lumina as a stable ACP v1 agent over stdio using the official
+TypeScript SDK. It is an adapter over `/api/v1`, not a parallel agent runtime:
+prompts, streamed assistant content, tool activity, interactive permissions,
+and cancellation all cross the existing versioned boundary. Workspace
+identity is verified before a session starts, and unsupported capabilities
+fail explicitly. See [acp.md](acp.md).
+
+## Completed adoption phases
+
+The planned selective ports are complete: secure parallel delegation,
+versioned runtime API and events, child-session UI, isolated Git worktrees,
+shared permissions, portable LSP diagnostics, typed plugins, and ACP v1.
+Future additions must follow the same incremental, tested integration rules.
 
 ## Explicit non-goals
 

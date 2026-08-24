@@ -30,7 +30,13 @@ function getReadFileMaxLines(): number {
 // Track files that have been read in the current session
 export const readFilesSet = new Set<string>();
 export function markFileAsRead(filePath: string) {
-  readFilesSet.add(filePath);
+  const absolutePath = resolveAgentPath(filePath);
+  try {
+    readFilesSet.add(fs.realpathSync(absolutePath));
+  } catch {
+    // Preserve the same normalized path for tests and a concurrently removed file.
+    readFilesSet.add(absolutePath);
+  }
 }
 
 export const readFileTool: Tool = {

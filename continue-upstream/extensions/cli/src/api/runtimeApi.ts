@@ -11,6 +11,7 @@ import {
 
 export interface RuntimeApiDependencies {
   sessionId: string;
+  workingDirectory: string;
   getState: () => unknown;
   listChildren: (parentSessionId: string) => ChildSessionRecord[];
   cancelChild: (sessionId: string) => boolean;
@@ -41,6 +42,7 @@ export function createRuntimeApiRouter(deps: RuntimeApiDependencies) {
       status: "ok",
       apiVersion: RUNTIME_API_VERSION,
       sessionId: deps.sessionId,
+      workingDirectory: deps.workingDirectory,
     });
   });
 

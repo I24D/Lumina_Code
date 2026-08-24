@@ -6,10 +6,12 @@ versioned contract.
 
 ## Discovery and events
 
-- `GET /api/v1/health` reports runtime and session health.
+- `GET /api/v1/health` reports API version, session health, and the absolute
+  runtime working directory.
 - `GET /api/v1/openapi.json` returns the OpenAPI 3.1 contract.
-- `GET /api/v1/events` streams typed server-sent events (SSE), including run,
-  permission, message, child-session, state, and shutdown lifecycle changes.
+- `GET /api/v1/events` streams typed server-sent events (SSE), including
+  assistant content, tool activity, permission requests, message,
+  child-session, state, and shutdown lifecycle changes.
 
 The remaining operations expose state, child sessions, message queuing,
 targeted child cancellation/retry, permission resolution, pause, and Git diff.
@@ -32,3 +34,5 @@ generated operation map, and a contract test prevents drift.
 The server binds to localhost by default. The API does not grant extra tool
 authority: messages still use the active Lumina permission policy, and pending
 tool actions must be resolved through the permission endpoint.
+
+The stable ACP v1 adapter is documented in [acp.md](acp.md).

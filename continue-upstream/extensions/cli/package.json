@@ -46,6 +46,7 @@
   },
   "homepage": "https://continue.dev",
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.4.0",
     "fdir": "^6.4.2",
     "find-up": "^8.0.0",
     "fzf": "^0.5.2",

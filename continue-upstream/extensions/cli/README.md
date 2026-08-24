@@ -91,6 +91,21 @@ cn ls --json
 - `cn logout`: Sign out of current session
 - `cn remote`: Launch a remote instance
 - `cn serve`: Start HTTP server mode
+- `cn acp`: Expose Lumina Code to ACP-compatible editors over stdio
+
+### ACP editor integration
+
+Start the local runtime and point the ACP adapter at it from the same workspace:
+
+```bash
+cn serve --port 8000
+cn acp --runtime-url http://127.0.0.1:8000
+```
+
+The adapter uses stable ACP v1 and Lumina's `/api/v1` runtime, so prompts,
+streaming, cancellation, and tool permission decisions keep the same security
+policy as the CLI. See [`docs/architecture/acp.md`](../../docs/architecture/acp.md)
+for capabilities and editor configuration details.
 
 ### Session Listing (`cn ls`)
 

@@ -10,6 +10,7 @@ import { runtimeOpenApiDocument } from "./runtimeOpenApi.js";
 describe("Lumina runtime API v1", () => {
   const deps = {
     sessionId: "session-1",
+    workingDirectory: process.cwd(),
     getState: vi.fn(() => ({ sessionId: "session-1", isProcessing: false })),
     listChildren: vi.fn(() => []),
     cancelChild: vi.fn(() => true),
@@ -41,8 +42,9 @@ describe("Lumina runtime API v1", () => {
 
     expect(health.body).toMatchObject({
       status: "ok",
-      apiVersion: "1.0.0",
+      apiVersion: "1.1.0",
       sessionId: "session-1",
+      workingDirectory: process.cwd(),
     });
     expect(contract.body).toEqual(runtimeOpenApiDocument);
     expect(contract.body.paths["/events"].get.operationId).toBe("streamEvents");

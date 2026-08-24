@@ -1,5 +1,6 @@
 import type { ChatHistoryItem, Session, ToolStatus } from "core/index.js";
 
+import { runtimeEventBus } from "../api/runtimeEvents.js";
 import { services } from "../services/index.js";
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 import { StreamCallbacks } from "../stream/streamChatResponse.types.js";
@@ -51,25 +52,41 @@ export async function streamChatResponseWithInterruption(
 
   // Create callbacks to capture tool events
   const callbacks: StreamCallbacks = {
-    onContent: (_: string) => {
-      // onContent is empty - doesn't update history during streaming
-      // This is just for real-time display purposes
+    onContent: (content: string) => {
+      runtimeEventBus.publish("run.content", {
+        sessionId: state.session.sessionId,
+        content,
+      });
     },
     onContentComplete: (_: string) => {
       // Note: streamChatResponse already adds messages to history via handleToolCalls
       // so we don't need to add them here - this callback is just for notification
       // that content streaming is complete
     },
-    onToolStart: (__: string, _?: any) => {
+    onToolStart: (toolName: string, toolArgs?: any) => {
+      runtimeEventBus.publish("run.tool.started", {
+        sessionId: state.session.sessionId,
+        toolName,
+        toolArgs,
+      });
       // Note: handleToolCalls already adds the tool call message to history
       // This callback is just for notification/UI updates
       // The tool call state is already created and added by handleToolCalls
     },
-    onToolResult: (_result: string, _toolName: string, _status: ToolStatus) => {
-      // No-op when using ChatHistoryService; it updates tool states/results
+    onToolResult: (result: string, toolName: string, status: ToolStatus) => {
+      runtimeEventBus.publish("run.tool.result", {
+        sessionId: state.session.sessionId,
+        result,
+        status,
+        toolName,
+      });
     },
-    onToolError: (_error: string, _toolName?: string) => {
-      // No-op; errors are added to history via handleToolCalls flow
+    onToolError: (error: string, toolName?: string) => {
+      runtimeEventBus.publish("run.tool.error", {
+        sessionId: state.session.sessionId,
+        error,
+        toolName,
+      });
     },
     onToolPermissionRequest: (
       toolName: string,
@@ -85,6 +102,13 @@ export async function streamChatResponseWithInterruption(
         timestamp: Date.now(),
         toolCallPreview,
       };
+      runtimeEventBus.publish("permission.requested", {
+        sessionId: state.session.sessionId,
+        requestId,
+        toolName,
+        toolArgs,
+        toolCallPreview,
+      });
 
       // Add a system message indicating permission is needed via service
       try {

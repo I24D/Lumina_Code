@@ -134,7 +134,7 @@ describe("multiEditTool CLI specific", () => {
       expect(result.preview).toHaveLength(2);
       expect(result.preview?.[0]).toEqual({
         type: "text",
-        content: "Will apply 1 edit to /tmp/test-multi-edit-file.txt:",
+        content: `Will apply 1 edit to ${path.resolve(testFilePath)}:`,
       });
       expect(result.preview?.[1]).toEqual({
         type: "diff",
@@ -216,7 +216,7 @@ describe("multiEditTool CLI specific", () => {
 
       const result = await multiEditTool.preprocess!(args);
 
-      expect(result.args.file_path).toBe(absolutePath);
+      expect(result.args.file_path).toBe(path.resolve(absolutePath));
       expect(result.args.newContent).toBe(
         "Hi there\nThis is a test file\nGoodbye world",
       );
@@ -278,7 +278,7 @@ describe("multiEditTool CLI specific", () => {
 
       const result = await multiEditTool.preprocess!(args);
 
-      expect(result.args.file_path).toBe(absolutePath);
+      expect(result.args.file_path).toBe(path.resolve(absolutePath));
     });
   });
 

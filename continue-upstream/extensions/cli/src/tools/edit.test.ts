@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import path from "path";
 
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -145,7 +146,7 @@ describe("editTool", () => {
       const result = await editTool.preprocess!(args);
 
       expect(result.args).toEqual({
-        resolvedPath: testFilePath,
+        resolvedPath: path.resolve(testFilePath),
         newContent: "Hi there\nThis is a test file\nGoodbye world",
         oldContent: originalContent,
       });

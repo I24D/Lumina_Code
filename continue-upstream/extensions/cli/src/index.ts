@@ -5,6 +5,7 @@ import "./init.js";
 
 import { Command } from "commander";
 
+import { runAcp } from "./acp/runAcp.js";
 import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
 import { listSessionsCommand } from "./commands/ls.js";
@@ -342,6 +343,17 @@ program
     }
 
     await serve(prompt, mergedOptions);
+  });
+
+program
+  .command("acp")
+  .description("Expose Lumina Code as an ACP v1 agent over stdio")
+  .option(
+    "--runtime-url <url>",
+    "Lumina runtime URL (default: LUMINA_RUNTIME_URL or http://127.0.0.1:8000)",
+  )
+  .action(async (options) => {
+    await runAcp({ runtimeUrl: options.runtimeUrl });
   });
 
 // Checks subcommand

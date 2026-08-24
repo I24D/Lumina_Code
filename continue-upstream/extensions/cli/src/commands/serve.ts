@@ -421,7 +421,8 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     setTimeout(handleExitResponse, 100);
   });
 
-  const server = app.listen(port, async () => {
+  // The runtime exposes permission and execution endpoints; keep it local.
+  const server = app.listen(port, "127.0.0.1", async () => {
     announceServeReady(state.session.sessionId, port, timeoutSeconds);
 
     // Run environment install script after server startup
