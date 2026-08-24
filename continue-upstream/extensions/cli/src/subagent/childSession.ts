@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Session, Usage } from "core/index.js";
 import { v4 as uuidv4 } from "uuid";
 
+import { runtimeEventBus } from "../api/runtimeEvents.js";
 import { getSessionDir } from "../session.js";
 import { logger } from "../util/logger.js";
 
@@ -108,6 +109,13 @@ export function saveChildSession(childSession: ChildSessionRecord): void {
     JSON.stringify(childSession, null, 2),
     "utf8",
   );
+  runtimeEventBus.publish("child.updated", {
+    sessionId: childSession.sessionId,
+    parentSessionId: childSession.parentSessionId,
+    agentName: childSession.agentName,
+    status: childSession.status,
+    dateUpdated: childSession.dateUpdated,
+  });
 }
 
 /** Add model usage to a child without touching the active primary session. */

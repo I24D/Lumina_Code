@@ -5,6 +5,8 @@ import express, { Request, Response } from "express";
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
 import { prependPrompt } from "src/util/promptProcessor.js";
 
+import { runtimeEventBus } from "../api/runtimeEvents.js";
+import { createServeRuntimeApiRouter } from "../api/serveRuntimeApi.js";
 import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
 import { setAgentId } from "../index.js";
@@ -43,6 +45,7 @@ import {
   streamChatResponseWithInterruption,
   type ServerState,
 } from "./serve.helpers.js";
+import { announceServeReady } from "./serve.logging.js";
 
 interface ServeOptions extends ExtendedCommandOptions {
   timeout?: string;
@@ -212,6 +215,15 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   const app = express();
   app.use(express.json());
 
+  app.use(
+    "/api/v1",
+    createServeRuntimeApiRouter({
+      state,
+      syncSessionHistory,
+      startProcessing: () => processMessages(state, llmApi),
+    }),
+  );
+
   // GET /state - Return the current state
   app.get("/state", (_req: Request, res: Response) => {
     state.lastActivity = Date.now();
@@ -244,6 +256,11 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
 
     // Queue the message
     await messageQueue.enqueueMessage(message);
+
+    runtimeEventBus.publish("message.queued", {
+      sessionId: state.session.sessionId,
+      position: messageQueue.getQueueLength(),
+    });
 
     res.json({
       queued: true,
@@ -283,6 +300,8 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     // Clear pending permission state
     state.pendingPermission = null;
 
+    runtimeEventBus.publish("permission.resolved", { requestId, approved });
+
     res.json({
       success: true,
       approved,
@@ -308,6 +327,10 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
 
     // Set isProcessing to false
     state.isProcessing = false;
+
+    runtimeEventBus.publish("run.paused", {
+      sessionId: state.session.sessionId,
+    });
 
     res.json({
       success: true,
@@ -359,6 +382,10 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
 
     // Set server running flag to false to stop processing
     state.serverRunning = false;
+    runtimeEventBus.publish("server.stopping", {
+      sessionId: state.session.sessionId,
+      reason: "requested",
+    });
     stopStorageSync();
 
     // Abort any current processing
@@ -395,31 +422,7 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   });
 
   const server = app.listen(port, async () => {
-    console.log(chalk.green(`Server started on http://localhost:${port}`));
-    console.log(chalk.dim("Endpoints:"));
-    console.log(chalk.dim("  GET  /state      - Get current agent state"));
-    console.log(
-      chalk.dim(
-        "  POST /message    - Send a message (body: { message: string })",
-      ),
-    );
-    console.log(
-      chalk.dim(
-        "  POST /permission - Approve/reject tool (body: { requestId, approved })",
-      ),
-    );
-    console.log(chalk.dim("  POST /pause      - Pause the current agent run"));
-    console.log(
-      chalk.dim("  GET  /diff       - Get git diff against main branch"),
-    );
-    console.log(
-      chalk.dim("  POST /exit       - Gracefully shut down the server"),
-    );
-    console.log(
-      chalk.dim(
-        `\nServer will shut down after ${timeoutSeconds} seconds of inactivity`,
-      ),
-    );
+    announceServeReady(state.session.sessionId, port, timeoutSeconds);
 
     // Run environment install script after server startup
     runEnvironmentInstallSafe();
@@ -466,6 +469,9 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       state.isProcessing = true;
       state.lastActivity = Date.now();
       processedMessage = true;
+      runtimeEventBus.publish("run.started", {
+        sessionId: state.session.sessionId,
+      });
 
       // Add user message via ChatHistoryService (single source of truth)
       try {
@@ -493,6 +499,9 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
         // No direct persistence here; ChatHistoryService handles persistence when appropriate
 
         state.lastActivity = Date.now();
+        runtimeEventBus.publish("run.completed", {
+          sessionId: state.session.sessionId,
+        });
 
         // Update metadata after successful agent turn
         try {
@@ -513,6 +522,10 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
           removePartialAssistantMessage(state.session.history);
         } else {
           logger.error(`Error: ${formatError(e)}`);
+          runtimeEventBus.publish("run.failed", {
+            sessionId: state.session.sessionId,
+            error: formatError(e),
+          });
 
           // Add error message via ChatHistoryService
           const errorMessage = `Error: ${formatError(e)}`;
@@ -540,6 +553,15 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       } finally {
         state.currentAbortController = null;
         state.isProcessing = false;
+        runtimeEventBus.publish(
+          "state.changed",
+          getCompleteStateSnapshot(
+            state.session,
+            state.isProcessing,
+            messageQueue.getQueueLength(),
+            state.pendingPermission,
+          ),
+        );
       }
     }
 
@@ -561,6 +583,10 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
         ),
       );
       state.serverRunning = false;
+      runtimeEventBus.publish("server.stopping", {
+        sessionId: state.session.sessionId,
+        reason: "inactivity",
+      });
       stopStorageSync();
       server.close(async () => {
         telemetryService.stopActiveTime();
@@ -589,6 +615,10 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   process.on("SIGINT", () => {
     console.log(chalk.yellow("\nShutting down server..."));
     state.serverRunning = false;
+    runtimeEventBus.publish("server.stopping", {
+      sessionId: state.session.sessionId,
+      reason: "signal",
+    });
     stopStorageSync();
     if (inactivityChecker) {
       clearInterval(inactivityChecker);

@@ -20,6 +20,7 @@
     "build:validate": "node validate-aliases.mjs",
     "build:bundle": "node build.mjs",
     "build": "npm run build:validate && npm run build:bundle",
+    "generate:runtime-api": "tsx src/api/scripts/generateRuntimeApiClient.ts && prettier --write src/api/generated/runtimeOperations.generated.ts",
     "start": "node dist/cn.js",
     "dev": "tsx src/index.ts",
     "repomix:sdk": "npx repomix node_modules/@continuedev/sdk --ignore **/api,cli-repomix.xml -o sdk-repomix.xml",

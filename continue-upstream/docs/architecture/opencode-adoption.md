@@ -51,20 +51,27 @@ Child records are stored under the CLI session directory's `children` folder.
 They do not pollute the top-level chat list. `cn serve` exposes them through
 `GET /session/:id/children`, establishing the first stable session-tree API.
 
+### Versioned runtime API
+
+`cn serve` now preserves its legacy endpoints while exposing `/api/v1` with a
+health check, session state and child operations, message and permission
+commands, pause and diff operations, and a typed SSE lifecycle stream. The
+OpenAPI 3.1 document is available at `/api/v1/openapi.json`; generated operation
+metadata backs the TypeScript runtime client and is checked against the
+contract in tests. See [runtime-api.md](runtime-api.md).
+
 ## Next ports
 
-1. Extend `cn serve` with a versioned API, event stream, health endpoint, and an
-   OpenAPI document; generate a TypeScript client from that contract.
-2. Render parent/child sessions in the CLI and Lumina chat UI, including agent,
+1. Render parent/child sessions in the CLI and Lumina chat UI, including agent,
    status, permissions, diff, cancellation, and retry controls.
-3. Isolate write-capable delegated work in Git worktrees and require review
+2. Isolate write-capable delegated work in Git worktrees and require review
    before merging results into the user's working tree.
-4. Move permission policy types and evaluation into a shared core package used
+3. Move permission policy types and evaluation into a shared core package used
    by CLI, VS Code, Start Talk, and Windows Bridge.
-5. Expose diagnostics through a portable LSP manager when no IDE language
+4. Expose diagnostics through a portable LSP manager when no IDE language
    server is available.
-6. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
-7. Add ACP support after the versioned runtime API is stable.
+5. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
+6. Add ACP support after the versioned runtime API is stable.
 
 ## Explicit non-goals
 
