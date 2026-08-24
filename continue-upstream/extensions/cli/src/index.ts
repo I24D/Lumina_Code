@@ -23,6 +23,13 @@ import { logger } from "./util/logger.js";
 import { readStdinSync } from "./util/stdin.js";
 import { getVersion } from "./version.js";
 
+export { registerCliPlugin } from "./plugins/externalPlugins.js";
+export type {
+  LuminaPlugin,
+  PluginContribution,
+  PluginContext,
+} from "./plugins/types.js";
+
 // TUI lifecycle and two-stage exit state management
 let tuiUnmount: (() => void) | null;
 let showExitMessage: boolean;

@@ -112,10 +112,21 @@ feedback without relying on VS Code's extension host. Missing servers fail with
 an installation hint rather than silently returning an empty problem list. See
 [portable-lsp.md](portable-lsp.md).
 
+### Unified typed plugins
+
+Built-in/custom tools, connected MCP tools, Markdown skills, and configured
+hooks now enter the CLI through one typed plugin registry. Stable IDs and
+origins make contributions auditable; duplicate plugin IDs fail, tool-name
+collisions cannot override the first registered implementation, activation
+errors become diagnostics, and deactivation runs in reverse order. Existing
+MCP, skill, and Continue/Claude hook files remain compatible through adapters.
+Programmatic hooks are overlaid into the real HookService, so they participate
+in the same blocking and context flow rather than being metadata only. See
+[plugin-api.md](plugin-api.md).
+
 ## Next ports
 
-1. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
-2. Add ACP support after the versioned runtime API is stable.
+1. Add ACP support after the versioned runtime API is stable.
 
 ## Explicit non-goals
 

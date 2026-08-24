@@ -4,6 +4,15 @@ import { ChatCompletionTool } from "openai/resources.mjs";
 
 import { isModelCapable } from "src/utils/modelCapability.js";
 
+import type { HookServiceState } from "../hooks/HookService.js";
+import {
+  hooksPlugin,
+  mcpPlugin,
+  skillsPlugin,
+  toolsPlugin,
+} from "../plugins/adapters.js";
+import { getRegisteredCliPlugins } from "../plugins/externalPlugins.js";
+import { PluginRegistry } from "../plugins/PluginRegistry.js";
 import {
   SERVICE_NAMES,
   serviceContainer,
@@ -15,11 +24,13 @@ import type {
   ModelServiceState,
 } from "../services/types.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
+import { loadMarkdownSkills } from "../util/loadMarkdownSkills.js";
 import { logger } from "../util/logger.js";
 
 import { ALL_BUILT_IN_TOOLS } from "./allBuiltIns.js";
 import { askQuestionTool } from "./askQuestion.js";
 import { checkBackgroundJobTool } from "./checkBackgroundJob.js";
+import { diagnosticsTool } from "./diagnostics.js";
 import { editTool } from "./edit.js";
 import { exitTool } from "./exit.js";
 import { fetchTool } from "./fetch.js";
@@ -70,6 +81,7 @@ const BASE_BUILTIN_TOOLS: Tool[] = [
   fetchTool,
   writeChecklistTool,
   checkBackgroundJobTool,
+  diagnosticsTool,
   askQuestionTool,
 ];
 
@@ -132,14 +144,55 @@ export async function getAllAvailableTools(
     tools.push(await subagentTool());
   }
 
-  tools.push(await skillsTool());
+  const loadedSkills = await loadMarkdownSkills();
+  for (const error of loadedSkills.errors) {
+    logger.warn(error.message);
+  }
+  const skillGateway = await skillsTool(loadedSkills.skills);
 
   const mcpState = await serviceContainer.get<MCPServiceState>(
     SERVICE_NAMES.MCP,
   );
-  tools.push(...mcpState.tools.map(convertMcpToolToContinueTool));
 
-  return tools;
+  const registry = new PluginRegistry();
+  await registry.registerPlugin(toolsPlugin("builtin:cli", "builtin", tools));
+  await registry.registerPlugin(
+    skillsPlugin(loadedSkills.skills, skillGateway),
+  );
+  await registry.registerPlugin(
+    mcpPlugin(mcpState.tools, convertMcpToolToContinueTool),
+  );
+  try {
+    const hookState = await serviceContainer.get<HookServiceState>(
+      SERVICE_NAMES.HOOKS,
+    );
+    await registry.registerPlugin(hooksPlugin(hookState));
+  } catch (error) {
+    logger.debug("Hook plugin metadata is not available", { error });
+  }
+  const externalPlugins = getRegisteredCliPlugins();
+  for (const plugin of externalPlugins) {
+    await registry.registerPlugin(plugin);
+  }
+  const externalPluginIds = new Set(externalPlugins.map((plugin) => plugin.id));
+  services.hooks.setPluginContributions(
+    registry
+      .getContributions("hook")
+      .filter((contribution) => externalPluginIds.has(contribution.pluginId)),
+  );
+  for (const diagnostic of registry.getDiagnostics()) {
+    const details = {
+      pluginId: diagnostic.pluginId,
+      contributionId: diagnostic.contributionId,
+    };
+    if (diagnostic.severity === "error") {
+      logger.error(diagnostic.message, details);
+    } else {
+      logger.warn(diagnostic.message, details);
+    }
+  }
+
+  return registry.getTools();
 }
 
 export function getToolDisplayName(toolName: string): string {

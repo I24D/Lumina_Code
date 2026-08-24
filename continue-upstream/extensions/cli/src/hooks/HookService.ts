@@ -5,10 +5,11 @@
  * method that integration points call to trigger hooks.
  */
 
+import type { HookPluginContribution } from "../plugins/types.js";
 import { BaseService } from "../services/BaseService.js";
 import { logger } from "../util/logger.js";
 
-import { loadHooksConfig } from "./hookConfig.js";
+import { loadHooksConfig, mergeHooksConfigs } from "./hookConfig.js";
 import { runHooks } from "./hookRunner.js";
 import type { HookEventResult, HookInput, HooksConfig } from "./types.js";
 
@@ -31,6 +32,8 @@ export interface HookServiceState {
 
 export class HookService extends BaseService<HookServiceState> {
   private cwd: string;
+  private fileConfig: HooksConfig = {};
+  private pluginConfig: HooksConfig = {};
 
   constructor() {
     super("hooks", {
@@ -47,6 +50,7 @@ export class HookService extends BaseService<HookServiceState> {
     }
 
     const loaded = loadHooksConfig(this.cwd);
+    this.fileConfig = loaded.hooks;
 
     const eventCount = Object.keys(loaded.hooks).length;
     const handlerCount = Object.values(loaded.hooks).reduce(
@@ -62,7 +66,7 @@ export class HookService extends BaseService<HookServiceState> {
     }
 
     return {
-      config: loaded.hooks,
+      config: mergeHooksConfigs(this.fileConfig, this.pluginConfig),
       disabled: loaded.disabled,
       onceKeys: new Set(),
     };
@@ -98,9 +102,25 @@ export class HookService extends BaseService<HookServiceState> {
    */
   async reloadConfig(): Promise<void> {
     const loaded = loadHooksConfig(this.cwd);
+    this.fileConfig = loaded.hooks;
     this.setState({
-      config: loaded.hooks,
+      config: mergeHooksConfigs(this.fileConfig, this.pluginConfig),
       disabled: loaded.disabled,
+    });
+  }
+
+  /** Replace the programmatic plugin overlay without duplicating file hooks. */
+  setPluginContributions(contributions: HookPluginContribution[]): void {
+    const config: HooksConfig = {};
+    for (const contribution of contributions) {
+      (config[contribution.event] ??= []).push({
+        matcher: contribution.matcher,
+        hooks: [contribution.handler],
+      });
+    }
+    this.pluginConfig = config;
+    this.setState({
+      config: mergeHooksConfigs(this.fileConfig, this.pluginConfig),
     });
   }
 

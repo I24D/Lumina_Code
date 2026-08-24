@@ -48,7 +48,7 @@ function loadSettingsFile(filePath: string): HookSettingsFile | null {
  * Merge two hook configs. Later config entries are appended (not replaced).
  * This matches Claude Code's behavior: hooks from multiple sources all run.
  */
-function mergeHooksConfigs(
+export function mergeHooksConfigs(
   base: HooksConfig,
   overlay: HooksConfig,
 ): HooksConfig {

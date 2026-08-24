@@ -1,6 +1,6 @@
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 
-import { loadMarkdownSkills } from "../util/loadMarkdownSkills.js";
+import { loadMarkdownSkills, type Skill } from "../util/loadMarkdownSkills.js";
 import { logger } from "../util/logger.js";
 
 import { Tool } from "./types.js";
@@ -26,8 +26,8 @@ export const SKILLS_TOOL_META: Tool = {
   run: async () => "",
 };
 
-export const skillsTool = async (): Promise<Tool> => {
-  const { skills } = await loadMarkdownSkills();
+export const skillsTool = async (availableSkills?: Skill[]): Promise<Tool> => {
+  const skills = availableSkills ?? (await loadMarkdownSkills()).skills;
 
   return {
     ...SKILLS_TOOL_META,
