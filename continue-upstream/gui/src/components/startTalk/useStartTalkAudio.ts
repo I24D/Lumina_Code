@@ -13,6 +13,7 @@ import type {
   StartTalkVideoSourceInfo,
 } from "core/startTalk";
 import { getStartTalkRetryDelayMs } from "core/startTalk/resiliencePolicy";
+import { evaluateSurfaceAuthorization } from "@continuedev/terminal-security";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useWebviewListener } from "../../hooks/useWebviewListener";
@@ -414,9 +415,10 @@ export function useStartTalkAudio({
   }, []);
 
   /** Unico punto de verdad de "todavia suena su voz". */
-  const hasQueuedAudio = useCallback(() => playbackRemainingMs() > 0, [
-    playbackRemainingMs,
-  ]);
+  const hasQueuedAudio = useCallback(
+    () => playbackRemainingMs() > 0,
+    [playbackRemainingMs],
+  );
 
   /**
    * Le dice a core cuánto le queda por sonar. Core mantiene el micrófono
@@ -638,7 +640,8 @@ export function useStartTalkAudio({
         if (!notificationInFlightRef.current) {
           return;
         }
-        const stillSpeaking = hasQueuedAudio() || !serverTurnCompleteRef.current;
+        const stillSpeaking =
+          hasQueuedAudio() || !serverTurnCompleteRef.current;
         if (
           stillSpeaking &&
           Date.now() - startedAt < NOTIFICATION_WATCHDOG_MAX_MS
@@ -762,7 +765,8 @@ export function useStartTalkAudio({
         if (!chatResponseInFlightRef.current) {
           return;
         }
-        const stillSpeaking = hasQueuedAudio() || !serverTurnCompleteRef.current;
+        const stillSpeaking =
+          hasQueuedAudio() || !serverTurnCompleteRef.current;
         if (
           stillSpeaking &&
           Date.now() - startedAt < NOTIFICATION_WATCHDOG_MAX_MS
@@ -1025,7 +1029,13 @@ export function useStartTalkAudio({
         }
 
         const approved = await requestDelegationApproval(call.id, fullTask);
-        if (!approved) {
+        const authorization = evaluateSurfaceAuthorization({
+          surface: "start-talk",
+          capability: "delegate-agent",
+          userApproved: approved,
+          policy: "allow",
+        });
+        if (!authorization.authorized) {
           const message =
             "Solicitud cancelada: el usuario no autorizo esta tarea.";
           if (sessionIdRef.current === sessionId) {
@@ -1060,7 +1070,10 @@ export function useStartTalkAudio({
           ),
         );
 
-        const response = await runDelegatedTask(fullTask, true);
+        const response = await runDelegatedTask(
+          fullTask,
+          authorization.authorized,
+        );
         const output = response || "Tarea completada.";
         const toolResponse =
           sessionIdRef.current === sessionId
@@ -1482,19 +1495,16 @@ export function useStartTalkAudio({
     }
   }, []);
 
-  const switchAudioDevice = useCallback(
-    async (deviceLabel: string) => {
-      const target = micDevicesRef.current.find(
-        (mic) => mic.label === deviceLabel,
-      );
-      if (!target || !micCaptureRef.current) {
-        return;
-      }
-      selectedMicIdRef.current = target.deviceId;
-      await startMicCaptureRef.current(target.deviceId);
-    },
-    [],
-  );
+  const switchAudioDevice = useCallback(async (deviceLabel: string) => {
+    const target = micDevicesRef.current.find(
+      (mic) => mic.label === deviceLabel,
+    );
+    if (!target || !micCaptureRef.current) {
+      return;
+    }
+    selectedMicIdRef.current = target.deviceId;
+    await startMicCaptureRef.current(target.deviceId);
+  }, []);
 
   /**
    * Abre el micrófono en el WebView y bombea su PCM a core.
@@ -1517,12 +1527,14 @@ export function useStartTalkAudio({
             return;
           }
           // Int16Array -> base64, que es lo que viaja por el puente.
-          const bytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+          const bytes = new Uint8Array(
+            pcm.buffer,
+            pcm.byteOffset,
+            pcm.byteLength,
+          );
           let binary = "";
           for (let i = 0; i < bytes.length; i += 0x8000) {
-            binary += String.fromCharCode(
-              ...bytes.subarray(i, i + 0x8000),
-            );
+            binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
           }
           void ideMessenger
             .request("startTalk/sendAudio", {

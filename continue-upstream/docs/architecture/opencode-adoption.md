@@ -86,14 +86,27 @@ This is change isolation, not an operating-system sandbox: an explicitly
 authorized terminal command can still address absolute paths. Lumina's normal
 permission prompt remains the authority for that action.
 
+### Shared permission policy
+
+`@continuedev/terminal-security` now owns host-neutral permission types,
+first-match tool and argument evaluation, core-policy conversion, and explicit
+authorization rules. The CLI consumes that evaluator instead of maintaining a
+private copy. VS Code, Start Talk, core, and Windows Bridge use the same surface
+authorization boundary.
+
+Start Talk delegation is checked independently by the orb UI, authenticated
+extension bridge, core relay, and main chat. Model output is never accepted as
+approval evidence. A missing or excluded authorization fails closed, while the
+host remains responsible for showing its native prompt. Windows Bridge routes
+its endpoint capability through the same decision model and retains its hard
+block against workspace-file mutation through Bridge PowerShell.
+
 ## Next ports
 
-1. Move permission policy types and evaluation into a shared core package used
-   by CLI, VS Code, Start Talk, and Windows Bridge.
-2. Expose diagnostics through a portable LSP manager when no IDE language
+1. Expose diagnostics through a portable LSP manager when no IDE language
    server is available.
-3. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
-4. Add ACP support after the versioned runtime API is stable.
+2. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
+3. Add ACP support after the versioned runtime API is stable.
 
 ## Explicit non-goals
 

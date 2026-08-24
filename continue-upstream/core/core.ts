@@ -1,4 +1,5 @@
 import { fetchwithRequestOptions } from "@continuedev/fetch";
+import { evaluateSurfaceAuthorization } from "@continuedev/terminal-security";
 import { spawn } from "node:child_process";
 import {
   appendFileSync,
@@ -894,7 +895,26 @@ export class Core {
     // the sidebar's final answer back to the orb. Core is a pure relay here;
     // the orb and sidebar coordinate by requestId.
     on("startTalk/delegateToMain", async (msg) => {
-      this.messenger.send("startTalk/runInMain", msg.data);
+      const authorization = evaluateSurfaceAuthorization({
+        surface: "start-talk",
+        capability: "delegate-agent",
+        userApproved: msg.data.userApproved === true,
+        policy: "allow",
+      });
+      if (!authorization.authorized) {
+        this.messenger.send("startTalk/mainResultReady", {
+          requestId: msg.data.requestId,
+          text: "Solicitud cancelada: se requiere autorizacion explicita del usuario.",
+          error: true,
+        });
+        return;
+      }
+      this.messenger.send("startTalk/runInMain", {
+        requestId: msg.data.requestId,
+        task: msg.data.task,
+        context: msg.data.context,
+        userApproved: true,
+      });
     });
 
     on("startTalk/mainResult", async (msg) => {
@@ -947,9 +967,7 @@ export class Core {
     on("goals/get", async (msg) => getGoal(msg.data.sessionId));
 
     on("goals/set", async (msg) =>
-      setGoal(
-        createGoal(msg.data.sessionId, msg.data.text, msg.data.maxTurns),
-      ),
+      setGoal(createGoal(msg.data.sessionId, msg.data.text, msg.data.maxTurns)),
     );
 
     // El juicio del turno lo hace el cliente con el modelo de chat; aquí solo

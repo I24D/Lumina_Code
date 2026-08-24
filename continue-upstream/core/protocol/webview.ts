@@ -45,7 +45,12 @@ export type ToWebviewFromIdeOrCoreProtocol = {
   // Voice delegation routed into the main chat: core relays the orb's task to
   // the sidebar, and relays the sidebar's final answer back to the orb.
   "startTalk/runInMain": [
-    { requestId: string; task: string; context?: string },
+    {
+      requestId: string;
+      task: string;
+      context?: string;
+      userApproved: true;
+    },
     void,
   ];
   "startTalk/mainResultReady": [

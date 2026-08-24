@@ -1,6 +1,7 @@
 import * as crypto from "node:crypto";
 import * as vscode from "vscode";
 
+import { evaluateSurfaceAuthorization } from "@continuedev/terminal-security";
 import { Message } from "core/protocol/messenger";
 import { WebSocket, WebSocketServer } from "ws";
 
@@ -137,9 +138,7 @@ export class OrbBridgeServer {
             }
           | undefined;
         const requestId =
-          typeof delegation?.requestId === "string"
-            ? delegation.requestId
-            : "";
+          typeof delegation?.requestId === "string" ? delegation.requestId : "";
         const task =
           typeof delegation?.task === "string" ? delegation.task.trim() : "";
 
@@ -153,7 +152,13 @@ export class OrbBridgeServer {
         // New clients set this only after the user clicks the approval card.
         // Old/hot-reloaded clients get a second, extension-owned safety gate so
         // a stale event handler can never send work straight into the chat.
-        if (delegation?.userApproved !== true) {
+        const authorization = evaluateSurfaceAuthorization({
+          surface: "start-talk",
+          capability: "delegate-agent",
+          userApproved: delegation?.userApproved === true,
+          policy: "allow",
+        });
+        if (!authorization.authorized) {
           if (authorizationInProgress) {
             denyDelegation(
               requestId,
@@ -183,6 +188,9 @@ export class OrbBridgeServer {
               "Solicitud cancelada: el usuario no autorizo esta tarea.",
             );
             return;
+          }
+          if (delegation) {
+            delegation.userApproved = true;
           }
         }
       }

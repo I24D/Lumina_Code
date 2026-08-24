@@ -1,7 +1,7 @@
 {
   "name": "@continuedev/terminal-security",
   "version": "1.0.0",
-  "description": "Terminal command security evaluation for Continue",
+  "description": "Shared tool, terminal, and host authorization policy for Lumina Code",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",

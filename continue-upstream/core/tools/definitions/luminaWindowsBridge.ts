@@ -1,4 +1,9 @@
-import { ToolPolicy } from "@continuedev/terminal-security";
+import {
+  evaluateSurfaceAuthorization,
+  type ProtectedCapability,
+  type ToolPolicy,
+  toolPolicyToPermissionDecision,
+} from "@continuedev/terminal-security";
 import { Tool } from "../..";
 import { BuiltInToolNames } from "../builtIn";
 
@@ -61,6 +66,27 @@ function looksLikeWorkspaceFileMutation(command: unknown): boolean {
   return FILE_MUTATION_COMMAND_PATTERNS.some((pattern) =>
     pattern.test(command),
   );
+}
+
+const CONTROL_ENDPOINTS = new Set([
+  "/perception_control",
+  "/vision_stream_control",
+  "/open_application",
+  "/open_settings",
+  "/clipboard",
+  "/notify_toast",
+  "/window_control",
+  "/input_control",
+  "/ui_interact",
+  "/play_media",
+  "/vision_click",
+]);
+
+function getBridgeCapability(endpoint: string): ProtectedCapability {
+  if (endpoint === "/execute_powershell_safe") return "execute-terminal";
+  return CONTROL_ENDPOINTS.has(endpoint)
+    ? "control-desktop"
+    : "inspect-desktop";
 }
 
 export const luminaWindowsBridgeTool: Tool = {
@@ -133,6 +159,17 @@ export const luminaWindowsBridgeTool: Tool = {
       looksLikeWorkspaceFileMutation(body.command)
     ) {
       return "disabled";
+    }
+    const authorization = evaluateSurfaceAuthorization({
+      surface: "windows-bridge",
+      capability: getBridgeCapability(endpoint),
+      userApproved: false,
+      policy: toolPolicyToPermissionDecision(basePolicy),
+    });
+    if (!authorization.authorized) {
+      return authorization.reason === "policy-excluded"
+        ? "disabled"
+        : "allowedWithPermission";
     }
     return basePolicy;
   },

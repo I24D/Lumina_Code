@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef } from "react";
 import { useStore } from "react-redux";
+import { evaluateSurfaceAuthorization } from "@continuedev/terminal-security";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useWebviewListener } from "../../hooks/useWebviewListener";
 import { useAppDispatch } from "../../redux/hooks";
@@ -108,7 +109,7 @@ export function LuminaVoiceDelegationBridge() {
 
   useWebviewListener(
     "startTalk/runInMain",
-    async ({ requestId, task, context }) => {
+    async ({ requestId, task, context, userApproved }) => {
       // The orb also receives the broadcast; only the sidebar must act on it.
       if (isOrbWindow()) {
         return;
@@ -119,6 +120,16 @@ export function LuminaVoiceDelegationBridge() {
       };
 
       console.log(`[VoiceDelegation] runInMain received: ${requestId}`);
+      const authorization = evaluateSurfaceAuthorization({
+        surface: "start-talk",
+        capability: "delegate-agent",
+        userApproved,
+        policy: "allow",
+      });
+      if (!authorization.authorized) {
+        reply("La tarea de Start Talk no tiene autorizacion valida.", true);
+        return;
+      }
       if (store.getState().session.isStreaming || pendingRef.current) {
         reply("Lumina Code ya está trabajando en otra tarea.", true);
         return;

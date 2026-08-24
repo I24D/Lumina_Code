@@ -1,31 +1,19 @@
-import { ToolCallPreview } from "../tools/types.js";
+import type {
+  PermissionDecision,
+  PermissionEvaluation,
+  PermissionMode,
+  ToolPermissionPolicy,
+  ToolPermissionRequest,
+  ToolPermissions,
+} from "@continuedev/terminal-security";
 
-export type PermissionPolicy = "allow" | "ask" | "exclude";
+import type { ToolCallPreview } from "../tools/types.js";
 
-export type PermissionMode = "normal" | "plan" | "auto";
+export type PermissionPolicy = PermissionDecision;
+export type { PermissionMode, ToolPermissionPolicy, ToolPermissions };
 
-export interface ToolPermissionPolicy {
-  /** The tool name to match against */
-  tool: string;
-  /** The permission to apply */
-  permission: PermissionPolicy;
-  /** Optional argument matching patterns. If not specified, applies to all calls to this tool */
-  argumentMatches?: Record<string, any>;
-}
-
-export interface ToolPermissions {
-  /** Array of permission policies that are evaluated in order */
-  policies: ToolPermissionPolicy[];
-}
-
-export interface ToolCallRequest {
-  name: string;
-  arguments: Record<string, any>;
+export interface ToolCallRequest extends ToolPermissionRequest {
   preview?: ToolCallPreview[];
 }
 
-export interface PermissionCheckResult {
-  permission: PermissionPolicy;
-  /** The policy that matched this tool call */
-  matchedPolicy?: ToolPermissionPolicy;
-}
+export interface PermissionCheckResult extends PermissionEvaluation {}
