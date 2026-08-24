@@ -44,9 +44,9 @@ describe("Parallel Tool Calls - Actions", () => {
     const { ideMessenger, store } = await renderWithProviders(<Chat />);
 
     // Mock required responses
-    ideMessenger.responses["tools/evaluatePolicy"] = {
+    ideMessenger.responseHandlers["tools/evaluatePolicy"] = async () => ({
       policy: "allowedWithPermission",
-    };
+    });
     ideMessenger.responses["context/getSymbolsForFiles"] = {};
 
     // Setup mock model with direct Redux dispatch
