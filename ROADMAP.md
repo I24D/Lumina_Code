@@ -63,6 +63,19 @@ El proyecto no publicará un árbol de código solamente para poder decir que es
 - [ ] Recopilar telemetría únicamente si es explícita, opcional y documentada.
 - [ ] Priorizar problemas reportados por los primeros colaboradores.
 
+## Fase 4A: Flujos avanzados del agente
+
+**Estado: completada**
+
+- [x] Sustituir el `window.prompt` de Session Goals por un diálogo propio del webview.
+- [x] Probar una meta con continuación real, veredicto separado y terminación automática.
+- [x] Preparar sesiones desde issues y pull requests de GitHub sin ejecución automática.
+- [x] Añadir un recorrido guiado de cambios por archivo y bloque de diff.
+- [x] Añadir un panel de trabajo con sesiones, metas, aprobaciones, tareas y tokens.
+- [x] Añadir trabajos persistentes únicos, diarios, semanales y cron con historial de ejecuciones.
+- [x] Hacer fallar el build si un módulo de Node se filtra al bundle del navegador.
+- [x] Reparar el foco y la ejecución de acciones del menú `/` del chat.
+
 ## Fase 5: Community beta
 
 **Estado: futura**

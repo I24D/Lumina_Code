@@ -108,4 +108,23 @@ describe("ScheduledTaskService", () => {
     ).toThrow(/prompt/i);
     service.dispose();
   });
+
+  it("normalizes goal turn limits to a safe integer range", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lumina-scheduler-"));
+    tempDirs.push(dir);
+    const service = new ScheduledTaskService({
+      storagePath: path.join(dir, "tasks.json"),
+      startTimers: false,
+    });
+    const task = service.create({
+      name: "Bounded agent",
+      prompt: "Check the project",
+      enabled: false,
+      schedule: { kind: "daily", time: "09:00" },
+      runAsGoal: true,
+      maxTurns: 7.9,
+    });
+    expect(task.maxTurns).toBe(7);
+    service.dispose();
+  });
 });

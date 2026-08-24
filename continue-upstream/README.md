@@ -1,6 +1,18 @@
-<h1 align="center">Continue</h1>
+<h1 align="center">Lumina Code — agent source</h1>
 
-<p align="center">Pioneering open-source coding agent</p>
+<p align="center">VS Code agent, core runtime and webview used by Lumina Code</p>
+
+> This directory is the forked agent source used by the public
+> [Lumina Code repository](../README.md). Build and installation instructions,
+> the supported Windows workflow, model setup and current feature status live
+> in the root README. The upstream Continue history and Apache 2.0 attribution
+> are preserved below and in [`../NOTICE`](../NOTICE).
+
+Lumina-specific workflows currently include Session Goals, GitHub issue/PR
+session preparation, guided changes, a work dashboard and persistent scheduled
+agent work. Open the chat and type `/` to discover these actions. Their behavior
+and safety boundaries are documented in
+[`../docs/AGENT_WORKFLOWS.md`](../docs/AGENT_WORKFLOWS.md).
 
 <div align="center">
 
@@ -14,7 +26,7 @@
   <img src="media/github-readme.png" alt="Banner" />
 </p>
 
-## What is Continue?
+## Upstream foundation: Continue
 
 > _Note: The `continuedev/continue` repository is no longer actively maintained and is read-only for all users._
 

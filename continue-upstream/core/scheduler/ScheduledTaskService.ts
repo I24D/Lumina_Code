@@ -188,7 +188,7 @@ function validateInput(input: ScheduledTaskInput): ScheduledTaskInput {
     name,
     prompt,
     maxTurns: input.runAsGoal
-      ? Math.max(1, Math.min(50, input.maxTurns ?? 12))
+      ? Math.max(1, Math.min(50, Math.floor(input.maxTurns ?? 12)))
       : undefined,
   };
 }

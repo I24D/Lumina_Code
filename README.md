@@ -58,19 +58,34 @@ El objetivo no es crear otro cuadro de chat. Es construir un colaborador técnic
 - Gateway MCP para interoperar con otros clientes compatibles.
 - Registro de actividad y superficies de transparencia para acciones del agente.
 
+### Flujos avanzados del agente
+
+La interfaz incluye acciones integradas que se abren escribiendo `/` en el chat. La selección elimina el texto del comando, devuelve el foco al editor y nunca envía el nombre del comando al modelo.
+
+| Comando     | Función                                                                                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/goal`     | Define una meta con un diálogo nativo. El agente continúa por turnos, usa un juez separado y se detiene al completar, bloquearse, cancelarse o alcanzar el límite. |
+| `/github`   | Prepara una sesión nueva desde la URL de un issue o pull request, incluyendo comentarios y contexto del diff de un PR. No ejecuta el agente automáticamente.       |
+| `/changes`  | Convierte el diff del workspace en un recorrido guiado por archivo y bloque, con navegación al código y aceptación o rechazo de cambios pendientes.                |
+| `/work`     | Reúne sesión activa, metas, aprobaciones, trabajos en ejecución, historial, tokens y disponibilidad de costes.                                                     |
+| `/schedule` | Crea trabajos persistentes únicos, diarios, semanales o cron; permite pausar, editar, ejecutar ahora y revisar resultados.                                         |
+
+Los trabajos programados se guardan localmente y solo se ejecutan mientras el host de Lumina Code está disponible. Crear una programación es una autorización explícita para ejecutar ese prompt en las fechas configuradas; los límites de herramientas y aprobaciones siguen aplicándose. Consulta [Flujos avanzados del agente](docs/AGENT_WORKFLOWS.md) para conocer el comportamiento, las credenciales y los límites de seguridad.
+
 Estas capacidades forman parte de la experiencia funcional actual. Algunas integraciones requieren credenciales propias o componentes opcionales, tal como se explica en la sección de instalación.
 
 ## Estado del proyecto / Project status
 
-| Área                                     | Estado público                                          |
-| ---------------------------------------- | ------------------------------------------------------- |
-| Extensión de VS Code para Windows x64    | **Estable y funcional desde el código fuente**          |
-| Development Host                         | **Verificado con launcher automatizado**                |
-| Generación e instalación manual del VSIX | **Disponible y documentada**                            |
-| Start Talk y puente nativo de voz        | **Funcional; requiere Gemini API**                      |
-| Chat, edición y agente de código         | **Funcional; requiere configurar un modelo**            |
-| Licencia y atribuciones                  | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE) |
-| Publicación en Visual Studio Marketplace | Aún no disponible                                       |
+| Área                                      | Estado público                                          |
+| ----------------------------------------- | ------------------------------------------------------- |
+| Extensión de VS Code para Windows x64     | **Estable y funcional desde el código fuente**          |
+| Development Host                          | **Verificado con launcher automatizado**                |
+| Generación e instalación manual del VSIX  | **Disponible y documentada**                            |
+| Start Talk y puente nativo de voz         | **Funcional; requiere Gemini API**                      |
+| Chat, edición y agente de código          | **Funcional; requiere configurar un modelo**            |
+| Metas, GitHub, cambios, panel y scheduler | **Funcionales y cubiertos por pruebas automatizadas**   |
+| Licencia y atribuciones                   | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE) |
+| Publicación en Visual Studio Marketplace  | Aún no disponible                                       |
 
 El repositorio ya no depende de copias manuales de los módulos nativos usados por la extensión: los scripts preparan y validan SQLite, LanceDB y las dependencias empaquetadas necesarias. La distribución actual es una build comunitaria desde el código fuente; no es un VSIX firmado ni una publicación de Marketplace.
 
