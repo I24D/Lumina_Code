@@ -5,6 +5,10 @@ import { messageQueue } from "../stream/messageQueue.js";
 import { listChildSessions } from "../subagent/childSession.js";
 import { cancelChildExecution } from "../subagent/executionRegistry.js";
 import { retryChildSession } from "../subagent/retry.js";
+import {
+  applyChildWorktreeById,
+  getChildWorktreeReview,
+} from "../subagent/worktree.js";
 import { getGitDiffSnapshot } from "../util/git.js";
 
 import { createRuntimeApiRouter } from "./runtimeApi.js";
@@ -34,6 +38,8 @@ export function createServeRuntimeApiRouter(options: ServeRuntimeApiOptions) {
     listChildren: listChildSessions,
     cancelChild: cancelChildExecution,
     retryChild: retryChildSession,
+    getChildDiff: getChildWorktreeReview,
+    applyChildDiff: applyChildWorktreeById,
     queueMessage: async (message) => {
       state.lastActivity = Date.now();
       await messageQueue.enqueueMessage(message);

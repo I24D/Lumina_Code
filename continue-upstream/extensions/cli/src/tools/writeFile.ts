@@ -4,6 +4,7 @@ import * as path from "path";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { createTwoFilesPatch } from "diff";
 
+import { resolveAgentPath } from "../stream/executionContext.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
   calculateLinesOfCodeDiff,
@@ -49,21 +50,22 @@ export const writeFileTool: Tool = {
   readonly: false,
   isBuiltIn: true,
   preprocess: async (args) => {
-    const filepath = args?.filepath;
+    const requestedFilepath = args?.filepath;
     const content = args?.content ?? "";
-    if (typeof filepath !== "string") {
+    if (typeof requestedFilepath !== "string") {
       throw new Error("Filepath must be a string");
     }
     if (typeof content !== "string") {
       throw new Error("New file content must be a string");
     }
+    const filepath = resolveAgentPath(requestedFilepath);
     try {
       if (fs.existsSync(filepath)) {
         const oldContent = fs.readFileSync(filepath, "utf-8");
 
         const diff = createTwoFilesPatch(
-          args.filepath,
-          args.filepath,
+          filepath,
+          filepath,
           oldContent,
           content,
           undefined,
@@ -72,7 +74,7 @@ export const writeFileTool: Tool = {
         );
 
         return {
-          args,
+          args: { filepath, content },
           preview: [
             {
               type: "text",

@@ -14,6 +14,8 @@ describe("Lumina runtime API v1", () => {
     listChildren: vi.fn(() => []),
     cancelChild: vi.fn(() => true),
     retryChild: vi.fn(async () => ({ sessionId: "retry-1" }) as any),
+    getChildDiff: vi.fn(() => ({ diff: "+child", status: "ready" })),
+    applyChildDiff: vi.fn(() => ({ applied: true as const, diff: "+child" })),
     queueMessage: vi.fn(async () => ({ position: 1 })),
     resolvePermission: vi.fn(() => ({ success: true })),
     pause: vi.fn(() => ({ success: true, message: "Agent run paused" })),
@@ -97,6 +99,12 @@ describe("Lumina runtime API v1", () => {
     await request(app)
       .post("/api/v1/sessions/child-1/retry")
       .expect(202, { sessionId: "retry-1" });
+    await request(app)
+      .get("/api/v1/sessions/child-1/diff")
+      .expect(200, { diff: "+child", status: "ready" });
+    await request(app)
+      .post("/api/v1/sessions/child-1/apply")
+      .expect(200, { applied: true, diff: "+child" });
     await request(app).get("/api/v1/diff").expect(200, { diff: "+change" });
 
     expect(deps.resolvePermission).toHaveBeenCalledWith("permission-1", true);
@@ -104,5 +112,7 @@ describe("Lumina runtime API v1", () => {
     expect(deps.listChildren).toHaveBeenCalledWith("session-1");
     expect(deps.cancelChild).toHaveBeenCalledWith("child-1");
     expect(deps.retryChild).toHaveBeenCalledWith("child-1");
+    expect(deps.getChildDiff).toHaveBeenCalledWith("child-1");
+    expect(deps.applyChildDiff).toHaveBeenCalledWith("child-1");
   });
 });

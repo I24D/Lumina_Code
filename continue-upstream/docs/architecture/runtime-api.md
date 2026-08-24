@@ -13,6 +13,10 @@ versioned contract.
 
 The remaining operations expose state, child sessions, message queuing,
 targeted child cancellation/retry, permission resolution, pause, and Git diff.
+Write-capable child sessions additionally expose
+`GET /api/v1/sessions/{id}/diff` for review and
+`POST /api/v1/sessions/{id}/apply` for an explicit, conflict-checked apply to
+the primary working tree. Fetching a diff never applies it.
 The OpenAPI document is the source for generated operation metadata. Regenerate
 it after contract changes with:
 

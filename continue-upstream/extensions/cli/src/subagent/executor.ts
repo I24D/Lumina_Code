@@ -18,6 +18,11 @@ import {
   trackChildSessionUsage,
 } from "./childSession.js";
 import { registerChildExecution } from "./executionRegistry.js";
+import {
+  finalizeChildWorktree,
+  permissionsCanWrite,
+  prepareChildWorktree,
+} from "./worktree.js";
 
 /**
  * Options for executing a subagent
@@ -225,11 +230,35 @@ export async function executeSubAgent(
   const inheritedPermissions = snapshotToolPermissionState(
     await resolveToolPermissionState(),
   );
-  const systemMessage = await buildAgentSystemMessage(
+  let workingDirectory: string | undefined;
+  try {
+    if (permissionsCanWrite(inheritedPermissions)) {
+      workingDirectory = await prepareChildWorktree(childSession);
+    }
+  } catch (error) {
+    const message = `Unable to create an isolated Git worktree for write-capable delegation: ${
+      error instanceof Error ? error.message : String(error)
+    }`;
+    childSession.status = "failed";
+    childSession.error = message;
+    saveChildSession(childSession);
+    return {
+      success: false,
+      status: "failed",
+      response: "",
+      sessionId: childSession.sessionId,
+      parentSessionId: options.parentSessionId,
+      error: message,
+    };
+  }
+  const baseSystemMessage = await buildAgentSystemMessage(
     options.agent,
     services,
     inheritedPermissions.currentMode,
   );
+  const systemMessage = workingDirectory
+    ? `${baseSystemMessage}\n\nYou are working in an isolated Git worktree at ${workingDirectory}. Use this directory for every relative file and terminal operation. Changes require explicit user review before they can reach the primary working tree.`
+    : baseSystemMessage;
 
   const unregister = registerChildExecution(
     childSession.sessionId,
@@ -244,12 +273,14 @@ export async function executeSubAgent(
         permissionState: inheritedPermissions,
         systemMessageOverride: systemMessage,
         useChatHistoryService: false,
+        workingDirectory,
         onUsage: (cost, usage) =>
           trackChildSessionUsage(childSession, cost, usage),
       },
       () => executeSubAgentInChildSession(options, childSession),
     );
   } finally {
+    finalizeChildWorktree(childSession);
     unregister();
   }
 }

@@ -15,6 +15,15 @@ export type ChildSessionStatus =
   | "failed"
   | "canceled";
 
+export interface ChildWorktreeState {
+  path: string;
+  repoRoot: string;
+  baseCommit: string;
+  status: "active" | "ready" | "unchanged" | "applied" | "failed";
+  diff?: string;
+  error?: string;
+}
+
 /**
  * Persisted record for work delegated by a primary session to a subagent.
  *
@@ -29,6 +38,7 @@ export interface ChildSessionRecord extends Session {
   dateCreated: string;
   dateUpdated: string;
   retryOfSessionId?: string;
+  worktree?: ChildWorktreeState;
   error?: string;
 }
 
@@ -127,20 +137,25 @@ export function trackChildSessionUsage(
   cost: number,
   usage: Usage,
 ): void {
-  childSession.usage.totalCost += cost;
-  childSession.usage.promptTokens += usage.promptTokens;
-  childSession.usage.completionTokens += usage.completionTokens;
+  const childUsage = (childSession.usage ??= {
+    totalCost: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+  });
+  childUsage.totalCost += cost;
+  childUsage.promptTokens += usage.promptTokens;
+  childUsage.completionTokens += usage.completionTokens;
 
   if (usage.promptTokensDetails?.cachedTokens) {
-    childSession.usage.promptTokensDetails ??= {};
-    childSession.usage.promptTokensDetails.cachedTokens =
-      (childSession.usage.promptTokensDetails.cachedTokens ?? 0) +
+    childUsage.promptTokensDetails ??= {};
+    childUsage.promptTokensDetails.cachedTokens =
+      (childUsage.promptTokensDetails.cachedTokens ?? 0) +
       usage.promptTokensDetails.cachedTokens;
   }
   if (usage.promptTokensDetails?.cacheWriteTokens) {
-    childSession.usage.promptTokensDetails ??= {};
-    childSession.usage.promptTokensDetails.cacheWriteTokens =
-      (childSession.usage.promptTokensDetails.cacheWriteTokens ?? 0) +
+    childUsage.promptTokensDetails ??= {};
+    childUsage.promptTokensDetails.cacheWriteTokens =
+      (childUsage.promptTokensDetails.cacheWriteTokens ?? 0) +
       usage.promptTokensDetails.cacheWriteTokens;
   }
 

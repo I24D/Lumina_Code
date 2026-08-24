@@ -7,6 +7,8 @@ export const RUNTIME_API_OPERATIONS = {
   listChildSessions: { method: "GET", path: "/sessions/{id}/children" },
   cancelChildSession: { method: "POST", path: "/sessions/{id}/cancel" },
   retryChildSession: { method: "POST", path: "/sessions/{id}/retry" },
+  getChildDiff: { method: "GET", path: "/sessions/{id}/diff" },
+  applyChildDiff: { method: "POST", path: "/sessions/{id}/apply" },
   queueMessage: { method: "POST", path: "/messages" },
   resolvePermission: { method: "POST", path: "/permissions" },
   pauseRun: { method: "POST", path: "/pause" },

@@ -3,6 +3,7 @@ import * as fs from "fs";
 import { throwIfFileIsSecurityConcern } from "core/indexing/ignore.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 
+import { resolveAgentPath } from "../stream/executionContext.js";
 import { parseEnvNumber } from "../util/truncateOutput.js";
 
 import { formatToolArgument } from "./formatters.js";
@@ -53,9 +54,10 @@ export const readFileTool: Tool = {
     if (filepath.startsWith("./")) {
       filepath = filepath.slice(2);
     }
+    filepath = resolveAgentPath(filepath);
     throwIfFileIsSecurityConcern(filepath);
     return {
-      args,
+      args: { ...args, filepath },
       preview: [
         {
           type: "text",
@@ -69,10 +71,7 @@ export const readFileTool: Tool = {
     context?: ToolRunContext,
   ): Promise<string> => {
     try {
-      let { filepath } = args;
-      if (filepath.startsWith("./")) {
-        filepath = filepath.slice(2);
-      }
+      const filepath = resolveAgentPath(args.filepath);
 
       if (!fs.existsSync(filepath)) {
         throw new ContinueError(

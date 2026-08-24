@@ -1,8 +1,11 @@
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   getAgentExecutionContext,
   resolveToolPermissionState,
+  resolveAgentPath,
   runWithAgentExecutionContext,
   shouldUseChatHistoryService,
   snapshotToolPermissionState,
@@ -60,5 +63,24 @@ describe("agent execution context", () => {
     ]);
     expect(getAgentExecutionContext()).toBeUndefined();
     expect(shouldUseChatHistoryService()).toBe(true);
+  });
+
+  it("resolves relative paths inside a child worktree and blocks escapes", async () => {
+    const worktree = path.resolve("isolated-child");
+    await runWithAgentExecutionContext(
+      {
+        sessionId: "child",
+        kind: "subagent",
+        workingDirectory: worktree,
+      },
+      async () => {
+        expect(resolveAgentPath("src/index.ts")).toBe(
+          path.join(worktree, "src", "index.ts"),
+        );
+        expect(() => resolveAgentPath("../outside.txt")).toThrow(
+          "Path escapes the isolated agent worktree",
+        );
+      },
+    );
   });
 });

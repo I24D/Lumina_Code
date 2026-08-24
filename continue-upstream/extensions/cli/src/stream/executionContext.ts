@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import path from "node:path";
 
 import type { Usage } from "core/index.js";
 
@@ -14,10 +15,20 @@ export interface AgentExecutionContext {
   permissionState?: ToolPermissionServiceState;
   systemMessageOverride?: string;
   useChatHistoryService?: boolean;
+  workingDirectory?: string;
   onUsage?: (cost: number, usage: Usage) => void;
 }
 
-const executionContextStorage = new AsyncLocalStorage<AgentExecutionContext>();
+const executionContextGlobal = globalThis as typeof globalThis & {
+  __luminaAgentExecutionContextStorage?: AsyncLocalStorage<AgentExecutionContext>;
+};
+
+// Bundlers and test runners can load this module through both its TypeScript
+// and ESM paths. Keep one process-wide storage instance so every tool observes
+// the same request scope without falling back to process.cwd().
+const executionContextStorage =
+  (executionContextGlobal.__luminaAgentExecutionContextStorage ??=
+    new AsyncLocalStorage<AgentExecutionContext>());
 
 export function runWithAgentExecutionContext<T>(
   context: AgentExecutionContext,
@@ -36,6 +47,24 @@ export function shouldUseChatHistoryService(): boolean {
 
 export function getSystemMessageOverride(): string | undefined {
   return getAgentExecutionContext()?.systemMessageOverride;
+}
+
+export function getAgentWorkingDirectory(): string {
+  return getAgentExecutionContext()?.workingDirectory ?? process.cwd();
+}
+
+export function resolveAgentPath(requestedPath: string): string {
+  const scopedRoot = getAgentExecutionContext()?.workingDirectory;
+  const resolved = path.resolve(scopedRoot ?? process.cwd(), requestedPath);
+  if (scopedRoot) {
+    const relative = path.relative(scopedRoot, resolved);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error(
+        `Path escapes the isolated agent worktree: ${requestedPath}`,
+      );
+    }
+  }
+  return resolved;
 }
 
 /** Attribute usage to the active request instead of a process-global session. */

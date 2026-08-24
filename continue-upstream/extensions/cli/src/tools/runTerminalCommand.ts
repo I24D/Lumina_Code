@@ -8,7 +8,10 @@ import {
 
 import { backgroundJobService } from "../services/BackgroundJobService.js";
 import { services } from "../services/index.js";
-import { shouldUseChatHistoryService } from "../stream/executionContext.js";
+import {
+  getAgentWorkingDirectory,
+  shouldUseChatHistoryService,
+} from "../stream/executionContext.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
   isGitCommitCommand,
@@ -69,7 +72,14 @@ function getShellCommand(command: string): { shell: string; args: string[] } {
     // Windows: Use PowerShell
     return {
       shell: "powershell.exe",
-      args: ["-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", command],
+      args: [
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        command,
+      ],
     };
   }
 
@@ -121,7 +131,7 @@ export const runTerminalCommandTool: Tool = {
   displayName: "Bash",
   description: `Executes a terminal command and returns the output
 
-Commands are automatically executed from the current working directory (${process.cwd()}), so there's no need to change directories with 'cd' commands.
+Commands are automatically executed from the active agent workspace, so there's no need to change directories with 'cd' commands.
 
 IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed, awk, etc).
 `,
@@ -184,13 +194,14 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
     const baseMaxLines = getBashMaxLines();
     const maxChars = Math.floor(baseMaxChars / parallelCount);
     const maxLines = Math.floor(baseMaxLines / parallelCount);
+    const workingDirectory = getAgentWorkingDirectory();
 
     emitBashToolStarted();
 
     const terminalOutput: string = await new Promise((resolve, reject) => {
       // Use same shell logic as core implementation
       const { shell, args } = getShellCommand(command);
-      const child = spawn(shell, args);
+      const child = spawn(shell, args, { cwd: workingDirectory });
       let stdout = "";
       let stderr = "";
       let timeoutId: NodeJS.Timeout;

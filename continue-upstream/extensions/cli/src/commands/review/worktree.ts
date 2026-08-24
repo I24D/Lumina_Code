@@ -1,4 +1,4 @@
-import { exec, execSync } from "child_process";
+import { exec, execFile, execSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -7,21 +7,36 @@ import { promisify } from "util";
 import { logger } from "../../util/logger.js";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Create a git worktree that mirrors the user's current working tree state.
  * The worktree gets committed + staged + unstaged + untracked changes.
  */
-export async function createWorktree(index: number): Promise<string> {
+export async function createWorktree(
+  index: number,
+  repositoryDirectory = process.cwd(),
+): Promise<string> {
   const tmpDir = os.tmpdir();
   const worktreePath = path.join(tmpDir, `cn-review-${Date.now()}-${index}`);
+  const { stdout: rootOutput } = await execFileAsync(
+    "git",
+    ["rev-parse", "--show-toplevel"],
+    { cwd: repositoryDirectory },
+  );
+  const repoRoot = rootOutput.trim();
 
   // Create the worktree at HEAD (detached)
-  await execAsync(`git worktree add "${worktreePath}" HEAD --detach`);
+  await execFileAsync(
+    "git",
+    ["worktree", "add", worktreePath, "HEAD", "--detach"],
+    { cwd: repoRoot },
+  );
 
   // Apply uncommitted changes (staged + unstaged) to the worktree
   try {
-    const { stdout: diff } = await execAsync("git diff HEAD", {
+    const { stdout: diff } = await execFileAsync("git", ["diff", "HEAD"], {
+      cwd: repoRoot,
       maxBuffer: 10 * 1024 * 1024,
     });
     if (diff.trim()) {
@@ -40,15 +55,16 @@ export async function createWorktree(index: number): Promise<string> {
 
   // Copy untracked files to the worktree
   try {
-    const { stdout: untrackedOutput } = await execAsync(
-      "git ls-files --others --exclude-standard",
+    const { stdout: untrackedOutput } = await execFileAsync(
+      "git",
+      ["ls-files", "--others", "--exclude-standard"],
+      { cwd: repoRoot },
     );
 
     if (untrackedOutput.trim()) {
       const untrackedFiles = untrackedOutput.trim().split("\n");
-      const cwd = process.cwd();
       for (const file of untrackedFiles) {
-        const srcPath = path.join(cwd, file);
+        const srcPath = path.join(repoRoot, file);
         const destPath = path.join(worktreePath, file);
         const destDir = path.dirname(destPath);
         if (!fs.existsSync(destDir)) {
@@ -66,10 +82,20 @@ export async function createWorktree(index: number): Promise<string> {
   }
 
   // Commit the initial state so captureWorktreeDiff only captures agent changes
-  await execAsync(`git -C "${worktreePath}" add -A`);
-  await execAsync(
-    `git -C "${worktreePath}" commit -m "cn-review: user working tree state (staged + unstaged + untracked)" --allow-empty --no-verify`,
-  );
+  await execFileAsync("git", ["-C", worktreePath, "add", "-A"]);
+  await execFileAsync("git", [
+    "-C",
+    worktreePath,
+    "-c",
+    "user.name=Lumina Code",
+    "-c",
+    "user.email=lumina@local.invalid",
+    "commit",
+    "-m",
+    "cn-review: user working tree state (staged + unstaged + untracked)",
+    "--allow-empty",
+    "--no-verify",
+  ]);
 
   return worktreePath;
 }

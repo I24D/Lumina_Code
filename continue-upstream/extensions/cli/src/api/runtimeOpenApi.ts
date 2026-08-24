@@ -81,6 +81,43 @@ export const runtimeOpenApiDocument = {
         },
       },
     },
+    "/sessions/{id}/diff": {
+      get: {
+        operationId: "getChildDiff",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": { description: "Reviewable child worktree diff" },
+          "404": { description: "No isolated diff" },
+        },
+      },
+    },
+    "/sessions/{id}/apply": {
+      post: {
+        operationId: "applyChildDiff",
+        description:
+          "Apply a previously reviewed child diff to the primary working tree.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": { description: "Diff applied" },
+          "404": { description: "No isolated diff" },
+          "500": { description: "Diff conflicts with the primary tree" },
+        },
+      },
+    },
     "/messages": {
       post: {
         operationId: "queueMessage",

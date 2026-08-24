@@ -1,11 +1,11 @@
 import * as fs from "fs";
-import path from "path";
 
 import { validateSingleEdit } from "core/edit/searchAndReplace/findAndReplaceUtils.js";
 import { executeFindAndReplace } from "core/edit/searchAndReplace/performReplace.js";
 import { throwIfFileIsSecurityConcern } from "core/indexing/ignore.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 
+import { resolveAgentPath } from "../stream/executionContext.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
   calculateLinesOfCodeDiff,
@@ -30,9 +30,7 @@ export function validateAndResolveFilePath(args: any): {
     );
   }
 
-  const absolutePath = path.isAbsolute(file_path)
-    ? file_path
-    : path.resolve(process.cwd(), file_path);
+  const absolutePath = resolveAgentPath(file_path);
 
   const resolvedPath = fs.realpathSync(absolutePath);
 

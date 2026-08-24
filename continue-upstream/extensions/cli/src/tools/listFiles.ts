@@ -1,6 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { resolveAgentPath } from "../stream/executionContext.js";
+
 import { formatToolArgument } from "./formatters.js";
 import { Tool } from "./types.js";
 
@@ -24,7 +26,7 @@ export const listFilesTool: Tool = {
   preprocess: async (args) => {
     // Resolve relative paths
     const normalizedPath = path.normalize(args.dirpath);
-    const dirPath = path.resolve(process.cwd(), normalizedPath);
+    const dirPath = resolveAgentPath(normalizedPath);
 
     if (!fs.existsSync(dirPath)) {
       throw new Error(`Directory does not exist: ${dirPath}`);

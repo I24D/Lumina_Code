@@ -72,6 +72,22 @@ export class LuminaRuntimeClient {
     return this.request(operationPath, { method: "POST" });
   }
 
+  getChildDiff(sessionId: string): Promise<{ diff: string; status: string }> {
+    const operationPath = RUNTIME_API_OPERATIONS.getChildDiff.path.replace(
+      "{id}",
+      encodeURIComponent(sessionId),
+    );
+    return this.request(operationPath);
+  }
+
+  applyChildDiff(sessionId: string): Promise<{ applied: true; diff: string }> {
+    const operationPath = RUNTIME_API_OPERATIONS.applyChildDiff.path.replace(
+      "{id}",
+      encodeURIComponent(sessionId),
+    );
+    return this.request(operationPath, { method: "POST" });
+  }
+
   queueMessage(message: string): Promise<{ queued: true; position: number }> {
     return this.request(RUNTIME_API_OPERATIONS.queueMessage.path, {
       method: "POST",

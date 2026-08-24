@@ -3,6 +3,10 @@ import * as fs from "fs";
 import * as util from "util";
 
 import {
+  getAgentWorkingDirectory,
+  resolveAgentPath,
+} from "../stream/executionContext.js";
+import {
   parseEnvNumber,
   truncateOutputFromEnd,
 } from "../util/truncateOutput.js";
@@ -50,7 +54,9 @@ export const viewDiffTool: Tool = {
   },
   run: async (args: { path?: string }): Promise<string> => {
     try {
-      const repoPath = args.path || process.cwd();
+      const repoPath = args.path
+        ? resolveAgentPath(args.path)
+        : getAgentWorkingDirectory();
       if (!fs.existsSync(repoPath)) {
         return `Error: Path does not exist: ${repoPath}`;
       }

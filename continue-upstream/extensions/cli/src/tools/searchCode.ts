@@ -5,6 +5,10 @@ import * as util from "util";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { findUp } from "find-up";
 
+import {
+  getAgentWorkingDirectory,
+  resolveAgentPath,
+} from "../stream/executionContext.js";
 import { parseEnvNumber } from "../util/truncateOutput.js";
 
 import { Tool } from "./types.js";
@@ -144,7 +148,9 @@ export const searchCodeTool: Tool = {
     path?: string;
     file_pattern?: string;
   }): Promise<string> => {
-    const searchPath = args.path || process.cwd();
+    const searchPath = args.path
+      ? resolveAgentPath(args.path)
+      : getAgentWorkingDirectory();
     if (!fs.existsSync(searchPath)) {
       throw new ContinueError(
         ContinueErrorReason.Unspecified,

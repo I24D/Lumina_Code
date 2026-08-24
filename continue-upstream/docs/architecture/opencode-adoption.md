@@ -70,16 +70,30 @@ retries; retry records retain `retryOfSessionId` for auditing. Hosts without a
 runtime API connection keep Retry disabled and use the normal safe stream abort
 fallback for Stop.
 
+### Isolated delegated writes
+
+Write-capable child agents run in detached Git worktrees that begin with an
+exact snapshot of the user's staged, unstaged, and untracked files. Relative
+file tools reject paths outside that worktree, and terminal commands start
+there as well. A completed task cannot change the primary working tree by
+itself: the child card first exposes its unified diff for review and only then
+offers an explicit Apply action. The v1 runtime API provides the same two-step
+review/apply flow for non-GUI clients. Read-only delegation avoids the worktree
+cost, while any policy that enables file editing or Bash is treated as
+write-capable.
+
+This is change isolation, not an operating-system sandbox: an explicitly
+authorized terminal command can still address absolute paths. Lumina's normal
+permission prompt remains the authority for that action.
+
 ## Next ports
 
-1. Isolate write-capable delegated work in Git worktrees and require review
-   before merging results into the user's working tree.
-2. Move permission policy types and evaluation into a shared core package used
+1. Move permission policy types and evaluation into a shared core package used
    by CLI, VS Code, Start Talk, and Windows Bridge.
-3. Expose diagnostics through a portable LSP manager when no IDE language
+2. Expose diagnostics through a portable LSP manager when no IDE language
    server is available.
-4. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
-5. Add ACP support after the versioned runtime API is stable.
+3. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
+4. Add ACP support after the versioned runtime API is stable.
 
 ## Explicit non-goals
 

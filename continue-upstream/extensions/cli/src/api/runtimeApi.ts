@@ -15,6 +15,8 @@ export interface RuntimeApiDependencies {
   listChildren: (parentSessionId: string) => ChildSessionRecord[];
   cancelChild: (sessionId: string) => boolean;
   retryChild: (sessionId: string) => Promise<ChildSessionRecord | null>;
+  getChildDiff: (sessionId: string) => { diff: string; status: string } | null;
+  applyChildDiff: (sessionId: string) => { applied: true; diff: string } | null;
   queueMessage: (message: string) => Promise<{ position: number }>;
   resolvePermission: (
     requestId: string,
@@ -69,6 +71,24 @@ export function createRuntimeApiRouter(deps: RuntimeApiDependencies) {
       return;
     }
     res.status(202).json(child);
+  });
+
+  router.get("/sessions/:id/diff", (req, res) => {
+    const review = deps.getChildDiff(req.params.id);
+    if (!review) {
+      res.status(404).json({ error: "Child session has no worktree diff" });
+      return;
+    }
+    res.json(review);
+  });
+
+  router.post("/sessions/:id/apply", (req, res) => {
+    const result = deps.applyChildDiff(req.params.id);
+    if (!result) {
+      res.status(404).json({ error: "Child session has no worktree diff" });
+      return;
+    }
+    res.json(result);
   });
 
   router.get("/events", (req: Request, res: Response) => {

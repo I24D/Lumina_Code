@@ -24,6 +24,7 @@ export function SubagentSession({
 }) {
   const dispatch = useAppDispatch();
   const [controlState, setControlState] = useState<string | null>(null);
+  const [reviewDiff, setReviewDiff] = useState<string | null>(null);
   const content = useMemo(
     () => toolCallState.output?.map((item) => item.content).join("\n") ?? "",
     [toolCallState.output],
@@ -63,6 +64,33 @@ export function SubagentSession({
     if (action === "cancel") {
       void dispatch(cancelStream());
     }
+  };
+
+  const loadReviewDiff = async () => {
+    if (!runtimeApiUrl || !metadata.sessionId) return;
+    setControlState("Loading isolated changes…");
+    const response = await fetch(
+      `${runtimeApiUrl}/api/v1/sessions/${encodeURIComponent(metadata.sessionId)}/diff`,
+    );
+    if (!response.ok) {
+      setControlState("No isolated changes available");
+      return;
+    }
+    const body = (await response.json()) as { diff: string };
+    setReviewDiff(body.diff);
+    setControlState(
+      body.diff ? "Review changes before applying" : "No changes",
+    );
+  };
+
+  const applyReviewedDiff = async () => {
+    if (!runtimeApiUrl || !metadata.sessionId || reviewDiff === null) return;
+    setControlState("Applying reviewed changes…");
+    const response = await fetch(
+      `${runtimeApiUrl}/api/v1/sessions/${encodeURIComponent(metadata.sessionId)}/apply`,
+      { method: "POST" },
+    );
+    setControlState(response.ok ? "Changes applied" : "Apply failed");
   };
 
   const statusClass =
@@ -109,19 +137,29 @@ export function SubagentSession({
             </button>
           )}
           {!isActive && (
-            <button
-              className="border-border hover:bg-list-active flex items-center gap-1 rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!runtimeApiUrl || !metadata.sessionId}
-              onClick={() => void invokeControl("retry")}
-              title={
-                runtimeApiUrl
-                  ? "Retry this delegated task"
-                  : "Retry is available when connected to cn serve"
-              }
-            >
-              <ArrowPathIcon className="h-3.5 w-3.5" />
-              Retry
-            </button>
+            <>
+              <button
+                className="border-border hover:bg-list-active rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!runtimeApiUrl || !metadata.sessionId}
+                onClick={() => void loadReviewDiff()}
+                title="Review isolated worktree changes"
+              >
+                Review
+              </button>
+              <button
+                className="border-border hover:bg-list-active flex items-center gap-1 rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!runtimeApiUrl || !metadata.sessionId}
+                onClick={() => void invokeControl("retry")}
+                title={
+                  runtimeApiUrl
+                    ? "Retry this delegated task"
+                    : "Retry is available when connected to cn serve"
+                }
+              >
+                <ArrowPathIcon className="h-3.5 w-3.5" />
+                Retry
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -130,6 +168,21 @@ export function SubagentSession({
         <pre className="border-border mt-3 max-h-48 overflow-auto whitespace-pre-wrap border-t pt-3 font-sans">
           {metadata.error || metadata.output}
         </pre>
+      )}
+      {reviewDiff !== null && (
+        <div className="border-border mt-3 border-t pt-3">
+          <pre className="max-h-64 overflow-auto whitespace-pre font-mono text-[11px]">
+            {reviewDiff || "No changes"}
+          </pre>
+          {!!reviewDiff && (
+            <button
+              className="border-border hover:bg-list-active mt-2 rounded border px-2 py-1 font-semibold"
+              onClick={() => void applyReviewedDiff()}
+            >
+              Apply reviewed changes
+            </button>
+          )}
+        </div>
       )}
       {controlState && (
         <div className="text-description mt-2">{controlState}</div>
