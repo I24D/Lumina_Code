@@ -121,6 +121,15 @@ describe("buildBuiltInSlashCommands", () => {
     expect(context.navigateTo).toHaveBeenCalledWith("/work");
   });
 
+  it("/schedule abre el programador persistente", () => {
+    const context = makeContext();
+    buildBuiltInSlashCommands(context).find(
+      (command) => command.title === "/schedule",
+    )!.action!();
+
+    expect(context.navigateTo).toHaveBeenCalledWith("/schedule");
+  });
+
   it("/privacy abre justo la pestaña de privacidad", () => {
     const context = makeContext();
     const command = buildBuiltInSlashCommands(context).find(

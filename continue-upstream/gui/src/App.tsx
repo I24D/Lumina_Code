@@ -3,6 +3,7 @@ import Layout from "./components/Layout";
 import { MainEditorProvider } from "./components/mainInput/TipTapEditor";
 import { LiveConversationOverlay } from "./components/startTalk/LiveConversationOverlay";
 import { LuminaVoiceDelegationBridge } from "./components/startTalk/LuminaVoiceDelegationBridge";
+import { ScheduledTaskBridge } from "./components/scheduler/ScheduledTaskBridge";
 import { SubmenuContextProvidersProvider } from "./context/SubmenuContextProviders";
 import { VscThemeProvider } from "./context/VscTheme";
 import ParallelListeners from "./hooks/ParallelListeners";
@@ -14,6 +15,7 @@ import History from "./pages/history";
 import Stats from "./pages/stats";
 import ChangesWalkthrough from "./pages/changes";
 import WorkPanel from "./pages/work";
+import SchedulePage from "./pages/schedule";
 import ThemePage from "./styles/ThemePage";
 import { ROUTES } from "./util/navigation";
 
@@ -46,6 +48,10 @@ const router = createMemoryRouter([
       {
         path: ROUTES.WORK,
         element: <WorkPanel />,
+      },
+      {
+        path: ROUTES.SCHEDULE,
+        element: <SchedulePage />,
       },
       {
         path: ROUTES.CONFIG,
@@ -112,6 +118,7 @@ function App() {
       <ParallelListeners />
       {/* Runs voice-delegated tasks in the real chat (sidebar only). */}
       <LuminaVoiceDelegationBridge />
+      <ScheduledTaskBridge />
     </VscThemeProvider>
   );
 }

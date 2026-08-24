@@ -89,6 +89,13 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "goals/applyVerdict",
     "goals/clear",
     "github/getWorkItem",
+    "scheduler/list",
+    "scheduler/create",
+    "scheduler/update",
+    "scheduler/delete",
+    "scheduler/runNow",
+    "scheduler/claimDue",
+    "scheduler/reportRun",
     // Codebase
     "index/setPaused",
     "index/forceReIndex",

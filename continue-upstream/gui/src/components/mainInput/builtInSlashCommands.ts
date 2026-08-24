@@ -235,6 +235,14 @@ export function buildBuiltInSlashCommands(
       action: () => context.navigateTo("/work"),
     },
     {
+      title: "/schedule",
+      description: "Crear y controlar tareas automáticas persistentes",
+      type: "action",
+      category: SLASH_CATEGORY.tools,
+      icon: "calendar",
+      action: () => context.navigateTo("/schedule"),
+    },
+    {
       title: "/help",
       description: "Atajos de teclado, documentación y diagnóstico",
       type: "action",

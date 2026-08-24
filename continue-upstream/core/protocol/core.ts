@@ -67,6 +67,11 @@ import type {
 import type { SessionGoal } from "../goals/sessionGoal.js";
 import type { GitHubWorkItem } from "../integrations/GitHubWorkItemService.js";
 import type {
+  ScheduledTask,
+  ScheduledTaskInput,
+  ScheduledTaskRun,
+} from "../scheduler/ScheduledTaskService.js";
+import type {
   CapabilityDefinition,
   LuminaCapability,
   PermissionMap,
@@ -359,6 +364,30 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "goals/clear": [{ sessionId: string }, void];
   // Sesiones precargadas desde issues y pull requests de GitHub.
   "github/getWorkItem": [{ reference: string }, GitHubWorkItem];
+  "scheduler/list": [
+    undefined,
+    { tasks: ScheduledTask[]; runs: ScheduledTaskRun[] },
+  ];
+  "scheduler/create": [ScheduledTaskInput, ScheduledTask];
+  "scheduler/update": [
+    { id: string; patch: Partial<ScheduledTaskInput> },
+    ScheduledTask,
+  ];
+  "scheduler/delete": [{ id: string }, void];
+  "scheduler/runNow": [{ id: string }, ScheduledTaskRun];
+  "scheduler/claimDue": [
+    undefined,
+    { task: ScheduledTask; run: ScheduledTaskRun } | undefined,
+  ];
+  "scheduler/reportRun": [
+    {
+      runId: string;
+      status: "completed" | "failed";
+      sessionId?: string;
+      error?: string;
+    },
+    void,
+  ];
   // Codebase indexing
   "index/setPaused": [boolean, void];
   "index/forceReIndex": [

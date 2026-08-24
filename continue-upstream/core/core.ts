@@ -116,6 +116,7 @@ import {
   setPermission,
 } from "./privacy/permissions.js";
 import { StartTalkManager } from "./startTalk/index.js";
+import { ScheduledTaskService } from "./scheduler/ScheduledTaskService.js";
 import {
   WhatsAppAutoResponder,
   type AutoReplyAuditEntry,
@@ -133,6 +134,7 @@ export class Core {
   private whatsappAutoResponder?: WhatsAppAutoResponder;
   private globalContext = new GlobalContext();
   private startTalkManager: StartTalkManager;
+  private scheduledTaskService: ScheduledTaskService;
   llmLogger = new LLMLogger();
 
   private messageAbortControllers = new Map<string, AbortController>();
@@ -180,6 +182,7 @@ export class Core {
       this.startTalkManager = new StartTalkManager((event) => {
         this.messenger.send("startTalk/event", event);
       });
+      this.scheduledTaskService = new ScheduledTaskService();
 
       // Autonomous WhatsApp assistant: watches incoming WhatsApp notifications
       // (Desktop + Enlace móvil), drafts a reply with the chat model and sends it
@@ -997,6 +1000,24 @@ export class Core {
         "LUMINA_PC_GITHUB_TOKEN",
       ]);
       return new GitHubWorkItemService(token).get(msg.data.reference);
+    });
+
+    on("scheduler/list", async () => this.scheduledTaskService.list());
+    on("scheduler/create", async (msg) =>
+      this.scheduledTaskService.create(msg.data),
+    );
+    on("scheduler/update", async (msg) =>
+      this.scheduledTaskService.update(msg.data.id, msg.data.patch),
+    );
+    on("scheduler/delete", async (msg) => {
+      this.scheduledTaskService.remove(msg.data.id);
+    });
+    on("scheduler/runNow", async (msg) =>
+      this.scheduledTaskService.runNow(msg.data.id),
+    );
+    on("scheduler/claimDue", async () => this.scheduledTaskService.claimDue());
+    on("scheduler/reportRun", async (msg) => {
+      this.scheduledTaskService.reportRun(msg.data);
     });
 
     on("index/forceReIndex", async ({ data }) => {
