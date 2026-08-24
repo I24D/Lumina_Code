@@ -103,6 +103,15 @@ describe("buildBuiltInSlashCommands", () => {
     expect(context.navigateTo).toHaveBeenCalledWith("/stats");
   });
 
+  it("/changes abre el recorrido guiado de diffs", () => {
+    const context = makeContext();
+    buildBuiltInSlashCommands(context).find(
+      (command) => command.title === "/changes",
+    )!.action!();
+
+    expect(context.navigateTo).toHaveBeenCalledWith("/changes");
+  });
+
   it("/privacy abre justo la pestaña de privacidad", () => {
     const context = makeContext();
     const command = buildBuiltInSlashCommands(context).find(

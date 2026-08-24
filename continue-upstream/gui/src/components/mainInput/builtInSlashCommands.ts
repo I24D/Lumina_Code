@@ -219,6 +219,14 @@ export function buildBuiltInSlashCommands(
       action: () => context.navigateTo("/stats"),
     },
     {
+      title: "/changes",
+      description: "Recorrer los cambios archivo por archivo y por pasos",
+      type: "action",
+      category: SLASH_CATEGORY.tools,
+      icon: "diff",
+      action: () => context.navigateTo("/changes"),
+    },
+    {
       title: "/help",
       description: "Atajos de teclado, documentación y diagnóstico",
       type: "action",
