@@ -101,12 +101,21 @@ host remains responsible for showing its native prompt. Windows Bridge routes
 its endpoint capability through the same decision model and retains its hard
 block against workspace-file mutation through Bridge PowerShell.
 
+### Portable LSP diagnostics
+
+The CLI now includes a read-only `Diagnostics` tool backed by a portable LSP
+manager. It discovers installed TypeScript, Python, Go, Rust, and C/C++ language
+servers; speaks framed JSON-RPC over stdio; opens files in the active primary or
+isolated child workspace; returns normalized diagnostics; and shuts the server
+down cleanly. This gives CLI, serve, and future ACP clients compiler-quality
+feedback without relying on VS Code's extension host. Missing servers fail with
+an installation hint rather than silently returning an empty problem list. See
+[portable-lsp.md](portable-lsp.md).
+
 ## Next ports
 
-1. Expose diagnostics through a portable LSP manager when no IDE language
-   server is available.
-2. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
-3. Add ACP support after the versioned runtime API is stable.
+1. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
+2. Add ACP support after the versioned runtime API is stable.
 
 ## Explicit non-goals
 

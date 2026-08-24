@@ -16,6 +16,7 @@ export function getDefaultToolPolicies(
     { tool: "AskQuestion", permission: "allow" },
     { tool: "Checklist", permission: "allow" },
     { tool: "Diff", permission: "allow" },
+    { tool: "Diagnostics", permission: "allow" },
     { tool: "Skills", permission: "allow" },
     { tool: "Exit", permission: "allow" }, // Exit tool is generally safe (headless mode only)
     { tool: "Fetch", permission: "allow" }, // Technically not read only but edge casey to post w query params
@@ -51,6 +52,7 @@ export const PLAN_MODE_POLICIES: ToolPermissionPolicy[] = [
   { tool: "AskQuestion", permission: "allow" },
   { tool: "Checklist", permission: "allow" },
   { tool: "Diff", permission: "allow" },
+  { tool: "Diagnostics", permission: "allow" },
   { tool: "Exit", permission: "allow" },
   { tool: "Fetch", permission: "allow" },
   { tool: "List", permission: "allow" },
