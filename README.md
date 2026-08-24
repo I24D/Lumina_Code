@@ -171,20 +171,21 @@ Lumina Code permite configurar otros proveedores, pero la configuración de refe
 
 | Función                                    | Proveedor    | Modelo                                 | Credencial necesaria                 |
 | ------------------------------------------ | ------------ | -------------------------------------- | ------------------------------------ |
-| Chat principal, edición y agente de código | Ollama Cloud | `glm-5.2:cloud`                        | API key de Ollama                    |
+| Chat principal, edición y agente de código | Ollama Cloud | `kimi-k3:cloud`                        | API key de Ollama                    |
+| Modelo alternativo de chat y agente        | Ollama Cloud | `glm-5.2:cloud`                        | La misma API key de Ollama           |
 | Voz en tiempo real mediante Start Talk     | Gemini Live  | `gemini-2.5-flash-native-audio-latest` | `GEMINI_API_KEY` de Google AI Studio |
 
-#### Chat y agente: Ollama Cloud con GLM 5.2
+#### Chat y agente: Kimi K3 con GLM-5.2 disponible
 
 1. Crea una API key en [Ollama](https://ollama.com/settings/keys).
-2. En Lumina Code, abre **Add model**, selecciona **Ollama Cloud** y elige **GLM-5.2 (Ollama Cloud)**.
-3. Introduce la API key cuando la interfaz la solicite. La configuración usa internamente:
+2. En Lumina Code, abre **Add model** y selecciona **Ollama Cloud**. El flujo recomendado agrega **Kimi K3 (Ollama Cloud)** primero y conserva **GLM-5.2 (Ollama Cloud)** como alternativa.
+3. Introduce la API key cuando la interfaz la solicite. Ambos modelos usan:
    - proveedor: `ollama`;
-   - modelo: `glm-5.2:cloud`;
+   - modelos: `kimi-k3:cloud` y `glm-5.2:cloud`;
    - API base: `https://ollama.com/`.
-4. Selecciona el modelo para los roles de chat, edición y aplicación según tu flujo de trabajo.
+4. Selecciona **Kimi K3** para los roles de chat, edición y aplicación. Puedes cambiar a **GLM-5.2** desde el selector sin volver a configurar la credencial.
 
-La ficha oficial del modelo y su disponibilidad se encuentran en [Ollama Library: GLM 5.2](https://ollama.com/library/glm-5.2). Ollama Cloud evita necesitar una GPU local capaz de ejecutar este modelo, pero requiere una cuenta y está sujeto a los límites y precios de Ollama.
+Las fichas oficiales y su disponibilidad se encuentran en [Ollama Library: Kimi K3](https://ollama.com/library/kimi-k3) y [Ollama Library: GLM 5.2](https://ollama.com/library/glm-5.2). Ollama Cloud evita necesitar una GPU local capaz de ejecutar estos modelos, pero requiere una cuenta y está sujeto a los límites y precios de Ollama.
 
 #### Start Talk: Gemini Live
 
@@ -208,7 +209,7 @@ prioridad sobre esa configuración global.
 > [!CAUTION]
 > Las claves de Ollama y Gemini son credenciales diferentes y no son intercambiables. No pegues valores reales en este README, commits, issues, capturas o archivos versionados. El `.env` raíz está ignorado por Git; verifica siempre `git status` antes de publicar cambios.
 
-**English:** For the known-working reference setup, use Ollama Cloud with `glm-5.2:cloud` for the main coding agent and a separate Gemini API key for Start Talk's real-time voice model. Keep both credentials private and never commit them.
+**English:** For the known-working reference setup, use Ollama Cloud with `kimi-k3:cloud` as the primary coding agent and keep `glm-5.2:cloud` configured as the alternative. Start Talk uses a separate Gemini API key for its real-time voice model. Keep both credentials private and never commit them.
 
 #### Lectura de respuestas de los chats
 

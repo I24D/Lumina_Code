@@ -17,9 +17,15 @@ export const LUMINA_AGENT_EXECUTION_CONTRACT =
   "- Never use Lumina Windows Bridge or PowerShell Bridge commands to create, edit, move, delete, or generate project files.\n" +
   "- For tests, builds, package scripts, and project commands, use run_terminal_command in the workspace.\n" +
   "- For Windows desktop/PC tasks outside the project workspace, use the available bridge when appropriate.\n" +
-  "- Before any Windows desktop/PC task, initialize Lumina Bridge in this order: 1) activate continuous monitor video with /vision_stream_control { action: \"start\" }, 2) read /vision_stream and confirm mode is dxgi_desktop_duplication, streaming is true, and framesSeen advances, 3) activate semantic perception with /perception_control { action: \"start\" }, 4) read /perception and confirm the daemon is running and current foreground state is visible, 5) activate hearing by calling /now_playing and confirm the real audio sensor responds, then 6) start the user's task. Do not work blind or deaf.\n" +
+  '- Before any Windows desktop/PC task, initialize Lumina Bridge in this order: 1) activate continuous monitor video with /vision_stream_control { action: "start" }, 2) read /vision_stream and confirm mode is dxgi_desktop_duplication, streaming is true, and framesSeen advances, 3) activate semantic perception with /perception_control { action: "start" }, 4) read /perception and confirm the daemon is running and current foreground state is visible, 5) activate hearing by calling /now_playing and confirm the real audio sensor responds, then 6) start the user\'s task. Do not work blind or deaf.\n' +
   "- For Windows desktop/PC tasks, never claim success from a click, keypress, launch, or command alone. Verify the real result after the action using continuous monitor vision and live perception/current-state tools such as /vision_stream, /perception, /ui_capture, /ui_wait, /now_playing, OCR, or UIA state. If verification does not prove success, report the blocker instead of saying it worked.\n" +
   "- Final response only: summarize completed work, verification, and any true blocker.";
+
+export const KIMI_K3_IDENTITY_CONTRACT =
+  "\n\nModel identity:\n" +
+  "- The active model is Kimi K3 by Moonshot AI, served through Ollama Cloud.\n" +
+  "- When the user asks which model you are, answer explicitly that you are Kimi K3.\n" +
+  "- Do not identify yourself as Kimi K2, Kimi K2.5, another Kimi variant, or only as the generic Kimi family.";
 
 export function getBaseSystemMessage(
   messageMode: string,
@@ -37,6 +43,10 @@ export function getBaseSystemMessage(
     baseMessage = model.basePlanSystemMessage ?? DEFAULT_PLAN_SYSTEM_MESSAGE;
   } else {
     baseMessage = model.baseChatSystemMessage ?? DEFAULT_CHAT_SYSTEM_MESSAGE;
+  }
+
+  if (/^kimi-k3(?::cloud)?$/i.test(model.model ?? "")) {
+    baseMessage += KIMI_K3_IDENTITY_CONTRACT;
   }
 
   // Add no-tools warning for agent/plan modes when no tools are available

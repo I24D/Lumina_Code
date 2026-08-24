@@ -89,9 +89,17 @@ const GEMINI_ONBOARDING_MODELS = (apiKey: string): OnboardingModel[] => [
 
 // Ollama Cloud uses the same "ollama" provider/API as local Ollama, just
 // pointed at Ollama's hosted API with an apiKey instead of a local server.
-const OLLAMA_CLOUD_ONBOARDING_MODELS = (
-  apiKey: string,
-): OnboardingModel[] => [
+const OLLAMA_CLOUD_ONBOARDING_MODELS = (apiKey: string): OnboardingModel[] => [
+  {
+    name: "Kimi K3 (Ollama Cloud)",
+    provider: "ollama",
+    model: "kimi-k3:cloud",
+    apiKey,
+    apiBase: "https://ollama.com/",
+    roles: ["chat", "edit", "apply"],
+    defaultCompletionOptions: { contextLength: 1048576, maxTokens: 32768 },
+    capabilities: ["tool_use", "image_input"],
+  },
   {
     name: "GLM-5.2 (Ollama Cloud)",
     provider: "ollama",
@@ -177,6 +185,26 @@ export function setupProviderConfig(
     "provider" in n &&
     m.provider === n.provider &&
     m.model === n.model;
+
+  if (provider === "ollamaCloud") {
+    const configuredCloudModels = newModels.map((newModel) => {
+      const existingModel = existingModels.find((model) =>
+        isSameModel(model, newModel),
+      );
+
+      return existingModel
+        ? { ...newModel, ...existingModel, apiKey }
+        : newModel;
+    });
+    const unrelatedModels = existingModels.filter(
+      (model) => !newModels.some((newModel) => isSameModel(model, newModel)),
+    );
+
+    return {
+      ...config,
+      models: [...configuredCloudModels, ...unrelatedModels],
+    };
+  }
 
   // Update API key on existing models; add new entries for any missing models
   const updatedModels = existingModels.map((m) => {

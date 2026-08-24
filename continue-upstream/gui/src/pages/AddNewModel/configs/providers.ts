@@ -233,7 +233,7 @@ export const providers: Partial<Record<string, ProviderInfo>> = {
     tags: [ModelProviderTags.RequiresApiKey],
     refPage: "moonshot",
     apiKeyUrl: "https://docs.moonshot.cn/docs/getting-started",
-    packages: [models.kimiK2, models.kimiK25, models.moonshotChat],
+    packages: [models.moonshotChat],
     collectInputFor: [
       {
         inputType: "text",
@@ -495,9 +495,9 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
     title: "Ollama Cloud",
     provider: "ollama",
     description:
-      "Run larger frontier models like GLM-5.2 on Ollama's hosted cloud GPUs using your Ollama API key — no local GPU required.",
+      "Use Kimi K3 as Lumina Code's primary cloud model and keep GLM-5.2 ready as an alternative — no local GPU required.",
     longDescription:
-      "Ollama Cloud runs bigger models on Ollama's own GPUs through the same Ollama API you use locally. Create an API key at [ollama.com/settings/keys](https://ollama.com/settings/keys), paste it below, then pick a cloud model. Cloud model names end in `:cloud` — you can type any other one (e.g. `qwen3-coder:480b-cloud`) using the Autodetect option below.",
+      "Ollama Cloud runs frontier models on Ollama's GPUs through the same API you use locally. Create an API key at [ollama.com/settings/keys](https://ollama.com/settings/keys), paste it below, then choose Kimi K3 (recommended) or GLM-5.2. Cloud model names end in `:cloud`; you can also enter another model with Autodetect.",
     icon: "ollama.png",
     tags: [ModelProviderTags.RequiresApiKey],
     // Fixed (not user-editable): the "Add model" form only ever collects
@@ -508,7 +508,8 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
       apiBase: "https://ollama.com/",
     },
     packages: [
-      models.glm52Cloud,
+      models.ollamaCloudKimiK3,
+      models.ollamaCloudGlm52,
       {
         ...models.AUTODETECT,
         params: {

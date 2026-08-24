@@ -6,6 +6,7 @@ import {
 } from "core/llm/defaultSystemMessages";
 import {
   getBaseSystemMessage,
+  KIMI_K3_IDENTITY_CONTRACT,
   LUMINA_AGENT_EXECUTION_CONTRACT,
   NO_TOOL_WARNING,
 } from "./getBaseSystemMessage";
@@ -52,6 +53,21 @@ test("getBaseSystemMessage should return the correct system message based on mod
 
   // Test chat mode with default message and tools
   expect(getBaseSystemMessage("chat", {} as ModelDescription, [mockTool])).toBe(
+    DEFAULT_CHAT_SYSTEM_MESSAGE,
+  );
+});
+
+test("getBaseSystemMessage identifies only Kimi K3 explicitly", () => {
+  const kimiK3 = { model: "kimi-k3:cloud" } as ModelDescription;
+  const kimiK25 = { model: "kimi-k2.5:cloud" } as ModelDescription;
+
+  expect(getBaseSystemMessage("chat", kimiK3, [])).toBe(
+    DEFAULT_CHAT_SYSTEM_MESSAGE + KIMI_K3_IDENTITY_CONTRACT,
+  );
+  expect(getBaseSystemMessage("agent", kimiK3, [{} as Tool])).toBe(
+    DEFAULT_AGENT_SYSTEM_MESSAGE + KIMI_K3_IDENTITY_CONTRACT,
+  );
+  expect(getBaseSystemMessage("chat", kimiK25, [])).toBe(
     DEFAULT_CHAT_SYSTEM_MESSAGE,
   );
 });

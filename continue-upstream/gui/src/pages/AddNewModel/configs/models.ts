@@ -496,62 +496,34 @@ export const models: { [key: string]: ModelPackage } = {
     providerOptions: ["moonshot"],
     isOpenSource: false,
   },
-  kimiK2: {
-    title: "Kimi K2",
-    description:
-      "Moonshot AI's Kimi K2, a powerful MoE model with strong coding and tool-use capabilities",
-    refUrl: "https://platform.moonshot.cn/",
-    params: {
-      title: "Kimi K2",
-      model: "kimi-k2",
-      contextLength: 128000,
-    },
-    icon: "moonshot.png",
-    providerOptions: ["moonshot"],
-    isOpenSource: false,
-  },
-  kimiK25: {
-    title: "Kimi K2.5",
-    description:
-      "Moonshot AI's Kimi K2.5, the latest generation model with enhanced reasoning",
-    refUrl: "https://platform.moonshot.cn/",
-    params: {
-      title: "Kimi K2.5",
-      model: "kimi-k2.5",
-      contextLength: 128000,
-    },
-    icon: "moonshot.png",
-    providerOptions: ["moonshot"],
-    isOpenSource: false,
-  },
   ollamaCloudKimiK3: {
-    title: "Ollama Cloud / Kimi K3 (2.8T, vision)",
+    title: "Kimi K3 (Ollama Cloud)",
     description:
       "Moonshot AI's Kimi K3 served through Ollama Cloud with a 1M token context window, vision, thinking, and tool use.",
     refUrl: "https://ollama.com/library/kimi-k3",
     params: {
-      title: "Ollama Cloud / Kimi K3 (2.8T, vision)",
+      title: "Kimi K3 (Ollama Cloud)",
       model: "kimi-k3:cloud",
       contextLength: 1_048_576,
       capabilities: { tools: true, uploadImage: true },
     },
     icon: "moonshot.png",
-    providerOptions: ["ollama"],
+    providerOptions: ["ollamaCloud"],
     isOpenSource: false,
   },
   ollamaCloudGlm52: {
-    title: "Ollama Cloud / GLM 5.2 (756B MoE)",
+    title: "GLM-5.2 (Ollama Cloud)",
     description:
       "Z.ai's GLM 5.2 served through Ollama Cloud with a 1M token context window, thinking, and tool use.",
     refUrl: "https://ollama.com/library/glm-5.2",
     params: {
-      title: "Ollama Cloud / GLM 5.2 (756B MoE)",
+      title: "GLM-5.2 (Ollama Cloud)",
       model: "glm-5.2:cloud",
       contextLength: 1_000_000,
       capabilities: { tools: true },
     },
     icon: "zai.svg",
-    providerOptions: ["ollama"],
+    providerOptions: ["ollamaCloud"],
     isOpenSource: false,
   },
   glm5: {
@@ -591,20 +563,6 @@ export const models: { [key: string]: ModelPackage } = {
     },
     icon: "zai.svg",
     providerOptions: ["zAI"],
-    isOpenSource: false,
-  },
-  glm52Cloud: {
-    title: "GLM-5.2 (Ollama Cloud)",
-    description:
-      "Z.ai's GLM-5.2 flagship model with a 1M-token context, hosted on Ollama Cloud GPUs.",
-    refUrl: "https://ollama.com/library/glm-5.2",
-    params: {
-      title: "GLM-5.2 (Ollama Cloud)",
-      model: "glm-5.2:cloud",
-      contextLength: 1_000_000,
-    },
-    icon: "ollama.png",
-    providerOptions: ["ollamaCloud"],
     isOpenSource: false,
   },
   mistralOs: {
