@@ -34,15 +34,15 @@ export function useLuminaRuntimeStatus() {
 
   const runtimeLabel = useMemo(() => {
     if (!runtime || runtime.state === "starting") {
-      return "Runtime starting";
+      return "Iniciando servicios";
     }
     if (runtime.state === "connected") {
-      return "Runtime connected";
+      return "Servicios listos";
     }
     if (runtime.state === "degraded") {
-      return "Runtime degraded";
+      return "Servicios parciales";
     }
-    return "Runtime offline";
+    return "Servicios sin conexión";
   }, [runtime]);
 
   const runtimeTitle = useMemo(() => {
@@ -50,7 +50,10 @@ export function useLuminaRuntimeStatus() {
       return "Checking Lumina runtime";
     }
     return runtime.components
-      .map((component) => `${component.label}: ${component.status}`)
+      .map(
+        (component) =>
+          `${component.label}: ${component.status}${component.required ? "" : " (opcional)"}`,
+      )
       .join("\n");
   }, [runtime]);
 

@@ -117,7 +117,9 @@ export class VsCodeMessenger {
       vscode.commands.executeCommand("lumina.startTalkOrb");
     });
 
-    this.onWebview("lumina/runtimeStatus", () => getLuminaRuntimeStatus());
+    this.onWebview("lumina/runtimeStatus", () =>
+      getLuminaRuntimeStatus(this.context),
+    );
 
     this.onWebview("acceptDiff", async ({ data: { filepath, streamId } }) => {
       await vscode.commands.executeCommand(

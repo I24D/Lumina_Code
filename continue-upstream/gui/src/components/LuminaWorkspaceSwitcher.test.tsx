@@ -8,7 +8,7 @@ describe("LuminaWorkspaceSwitcher", () => {
     await renderWithProviders(<LuminaWorkspaceSwitcher />);
 
     await waitFor(() => {
-      expect(screen.getByText("Runtime connected")).toBeInTheDocument();
+      expect(screen.getByText("Servicios listos")).toBeInTheDocument();
     });
     expect(screen.getByLabelText("Lumina Code")).toBeInTheDocument();
     expect(screen.getByAltText("Lumina Code mascot")).toHaveAttribute(

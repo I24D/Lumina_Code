@@ -77,14 +77,23 @@ export function RuntimeSection() {
       <div className="lumina-runtime-grid">
         {runtime?.components.map((component) => {
           const healthy = component.status === "connected";
-          const StateIcon = healthy ? CheckCircleIcon : ExclamationTriangleIcon;
+          const optionalOffline =
+            !component.required && component.status === "offline";
+          const StateIcon = healthy
+            ? CheckCircleIcon
+            : optionalOffline
+              ? SignalIcon
+              : ExclamationTriangleIcon;
           return (
-            <article key={component.name} data-state={component.status}>
+            <article
+              key={component.name}
+              data-state={optionalOffline ? "optional" : component.status}
+            >
               <div className="lumina-runtime-card__heading">
                 <StateIcon />
                 <strong>{component.label}</strong>
               </div>
-              <span>{component.status}</span>
+              <span>{optionalOffline ? "opcional" : component.status}</span>
               <code title={component.endpoint}>{component.endpoint}</code>
             </article>
           );

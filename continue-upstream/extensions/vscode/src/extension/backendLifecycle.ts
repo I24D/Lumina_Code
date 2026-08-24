@@ -22,6 +22,7 @@ export type LuminaRuntimeComponentStatus = {
   label: string;
   status: "connected" | "starting" | "offline";
   endpoint: string;
+  required: boolean;
 };
 
 export type LuminaRuntimeStatus = {
@@ -512,10 +513,27 @@ function beginRuntimeStartup(context: vscode.ExtensionContext): Promise<void> {
   return startPromise;
 }
 
-export async function getLuminaRuntimeStatus(): Promise<LuminaRuntimeStatus> {
+export async function getLuminaRuntimeStatus(
+  context: vscode.ExtensionContext,
+): Promise<LuminaRuntimeStatus> {
   const health = await readComponentHealth();
-  const connectedCount = [...health.values()].filter(Boolean).length;
-  const starting = Boolean(runtimeProcess && runtimeProcess.exitCode === null);
+  const luminaPcRoot = resolveLuminaPcRoot(context);
+  const standaloneBridgeProfile = Boolean(
+    luminaPcRoot &&
+      !hasUnifiedRuntime(luminaPcRoot) &&
+      resolveStandaloneBridgeRoot(luminaPcRoot),
+  );
+  const requiredNames = new Set<LuminaRuntimeComponentName>(
+    standaloneBridgeProfile
+      ? ["windowsBridge"]
+      : PROBES.map((definition) => definition.name),
+  );
+  const starting = standaloneBridgeProfile
+    ? Boolean(
+        windowsBridgeRecoveryProcess &&
+          windowsBridgeRecoveryProcess.exitCode === null,
+      )
+    : Boolean(runtimeProcess && runtimeProcess.exitCode === null);
   const components = PROBES.map<LuminaRuntimeComponentStatus>((definition) => ({
     name: definition.name,
     label: definition.label,
@@ -525,10 +543,15 @@ export async function getLuminaRuntimeStatus(): Promise<LuminaRuntimeStatus> {
         ? "starting"
         : "offline",
     endpoint: `${definition.host}:${definition.port}${definition.path ?? ""}`,
+    required: requiredNames.has(definition.name),
   }));
+  const requiredComponents = components.filter((component) => component.required);
+  const connectedCount = requiredComponents.filter(
+    (component) => component.status === "connected",
+  ).length;
 
   const state: LuminaRuntimeStatus["state"] =
-    connectedCount === PROBES.length
+    connectedCount === requiredComponents.length
       ? "connected"
       : starting
         ? "starting"

@@ -1352,6 +1352,13 @@ body {
   color: var(--lumina-warning);
 }
 
+.lumina-runtime-grid
+  article[data-state="optional"]
+  .lumina-runtime-card__heading
+  svg {
+  color: var(--lumina-muted);
+}
+
 .lumina-runtime-grid article strong {
   overflow: hidden;
   font-size: 11px;

@@ -21,6 +21,8 @@ export type LuminaRuntimeStatus = {
     label: string;
     status: "connected" | "starting" | "offline";
     endpoint: string;
+    /** Whether this component is required by the detected runtime profile. */
+    required: boolean;
   }>;
   checkedAt: string;
 };
