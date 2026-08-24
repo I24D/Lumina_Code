@@ -1,8 +1,7 @@
 import * as dotenv from "dotenv";
 import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 
+import { getWorkspaceEnvFiles } from "../util/workspaceEnv.js";
 import type { StartTalkThinkingLevel } from "./types.js";
 
 export type StartTalkGeminiEnv = {
@@ -30,42 +29,6 @@ function parseThinkingLevel(
   }
 
   return undefined;
-}
-
-function toFilePath(candidate: string): string {
-  if (candidate.startsWith("file://")) {
-    return fileURLToPath(candidate);
-  }
-
-  return candidate;
-}
-
-function getCandidateEnvFiles(workspaceDirs: string[]): string[] {
-  const moduleDir = typeof __dirname === "string" ? __dirname : process.cwd();
-  const roots = [
-    ...workspaceDirs.map(toFilePath),
-    moduleDir,
-    process.cwd(),
-    path.resolve(process.cwd(), ".."),
-    path.resolve(process.cwd(), "..", ".."),
-  ];
-  const envFiles = new Set<string>();
-
-  for (const root of roots) {
-    let current = path.resolve(root);
-
-    while (true) {
-      envFiles.add(path.join(current, ".env"));
-
-      const parent = path.dirname(current);
-      if (parent === current) {
-        break;
-      }
-      current = parent;
-    }
-  }
-
-  return [...envFiles];
 }
 
 export function readStartTalkGeminiEnvFile(
@@ -116,7 +79,7 @@ export function resolveStartTalkGeminiEnv(
     };
   }
 
-  for (const envFile of getCandidateEnvFiles(workspaceDirs)) {
+  for (const envFile of getWorkspaceEnvFiles(workspaceDirs)) {
     const env = readStartTalkGeminiEnvFile(envFile);
     if (env) {
       return env;

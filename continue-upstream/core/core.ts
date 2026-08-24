@@ -21,6 +21,7 @@ import { ConfigHandler } from "./config/ConfigHandler";
 import { addModel, deleteModel } from "./config/util";
 import { DevDataSqliteDb } from "./data/devdataSqlite";
 import { DataLogger } from "./data/log";
+import { GitHubWorkItemService } from "./integrations/GitHubWorkItemService.js";
 import { CodebaseIndexer } from "./indexing/CodebaseIndexer";
 import DocsService from "./indexing/docs/DocsService";
 import { countTokens } from "./llm/countTokens";
@@ -33,6 +34,7 @@ import { callTool } from "./tools/callTool";
 import { ChatDescriber } from "./util/chatDescriber";
 import { compactConversation } from "./util/conversationCompaction";
 import { GlobalContext } from "./util/GlobalContext";
+import { resolveWorkspaceEnvValue } from "./util/workspaceEnv.js";
 import historyManager from "./util/history";
 import {
   editConfigFile,
@@ -983,6 +985,16 @@ export class Core {
 
     on("goals/clear", async (msg) => {
       clearGoal(msg.data.sessionId);
+    });
+
+    on("github/getWorkItem", async (msg) => {
+      const workspaceDirs = await this.ide.getWorkspaceDirs();
+      const token = resolveWorkspaceEnvValue(workspaceDirs, [
+        "GITHUB_TOKEN",
+        "I24D_GITHUB",
+        "LUMINA_PC_GITHUB_TOKEN",
+      ]);
+      return new GitHubWorkItemService(token).get(msg.data.reference);
     });
 
     on("index/forceReIndex", async ({ data }) => {

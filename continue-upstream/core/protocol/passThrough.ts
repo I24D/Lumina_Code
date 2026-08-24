@@ -87,6 +87,7 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "goals/set",
     "goals/applyVerdict",
     "goals/clear",
+    "github/getWorkItem",
     // Codebase
     "index/setPaused",
     "index/forceReIndex",

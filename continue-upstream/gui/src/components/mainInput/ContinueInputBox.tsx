@@ -15,10 +15,17 @@ import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectSlashCommandComboBoxInputs } from "../../redux/selectors";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import { setDialogMessage, setShowDialog } from "../../redux/slices/uiSlice";
-import { clearSessionHistory, setMode } from "../../redux/slices/sessionSlice";
+import {
+  clearSessionHistory,
+  newSession,
+  setMainEditorContentTrigger,
+  setMode,
+  updateSessionTitle,
+} from "../../redux/slices/sessionSlice";
 import { cancelStream } from "../../redux/thunks/cancelStream";
 import { saveCurrentSession, updateSession } from "../../redux/thunks/session";
 import { useCompactConversation } from "../../util/compactConversation";
+import { GitHubSessionDialog } from "../dialogs/GitHubSessionDialog";
 import { SessionGoalDialog } from "../dialogs/SessionGoalDialog";
 import {
   buildBuiltInSlashCommands,
@@ -66,6 +73,16 @@ const EDIT_ALLOWED_SLASH_COMMAND_SOURCES: SlashCommandSource[] = [
   "invokable-rule",
   "json-custom-command",
 ];
+
+function textToEditorContent(text: string): JSONContent {
+  return {
+    type: "doc",
+    content: text.split("\n").map((line) => ({
+      type: "paragraph",
+      content: line ? [{ type: "text", text: line }] : undefined,
+    })),
+  };
+}
 
 function ContinueInputBox(props: ContinueInputBoxProps) {
   const dispatch = useAppDispatch();
@@ -153,6 +170,52 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
         },
         historyLength,
         goalSummary: sessionGoal?.text,
+        openGitHubSession: () => {
+          dispatch(
+            setDialogMessage(
+              <GitHubSessionDialog
+                onSubmit={async (reference) => {
+                  const response = await ideMessenger.request(
+                    "github/getWorkItem",
+                    { reference },
+                  );
+                  if (response.status === "error") {
+                    throw new Error(response.error);
+                  }
+
+                  if (historyLength > 0) {
+                    await dispatch(
+                      saveCurrentSession({
+                        openNewSession: true,
+                        generateTitle: true,
+                      }),
+                    ).unwrap();
+                  } else {
+                    dispatch(newSession());
+                  }
+
+                  const item = response.content;
+                  dispatch(setMode("agent"));
+                  dispatch(
+                    updateSessionTitle(
+                      `GitHub #${item.reference.number}: ${item.title}`,
+                    ),
+                  );
+                  dispatch(
+                    setMainEditorContentTrigger(
+                      textToEditorContent(
+                        `${item.suggestedPrompt}\n\n` +
+                          `<github-context source="${item.url}">\n` +
+                          `${item.markdown}\n</github-context>`,
+                      ),
+                    ),
+                  );
+                }}
+              />,
+            ),
+          );
+          dispatch(setShowDialog(true));
+        },
         toggleSessionGoal: () => {
           if (!sessionId) {
             return;

@@ -28,6 +28,8 @@ export interface SlashCommandContext {
   toggleSessionGoal: () => void;
   /** Meta activa, para describirla en el comando. */
   goalSummary?: string;
+  /** Prepara una sesión nueva con el contexto de un issue o PR. */
+  openGitHubSession: () => void;
   /** Cuántos mensajes hay ahora, para saber si hay algo que compactar. */
   historyLength: number;
   /** Abre una pestaña concreta de los ajustes. */
@@ -103,6 +105,15 @@ export function buildBuiltInSlashCommands(
       category: SLASH_CATEGORY.session,
       icon: "sparkles",
       action: context.compactConversation,
+    },
+    {
+      title: "/github",
+      argsHint: "[issue|PR]",
+      description: "Preparar una sesión desde un issue o pull request",
+      type: "action",
+      category: SLASH_CATEGORY.session,
+      icon: "git-branch",
+      action: context.openGitHubSession,
     },
     {
       title: "/stop",

@@ -14,6 +14,7 @@ function makeContext(overrides = {}) {
     compactConversation: vi.fn(),
     historyLength: 4,
     toggleSessionGoal: vi.fn(),
+    openGitHubSession: vi.fn(),
     goalSummary: undefined as string | undefined,
     openConfigTab: vi.fn(),
     navigateTo: vi.fn(),
@@ -85,10 +86,18 @@ describe("buildBuiltInSlashCommands", () => {
     expect(con.description).toContain("que pasen los tests");
   });
 
+  it("/github abre el flujo de sesión desde issue o PR", () => {
+    const context = makeContext();
+    buildBuiltInSlashCommands(context).find(
+      (command) => command.title === "/github",
+    )!.action!();
+
+    expect(context.openGitHubSession).toHaveBeenCalledOnce();
+  });
+
   it("/usage navega a las estadísticas", () => {
     const context = makeContext();
-    buildBuiltInSlashCommands(context)
-      .find((c) => c.title === "/usage")!
+    buildBuiltInSlashCommands(context).find((c) => c.title === "/usage")!
       .action!();
 
     expect(context.navigateTo).toHaveBeenCalledWith("/stats");
@@ -106,21 +115,18 @@ describe("buildBuiltInSlashCommands", () => {
 
   it("/mode rota entre los tres modos", () => {
     const context = makeContext({ currentMode: "chat" });
-    buildBuiltInSlashCommands(context)
-      .find((c) => c.title === "/mode")!
+    buildBuiltInSlashCommands(context).find((c) => c.title === "/mode")!
       .action!();
     expect(context.setMode).toHaveBeenCalledWith("agent");
 
     const fromAgent = makeContext({ currentMode: "agent" });
-    buildBuiltInSlashCommands(fromAgent)
-      .find((c) => c.title === "/mode")!
+    buildBuiltInSlashCommands(fromAgent).find((c) => c.title === "/mode")!
       .action!();
     expect(fromAgent.setMode).toHaveBeenCalledWith("plan");
 
     // Y vuelve al principio en vez de quedarse atascado en el último.
     const fromPlan = makeContext({ currentMode: "plan" });
-    buildBuiltInSlashCommands(fromPlan)
-      .find((c) => c.title === "/mode")!
+    buildBuiltInSlashCommands(fromPlan).find((c) => c.title === "/mode")!
       .action!();
     expect(fromPlan.setMode).toHaveBeenCalledWith("chat");
   });

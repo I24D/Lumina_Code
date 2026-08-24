@@ -65,6 +65,7 @@ import type {
   StartTalkVideoStartRequest,
 } from "../startTalk/index.js";
 import type { SessionGoal } from "../goals/sessionGoal.js";
+import type { GitHubWorkItem } from "../integrations/GitHubWorkItemService.js";
 import type {
   CapabilityDefinition,
   LuminaCapability,
@@ -307,7 +308,10 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     StartTalkNotificationSettingsRequest,
     void,
   ];
-  "startTalk/getTranscript": [StartTalkSessionRequest, StartTalkTranscriptEntry[]];
+  "startTalk/getTranscript": [
+    StartTalkSessionRequest,
+    StartTalkTranscriptEntry[],
+  ];
   // Voice delegation into the main chat (orb → core → sidebar → core → orb).
   "startTalk/delegateToMain": [
     {
@@ -352,6 +356,8 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     SessionGoal | undefined,
   ];
   "goals/clear": [{ sessionId: string }, void];
+  // Sesiones precargadas desde issues y pull requests de GitHub.
+  "github/getWorkItem": [{ reference: string }, GitHubWorkItem];
   // Codebase indexing
   "index/setPaused": [boolean, void];
   "index/forceReIndex": [
