@@ -50,6 +50,13 @@ export type LuminaAssistantTaskStep = {
   id: string;
   title: string;
   status: "pending" | "running" | "succeeded" | "failed" | "skipped";
+  kind?: LuminaTaskRecord["kind"];
+  toolName?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  durationMs?: number;
+  detail?: string;
+  error?: string;
 };
 
 export type LuminaAssistantSettingsState = {
@@ -201,7 +208,11 @@ export class LuminaAgentRuntime {
     this.persistTasks();
   }
 
-  failToolCall(toolCall: ToolCallLike, error: unknown, durationMs: number): void {
+  failToolCall(
+    toolCall: ToolCallLike,
+    error: unknown,
+    durationMs: number,
+  ): void {
     const errorMessage = error instanceof Error ? error.message : String(error);
     this.taskLedger.failTask(toolCall.id, errorMessage, durationMs);
 
@@ -265,6 +276,13 @@ export class LuminaAgentRuntime {
         id: task.id,
         title: task.title,
         status: taskStatusToStepStatus(task.status),
+        kind: task.kind,
+        toolName: task.toolName,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+        durationMs: task.durationMs,
+        detail: task.progressSummary,
+        error: task.error,
       })),
       settings: {
         fullAccess: false,
@@ -322,7 +340,11 @@ export class LuminaAgentRuntime {
   private appendExperience(record: ExperienceRecord): void {
     try {
       mkdirSync(this.stateDir, { recursive: true });
-      appendFileSync(this.experiencesPath, `${JSON.stringify(record)}\n`, "utf8");
+      appendFileSync(
+        this.experiencesPath,
+        `${JSON.stringify(record)}\n`,
+        "utf8",
+      );
     } catch {
       // Persistence is best-effort; tool execution should continue.
     }

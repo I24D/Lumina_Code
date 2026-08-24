@@ -112,6 +112,15 @@ describe("buildBuiltInSlashCommands", () => {
     expect(context.navigateTo).toHaveBeenCalledWith("/changes");
   });
 
+  it("/work abre el panel de observabilidad", () => {
+    const context = makeContext();
+    buildBuiltInSlashCommands(context).find(
+      (command) => command.title === "/work",
+    )!.action!();
+
+    expect(context.navigateTo).toHaveBeenCalledWith("/work");
+  });
+
   it("/privacy abre justo la pestaña de privacidad", () => {
     const context = makeContext();
     const command = buildBuiltInSlashCommands(context).find(

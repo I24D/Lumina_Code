@@ -13,6 +13,7 @@ import Chat from "./pages/gui";
 import History from "./pages/history";
 import Stats from "./pages/stats";
 import ChangesWalkthrough from "./pages/changes";
+import WorkPanel from "./pages/work";
 import ThemePage from "./styles/ThemePage";
 import { ROUTES } from "./util/navigation";
 
@@ -41,6 +42,10 @@ const router = createMemoryRouter([
       {
         path: ROUTES.CHANGES,
         element: <ChangesWalkthrough />,
+      },
+      {
+        path: ROUTES.WORK,
+        element: <WorkPanel />,
       },
       {
         path: ROUTES.CONFIG,

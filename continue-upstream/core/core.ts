@@ -103,7 +103,7 @@ import {
   selectStartTalkGeminiEnv,
   type StartTalkGeminiConfigStore,
 } from "./startTalk/env.js";
-import { clearGoal, getGoal, setGoal } from "./goals/goalStore.js";
+import { clearGoal, getGoal, listGoals, setGoal } from "./goals/goalStore.js";
 import {
   applyVerdict,
   createGoal,
@@ -967,6 +967,8 @@ export class Core {
     on("privacy/resetPermissions", async () => resetPermissions());
 
     on("goals/get", async (msg) => getGoal(msg.data.sessionId));
+
+    on("goals/list", async () => listGoals());
 
     on("goals/set", async (msg) =>
       setGoal(createGoal(msg.data.sessionId, msg.data.text, msg.data.maxTurns)),

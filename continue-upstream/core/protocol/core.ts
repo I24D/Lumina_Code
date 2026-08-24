@@ -347,6 +347,7 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "privacy/resetPermissions": [undefined, PermissionMap];
   // Metas de sesión: el agente sigue trabajando hasta cumplirlas.
   "goals/get": [{ sessionId: string }, SessionGoal | undefined];
+  "goals/list": [undefined, SessionGoal[]];
   "goals/set": [
     { sessionId: string; text: string; maxTurns?: number },
     SessionGoal,

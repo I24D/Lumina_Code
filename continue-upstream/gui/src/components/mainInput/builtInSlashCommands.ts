@@ -227,6 +227,14 @@ export function buildBuiltInSlashCommands(
       action: () => context.navigateTo("/changes"),
     },
     {
+      title: "/work",
+      description: "Ver sesiones, metas, aprobaciones, tareas y consumo",
+      type: "action",
+      category: SLASH_CATEGORY.tools,
+      icon: "chart",
+      action: () => context.navigateTo("/work"),
+    },
+    {
       title: "/help",
       description: "Atajos de teclado, documentación y diagnóstico",
       type: "action",

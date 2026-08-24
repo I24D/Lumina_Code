@@ -82,6 +82,10 @@ export function getGoal(sessionId: string): SessionGoal | undefined {
   return load()[sessionId];
 }
 
+export function listGoals(): SessionGoal[] {
+  return Object.values(load()).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
 export function setGoal(goal: SessionGoal): SessionGoal {
   const store = { ...load(), [goal.sessionId]: goal };
   cache = store;

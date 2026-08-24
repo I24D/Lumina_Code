@@ -15,6 +15,13 @@ export type AssistantTaskStep = {
   id: string;
   title: string;
   status: "pending" | "running" | "succeeded" | "failed" | "skipped";
+  kind?: "tool" | "plan" | "agent";
+  toolName?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  durationMs?: number;
+  detail?: string;
+  error?: string;
 };
 
 export type AssistantSettingsState = {

@@ -18,6 +18,7 @@ export const ROUTES = {
   THEME: "/theme",
   STATS: "/stats",
   CHANGES: "/changes",
+  WORK: "/work",
   ASSISTANT: "/assistant",
   // EXAMPLE_ROUTE_WITH_PARAMS: (params: ParamsType) => `/route/${params}`,
 };
