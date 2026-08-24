@@ -47,6 +47,40 @@ export const runtimeOpenApiDocument = {
         responses: { "200": { description: "Delegated child sessions" } },
       },
     },
+    "/sessions/{id}/cancel": {
+      post: {
+        operationId: "cancelChildSession",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": { description: "Child cancellation requested" },
+          "404": { description: "Child is not running" },
+        },
+      },
+    },
+    "/sessions/{id}/retry": {
+      post: {
+        operationId: "retryChildSession",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "202": { description: "Replacement child queued" },
+          "404": { description: "Child cannot be retried" },
+        },
+      },
+    },
     "/messages": {
       post: {
         operationId: "queueMessage",

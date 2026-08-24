@@ -28,6 +28,7 @@ export interface ChildSessionRecord extends Session {
   status: ChildSessionStatus;
   dateCreated: string;
   dateUpdated: string;
+  retryOfSessionId?: string;
   error?: string;
 }
 
@@ -61,6 +62,7 @@ export function createChildSession(
   parentSessionId: string,
   agentName: string,
   prompt: string,
+  retryOfSessionId?: string,
 ): ChildSessionRecord {
   if (!parentSessionId.trim()) {
     throw new Error("A child session requires a parent session ID");
@@ -77,6 +79,7 @@ export function createChildSession(
     status: "queued",
     dateCreated: now,
     dateUpdated: now,
+    retryOfSessionId,
     title: makeChildSessionTitle(agentName, prompt),
     workspaceDirectory: process.cwd(),
     history: [

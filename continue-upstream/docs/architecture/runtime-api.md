@@ -12,8 +12,9 @@ versioned contract.
   permission, message, child-session, state, and shutdown lifecycle changes.
 
 The remaining operations expose state, child sessions, message queuing,
-permission resolution, pause, and Git diff. The OpenAPI document is the source
-for generated operation metadata. Regenerate it after contract changes with:
+targeted child cancellation/retry, permission resolution, pause, and Git diff.
+The OpenAPI document is the source for generated operation metadata. Regenerate
+it after contract changes with:
 
 ```bash
 cd extensions/cli
@@ -27,4 +28,3 @@ generated operation map, and a contract test prevents drift.
 The server binds to localhost by default. The API does not grant extra tool
 authority: messages still use the active Lumina permission policy, and pending
 tool actions must be resolved through the permission endpoint.
-

@@ -3,6 +3,8 @@ import { toolPermissionManager } from "../permissions/permissionManager.js";
 import { getCompleteStateSnapshot } from "../session.js";
 import { messageQueue } from "../stream/messageQueue.js";
 import { listChildSessions } from "../subagent/childSession.js";
+import { cancelChildExecution } from "../subagent/executionRegistry.js";
+import { retryChildSession } from "../subagent/retry.js";
 import { getGitDiffSnapshot } from "../util/git.js";
 
 import { createRuntimeApiRouter } from "./runtimeApi.js";
@@ -30,6 +32,8 @@ export function createServeRuntimeApiRouter(options: ServeRuntimeApiOptions) {
       );
     },
     listChildren: listChildSessions,
+    cancelChild: cancelChildExecution,
+    retryChild: retryChildSession,
     queueMessage: async (message) => {
       state.lastActivity = Date.now();
       await messageQueue.enqueueMessage(message);

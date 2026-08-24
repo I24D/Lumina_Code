@@ -12,6 +12,8 @@ describe("Lumina runtime API v1", () => {
     sessionId: "session-1",
     getState: vi.fn(() => ({ sessionId: "session-1", isProcessing: false })),
     listChildren: vi.fn(() => []),
+    cancelChild: vi.fn(() => true),
+    retryChild: vi.fn(async () => ({ sessionId: "retry-1" }) as any),
     queueMessage: vi.fn(async () => ({ position: 1 })),
     resolvePermission: vi.fn(() => ({ success: true })),
     pause: vi.fn(() => ({ success: true, message: "Agent run paused" })),
@@ -89,10 +91,18 @@ describe("Lumina runtime API v1", () => {
     await request(app)
       .get("/api/v1/sessions/session-1/children")
       .expect(200, []);
+    await request(app)
+      .post("/api/v1/sessions/child-1/cancel")
+      .expect(200, { success: true, sessionId: "child-1" });
+    await request(app)
+      .post("/api/v1/sessions/child-1/retry")
+      .expect(202, { sessionId: "retry-1" });
     await request(app).get("/api/v1/diff").expect(200, { diff: "+change" });
 
     expect(deps.resolvePermission).toHaveBeenCalledWith("permission-1", true);
     expect(deps.pause).toHaveBeenCalledOnce();
     expect(deps.listChildren).toHaveBeenCalledWith("session-1");
+    expect(deps.cancelChild).toHaveBeenCalledWith("child-1");
+    expect(deps.retryChild).toHaveBeenCalledWith("child-1");
   });
 });

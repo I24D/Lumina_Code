@@ -17,6 +17,7 @@ import {
   saveChildSession,
   trackChildSessionUsage,
 } from "./childSession.js";
+import { registerChildExecution } from "./executionRegistry.js";
 
 /**
  * Options for executing a subagent
@@ -198,13 +199,12 @@ async function executeSubAgentInChildSession(
  */
 export async function executeSubAgent(
   options: SubAgentExecutionOptions,
+  childSessionOverride?: ChildSessionRecord,
 ): Promise<SubAgentResult> {
   const agentName = options.agent.model?.name || "subagent";
-  const childSession = createChildSession(
-    options.parentSessionId,
-    agentName,
-    options.prompt,
-  );
+  const childSession =
+    childSessionOverride ??
+    createChildSession(options.parentSessionId, agentName, options.prompt);
 
   const activeContext = getAgentExecutionContext();
   if (activeContext?.kind === "subagent") {
@@ -231,17 +231,25 @@ export async function executeSubAgent(
     inheritedPermissions.currentMode,
   );
 
-  return runWithAgentExecutionContext(
-    {
-      sessionId: childSession.sessionId,
-      parentSessionId: options.parentSessionId,
-      kind: "subagent",
-      permissionState: inheritedPermissions,
-      systemMessageOverride: systemMessage,
-      useChatHistoryService: false,
-      onUsage: (cost, usage) =>
-        trackChildSessionUsage(childSession, cost, usage),
-    },
-    () => executeSubAgentInChildSession(options, childSession),
+  const unregister = registerChildExecution(
+    childSession.sessionId,
+    options.abortController,
   );
+  try {
+    return await runWithAgentExecutionContext(
+      {
+        sessionId: childSession.sessionId,
+        parentSessionId: options.parentSessionId,
+        kind: "subagent",
+        permissionState: inheritedPermissions,
+        systemMessageOverride: systemMessage,
+        useChatHistoryService: false,
+        onUsage: (cost, usage) =>
+          trackChildSessionUsage(childSession, cost, usage),
+      },
+      () => executeSubAgentInChildSession(options, childSession),
+    );
+  } finally {
+    unregister();
+  }
 }

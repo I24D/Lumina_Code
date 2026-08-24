@@ -5,6 +5,8 @@ import React from "react";
 
 import { getToolDisplayName } from "src/tools/index.js";
 
+import { parseSubagentTaskMetadata } from "../subagent/taskMetadata.js";
+
 import { ColoredDiff } from "./ColoredDiff.js";
 import { ChecklistDisplay } from "./components/ChecklistDisplay.js";
 
@@ -117,15 +119,23 @@ const ToolResultSummary: React.FC<ToolResultSummaryProps> = ({
 
   // show streaming output for subagent tool output
   if (toolName === "Subagent") {
-    const metadataIndex = content.indexOf("<task_metadata>");
-    const actualOutput =
-      metadataIndex >= 0 ? content.slice(0, metadataIndex).trim() : content;
+    const task = parseSubagentTaskMetadata(content);
+    const actualOutput = task.output;
+    const statusColor =
+      task.status === "completed"
+        ? "green"
+        : task.status === "failed"
+          ? "red"
+          : task.status === "canceled"
+            ? "yellow"
+            : "cyan";
+    const statusText = task.status ?? "running";
 
     if (!actualOutput) {
       return (
         <Box>
           <Text color="dim">⎿ </Text>
-          <Text color="dim"> Subagent executing...</Text>
+          <Text color={statusColor}> Subagent {statusText}</Text>
         </Box>
       );
     }
@@ -138,7 +148,10 @@ const ToolResultSummary: React.FC<ToolResultSummaryProps> = ({
         <Box flexDirection="column">
           <Box>
             <Text color="dim">⎿ </Text>
-            <Text color="dim"> Subagent output:</Text>
+            <Text color={statusColor}> Subagent {statusText}</Text>
+            {task.sessionId && (
+              <Text color="dim"> · {task.sessionId.slice(0, 8)}</Text>
+            )}
           </Box>
           <Box paddingLeft={2}>
             <Text>{actualOutput.trimEnd()}</Text>
@@ -151,7 +164,10 @@ const ToolResultSummary: React.FC<ToolResultSummaryProps> = ({
         <Box flexDirection="column">
           <Box>
             <Text color="dim">⎿ </Text>
-            <Text color="dim"> Subagent output:</Text>
+            <Text color={statusColor}> Subagent {statusText}</Text>
+            {task.sessionId && (
+              <Text color="dim"> · {task.sessionId.slice(0, 8)}</Text>
+            )}
           </Box>
           <Box paddingLeft={2}>
             <Text color="dim">

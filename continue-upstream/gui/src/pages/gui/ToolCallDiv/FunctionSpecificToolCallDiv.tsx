@@ -5,6 +5,7 @@ import { CreateFile } from "./CreateFile";
 import { EditFile } from "./EditFile";
 import { FindAndReplaceDisplay } from "./FindAndReplace";
 import { RunTerminalCommand } from "./RunTerminalCommand";
+import { SubagentSession } from "./SubagentSession";
 
 function FunctionSpecificToolCallDiv({
   toolCallState,
@@ -18,6 +19,8 @@ function FunctionSpecificToolCallDiv({
   const toolCall = toolCallState.toolCall;
 
   switch (toolCall.function?.name) {
+    case "Subagent":
+      return <SubagentSession toolCallState={toolCallState} />;
     case BuiltInToolNames.CreateNewFile:
       return (
         <CreateFile

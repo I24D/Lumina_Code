@@ -13,6 +13,8 @@ export interface RuntimeApiDependencies {
   sessionId: string;
   getState: () => unknown;
   listChildren: (parentSessionId: string) => ChildSessionRecord[];
+  cancelChild: (sessionId: string) => boolean;
+  retryChild: (sessionId: string) => Promise<ChildSessionRecord | null>;
   queueMessage: (message: string) => Promise<{ position: number }>;
   resolvePermission: (
     requestId: string,
@@ -50,6 +52,23 @@ export function createRuntimeApiRouter(deps: RuntimeApiDependencies) {
 
   router.get("/sessions/:id/children", (req, res) => {
     res.json(deps.listChildren(req.params.id));
+  });
+
+  router.post("/sessions/:id/cancel", (req, res) => {
+    if (!deps.cancelChild(req.params.id)) {
+      res.status(404).json({ error: "Child session is not running" });
+      return;
+    }
+    res.json({ success: true, sessionId: req.params.id });
+  });
+
+  router.post("/sessions/:id/retry", async (req, res) => {
+    const child = await deps.retryChild(req.params.id);
+    if (!child) {
+      res.status(404).json({ error: "Child session cannot be retried" });
+      return;
+    }
+    res.status(202).json(child);
   });
 
   router.get("/events", (req: Request, res: Response) => {

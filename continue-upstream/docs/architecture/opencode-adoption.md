@@ -60,18 +60,26 @@ OpenAPI 3.1 document is available at `/api/v1/openapi.json`; generated operation
 metadata backs the TypeScript runtime client and is checked against the
 contract in tests. See [runtime-api.md](runtime-api.md).
 
+### Child-session controls and UI
+
+The CLI renders delegated output with lifecycle status and a traceable child
+identifier. Lumina's chat GUI recognizes `Subagent` tool calls and shows a
+dedicated task card with agent, description, status, output or error, and Stop
+or Retry controls. The v1 API implements targeted cancellation and linked
+retries; retry records retain `retryOfSessionId` for auditing. Hosts without a
+runtime API connection keep Retry disabled and use the normal safe stream abort
+fallback for Stop.
+
 ## Next ports
 
-1. Render parent/child sessions in the CLI and Lumina chat UI, including agent,
-   status, permissions, diff, cancellation, and retry controls.
-2. Isolate write-capable delegated work in Git worktrees and require review
+1. Isolate write-capable delegated work in Git worktrees and require review
    before merging results into the user's working tree.
-3. Move permission policy types and evaluation into a shared core package used
+2. Move permission policy types and evaluation into a shared core package used
    by CLI, VS Code, Start Talk, and Windows Bridge.
-4. Expose diagnostics through a portable LSP manager when no IDE language
+3. Expose diagnostics through a portable LSP manager when no IDE language
    server is available.
-5. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
-6. Add ACP support after the versioned runtime API is stable.
+4. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
+5. Add ACP support after the versioned runtime API is stable.
 
 ## Explicit non-goals
 
