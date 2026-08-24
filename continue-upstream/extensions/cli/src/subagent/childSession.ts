@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import type { Session } from "core/index.js";
+import type { Session, Usage } from "core/index.js";
 import { v4 as uuidv4 } from "uuid";
 
 import { getSessionDir } from "../session.js";
@@ -108,6 +108,32 @@ export function saveChildSession(childSession: ChildSessionRecord): void {
     JSON.stringify(childSession, null, 2),
     "utf8",
   );
+}
+
+/** Add model usage to a child without touching the active primary session. */
+export function trackChildSessionUsage(
+  childSession: ChildSessionRecord,
+  cost: number,
+  usage: Usage,
+): void {
+  childSession.usage.totalCost += cost;
+  childSession.usage.promptTokens += usage.promptTokens;
+  childSession.usage.completionTokens += usage.completionTokens;
+
+  if (usage.promptTokensDetails?.cachedTokens) {
+    childSession.usage.promptTokensDetails ??= {};
+    childSession.usage.promptTokensDetails.cachedTokens =
+      (childSession.usage.promptTokensDetails.cachedTokens ?? 0) +
+      usage.promptTokensDetails.cachedTokens;
+  }
+  if (usage.promptTokensDetails?.cacheWriteTokens) {
+    childSession.usage.promptTokensDetails ??= {};
+    childSession.usage.promptTokensDetails.cacheWriteTokens =
+      (childSession.usage.promptTokensDetails.cacheWriteTokens ?? 0) +
+      usage.promptTokensDetails.cacheWriteTokens;
+  }
+
+  saveChildSession(childSession);
 }
 
 export function loadChildSession(sessionId: string): ChildSessionRecord | null {

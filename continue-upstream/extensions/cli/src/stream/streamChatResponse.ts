@@ -21,6 +21,11 @@ import {
 import { logger } from "../util/logger.js";
 import { validateContextLength } from "../util/tokenizer.js";
 
+import {
+  getSystemMessageOverride,
+  resolveToolPermissionState,
+  shouldUseChatHistoryService,
+} from "./executionContext.js";
 import { getRequestTools, handleToolCalls } from "./handleToolCalls.js";
 import {
   handleNormalAutoCompaction,
@@ -75,6 +80,9 @@ function refreshChatHistoryFromService(
   chatHistory: ChatHistoryItem[],
   isCompacting: boolean,
 ): ChatHistoryItem[] {
+  if (!shouldUseChatHistoryService()) {
+    return chatHistory;
+  }
   const chatHistorySvc = services.chatHistory;
   if (
     typeof chatHistorySvc?.isReady === "function" &&
@@ -108,6 +116,7 @@ function handleAutoContinuation(
   // Add a continuation message to the history
   const chatHistorySvc = services.chatHistory;
   if (
+    shouldUseChatHistoryService() &&
     typeof chatHistorySvc?.isReady === "function" &&
     chatHistorySvc.isReady()
   ) {
@@ -193,7 +202,7 @@ interface ProcessStreamingResponseOptions {
 }
 
 // Process a single streaming response and return whether we need to continue
-// eslint-disable-next-line max-statements, complexity
+// eslint-disable-next-line max-statements
 export async function processStreamingResponse(
   options: ProcessStreamingResponseOptions,
 ): Promise<{
@@ -434,7 +443,8 @@ export async function streamChatResponse(
     hasCallbacks: !!callbacks,
   });
 
-  const isHeadless = services.toolPermissions.isHeadless();
+  const initialPermissionState = await resolveToolPermissionState();
+  const isHeadless = initialPermissionState.isHeadless;
 
   let fullResponse = "";
   let finalResponse = "";
@@ -446,9 +456,12 @@ export async function streamChatResponse(
     logger.debug("Starting conversation iteration");
 
     // Get system message once per iteration (can change based on tool permissions mode)
-    const systemMessage = await services.systemMessage.getSystemMessage(
-      services.toolPermissions.getState().currentMode,
-    );
+    const permissionState = await resolveToolPermissionState();
+    const systemMessage =
+      getSystemMessageOverride() ??
+      (await services.systemMessage.getSystemMessage(
+        permissionState.currentMode,
+      ));
 
     // Recompute tools on each iteration to handle mode changes during streaming
     const rawTools = await getRequestTools(isHeadless);

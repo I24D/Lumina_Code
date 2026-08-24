@@ -2,14 +2,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { services } from "../services/index.js";
 import { serviceContainer } from "../services/ServiceContainer.js";
+import {
+  getAgentExecutionContext,
+  runWithAgentExecutionContext,
+} from "../stream/executionContext.js";
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 
-import { createChildSession, saveChildSession } from "./childSession.js";
+import {
+  createChildSession,
+  saveChildSession,
+  trackChildSessionUsage,
+} from "./childSession.js";
 import { executeSubAgent } from "./executor.js";
 
 vi.mock("../services/ServiceContainer.js", () => ({
   serviceContainer: {
     get: vi.fn(),
+    getSync: vi.fn(),
     set: vi.fn(),
   },
 }));
@@ -35,6 +44,7 @@ vi.mock("../stream/streamChatResponse.js", () => ({
 vi.mock("./childSession.js", () => ({
   createChildSession: vi.fn(),
   saveChildSession: vi.fn(),
+  trackChildSessionUsage: vi.fn(),
 }));
 
 describe("executeSubAgent", () => {
@@ -51,6 +61,11 @@ describe("executeSubAgent", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(serviceContainer.getSync).mockReturnValue({
+      state: "ready",
+      value: permissionState,
+      error: null,
+    });
     vi.mocked(serviceContainer.get).mockResolvedValue(permissionState);
     vi.mocked(services.toolPermissions.getState).mockReturnValue(
       permissionState,
@@ -101,7 +116,8 @@ describe("executeSubAgent", () => {
       sessionId: "child-session-id",
       parentSessionId: "parent-session-id",
     });
-    expect(serviceContainer.get).toHaveBeenCalledWith("toolPermissions");
+    expect(serviceContainer.getSync).toHaveBeenCalledWith("toolPermissions");
+    expect(serviceContainer.get).not.toHaveBeenCalled();
     expect(serviceContainer.set).not.toHaveBeenCalled();
     expect(permissionState.permissions.policies).toEqual([
       { tool: "*", permission: "exclude" },
@@ -146,5 +162,137 @@ describe("executeSubAgent", () => {
         error: "provider unavailable",
       }),
     );
+  });
+
+  it("runs sibling subagents concurrently with isolated request state", async () => {
+    let activeStreams = 0;
+    let maxActiveStreams = 0;
+    const contexts: Array<ReturnType<typeof getAgentExecutionContext>> = [];
+    let releaseStreams!: () => void;
+    const release = new Promise<void>((resolve) => {
+      releaseStreams = resolve;
+    });
+
+    vi.mocked(createChildSession).mockImplementation(
+      (parent, agent, prompt) =>
+        ({
+          sessionId: `child-${prompt}`,
+          parentSessionId: parent,
+          agentName: agent,
+          status: "queued",
+          dateCreated: "2026-01-01T00:00:00.000Z",
+          dateUpdated: "2026-01-01T00:00:00.000Z",
+          title: `${agent}: ${prompt}`,
+          workspaceDirectory: process.cwd(),
+          history: [
+            { message: { role: "user", content: prompt }, contextItems: [] },
+          ],
+          usage: {
+            totalCost: 0,
+            promptTokens: 0,
+            completionTokens: 0,
+            promptTokensDetails: {},
+          },
+        }) as any,
+    );
+    vi.mocked(streamChatResponse).mockImplementation(async (history) => {
+      activeStreams += 1;
+      maxActiveStreams = Math.max(maxActiveStreams, activeStreams);
+      contexts.push(getAgentExecutionContext());
+      if (activeStreams === 2) releaseStreams();
+      await release;
+      activeStreams -= 1;
+      history.push({
+        message: { role: "assistant", content: "done" },
+        contextItems: [],
+      } as any);
+      return "done";
+    });
+
+    const run = (prompt: string) =>
+      executeSubAgent({
+        agent: {
+          model: { name: "explore", chatOptions: {} },
+          llmApi: {},
+        } as any,
+        prompt,
+        parentSessionId: "parent-session-id",
+        abortController: new AbortController(),
+      });
+
+    const results = await Promise.all([run("one"), run("two")]);
+
+    expect(maxActiveStreams).toBe(2);
+    expect(contexts.map((context) => context?.sessionId).sort()).toEqual([
+      "child-one",
+      "child-two",
+    ]);
+    expect(contexts.every((context) => context?.kind === "subagent")).toBe(
+      true,
+    );
+    expect(contexts.every((context) => !context?.useChatHistoryService)).toBe(
+      true,
+    );
+    expect(results.every((result) => result.success)).toBe(true);
+    expect(serviceContainer.set).not.toHaveBeenCalled();
+  });
+
+  it("attributes usage through the child request context", async () => {
+    vi.mocked(streamChatResponse).mockImplementationOnce(async (history) => {
+      getAgentExecutionContext()?.onUsage?.(0.05, {
+        promptTokens: 10,
+        completionTokens: 4,
+      });
+      history.push({
+        message: { role: "assistant", content: "safe result" },
+        contextItems: [],
+      } as any);
+      return "safe result";
+    });
+
+    await executeSubAgent({
+      agent: {
+        model: { name: "explore", chatOptions: {} },
+        llmApi: {},
+      } as any,
+      prompt: "inspect",
+      parentSessionId: "parent-session-id",
+      abortController: new AbortController(),
+    });
+
+    expect(trackChildSessionUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "child-session-id" }),
+      0.05,
+      { promptTokens: 10, completionTokens: 4 },
+    );
+  });
+
+  it("rejects nested delegation instead of creating an unbounded tree", async () => {
+    const result = await runWithAgentExecutionContext(
+      {
+        sessionId: "already-a-child",
+        parentSessionId: "parent-session-id",
+        kind: "subagent",
+        permissionState,
+        useChatHistoryService: false,
+      },
+      () =>
+        executeSubAgent({
+          agent: {
+            model: { name: "nested", chatOptions: {} },
+            llmApi: {},
+          } as any,
+          prompt: "delegate again",
+          parentSessionId: "already-a-child",
+          abortController: new AbortController(),
+        }),
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      status: "failed",
+      error: expect.stringContaining("Nested subagents"),
+    });
+    expect(streamChatResponse).not.toHaveBeenCalled();
   });
 });

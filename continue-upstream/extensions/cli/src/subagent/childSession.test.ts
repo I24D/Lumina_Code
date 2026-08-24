@@ -7,6 +7,7 @@ import {
   listChildSessions,
   loadChildSession,
   saveChildSession,
+  trackChildSessionUsage,
 } from "./childSession.js";
 
 describe("child sessions", () => {
@@ -56,5 +57,22 @@ describe("child sessions", () => {
 
   it("rejects path traversal when loading a child session", () => {
     expect(loadChildSession("../outside")).toBeNull();
+  });
+
+  it("persists model usage on the child session", () => {
+    const child = createChildSession(randomUUID(), "review", "Review changes");
+
+    trackChildSessionUsage(child, 0.12, {
+      promptTokens: 100,
+      completionTokens: 25,
+      promptTokensDetails: { cachedTokens: 40, cacheWriteTokens: 10 },
+    });
+
+    expect(loadChildSession(child.sessionId)?.usage).toEqual({
+      totalCost: 0.12,
+      promptTokens: 100,
+      completionTokens: 25,
+      promptTokensDetails: { cachedTokens: 40, cacheWriteTokens: 10 },
+    });
   });
 });

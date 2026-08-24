@@ -13,6 +13,11 @@ import { updateSessionHistory } from "../session.js";
 import { formatError } from "../util/formatError.js";
 import { logger } from "../util/logger.js";
 
+import {
+  resolveToolPermissionState,
+  shouldUseChatHistoryService,
+} from "./executionContext.js";
+
 interface AutoCompactionCallbacks {
   // For streaming mode
   onSystemMessage?: (message: string) => void;
@@ -167,8 +172,9 @@ export async function handleAutoCompaction(
       providedSystemMessage ??
       (async () => {
         const { services } = await import("../services/index.js");
+        const permissionState = await resolveToolPermissionState();
         return services.systemMessage.getSystemMessage(
-          services.toolPermissions.getState().currentMode,
+          permissionState.currentMode,
         );
       })();
     const resolvedSystemMessage =
@@ -198,7 +204,9 @@ export async function handleAutoCompaction(
     });
 
     // Save the compacted session
-    updateSessionHistory(result.compactedHistory);
+    if (shouldUseChatHistoryService()) {
+      updateSessionHistory(result.compactedHistory);
+    }
 
     // Handle success notification
     handleCompactionSuccess(result, isHeadless, callbacks);

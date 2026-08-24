@@ -1,11 +1,11 @@
+/* eslint-disable import/order -- test mocks confuse the TypeScript path resolver */
 import type { ChatHistoryItem, ToolStatus } from "core/index.js";
 import { convertFromUnifiedHistory } from "core/util/messageConversion.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { services } from "../services/index.js";
-
-// eslint-disable-next-line
-import { handleToolCalls } from "./handleToolCalls.js"; // for some reason can't resolve import groups here
+import { handleToolCalls } from "./handleToolCalls.js";
+/* eslint-enable import/order */
 
 // Mock the services
 vi.mock("../services/index.js", () => ({
@@ -388,5 +388,62 @@ describe("handleToolCalls - duplicate tool_result prevention", () => {
       (item) => item.message.role === "tool",
     );
     expect(separateToolMessages).toHaveLength(0);
+  });
+
+  it("keeps successful child tool results in child-local history", async () => {
+    const { runWithAgentExecutionContext } = await import(
+      "./executionContext.js"
+    );
+    vi.mocked(services.chatHistory.isReady).mockReturnValue(true);
+    const toolCalls = [
+      {
+        id: "child-tool-1",
+        name: "Read",
+        arguments: { path: "README.md" },
+        argumentsStr: '{"path":"README.md"}',
+        startNotified: false,
+      },
+    ];
+    mockPreprocess.mockResolvedValue({
+      preprocessedCalls: [toolCalls[0] as any],
+      errorChatEntries: [],
+    });
+    mockExecute.mockResolvedValue({
+      hasRejection: false,
+      chatHistoryEntries: [
+        {
+          role: "tool",
+          tool_call_id: "child-tool-1",
+          content: "README contents",
+          status: "done",
+        },
+      ],
+    });
+
+    await runWithAgentExecutionContext(
+      {
+        sessionId: "child-session",
+        parentSessionId: "parent-session",
+        kind: "subagent",
+        useChatHistoryService: false,
+      },
+      () =>
+        handleToolCalls({
+          toolCalls,
+          chatHistory,
+          content: "",
+          callbacks: undefined,
+          isHeadless: false,
+        }),
+    );
+
+    expect(services.chatHistory.addAssistantMessage).not.toHaveBeenCalled();
+    expect(services.chatHistory.addToolResult).not.toHaveBeenCalled();
+    const toolState = chatHistory.at(-1)?.toolCallStates?.[0];
+    expect(toolState).toMatchObject({
+      toolCallId: "child-tool-1",
+      status: "done",
+      output: [expect.objectContaining({ content: "README contents" })],
+    });
   });
 });

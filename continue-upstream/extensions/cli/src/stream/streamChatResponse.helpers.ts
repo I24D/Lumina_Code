@@ -6,17 +6,10 @@ import { calculateRequestCost } from "core/llm/utils/calculateRequestCost.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { ChatCompletionToolMessageParam } from "openai/resources/chat/completions.mjs";
 
-import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
-
 import { checkToolPermission } from "../permissions/permissionChecker.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import { ToolCallRequest, ToolPermissions } from "../permissions/types.js";
-import {
-  SERVICE_NAMES,
-  serviceContainer,
-  services,
-} from "../services/index.js";
-import { trackSessionUsage } from "../session.js";
+import { services } from "../services/index.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
   executeToolCall,
@@ -27,10 +20,42 @@ import {
 import { PreprocessedToolCall, ToolCall } from "../tools/types.js";
 import { logger } from "../util/logger.js";
 
+import {
+  resolveToolPermissionState,
+  shouldUseChatHistoryService,
+  trackAgentExecutionUsage,
+} from "./executionContext.js";
 import { StreamCallbacks } from "./streamChatResponse.types.js";
 
 export interface ToolResultWithStatus extends ChatCompletionToolMessageParam {
   status: ToolStatus;
+}
+
+function updatePrimaryToolResult(
+  enabled: boolean,
+  toolCallId: string,
+  content: string,
+  status: ToolStatus,
+): void {
+  if (!enabled) return;
+  try {
+    services.chatHistory.addToolResult(toolCallId, content, status);
+  } catch {
+    // The primary history service may not be initialized in headless callers.
+  }
+}
+
+function updatePrimaryToolStatus(
+  enabled: boolean,
+  toolCallId: string,
+  status: ToolStatus,
+): void {
+  if (!enabled) return;
+  try {
+    services.chatHistory.updateToolStatus(toolCallId, status);
+  } catch {
+    // The primary history service may not be initialized in headless callers.
+  }
 }
 
 // Helper function to handle permission denied
@@ -352,7 +377,7 @@ export function recordStreamTelemetry(options: {
   }
 
   telemetryService.recordCost(cost, model.model);
-  trackSessionUsage(cost, usage);
+  trackAgentExecutionUsage(cost, usage);
 
   telemetryService.recordResponseTime(
     totalDuration,
@@ -489,6 +514,7 @@ export async function executeStreamedToolCalls(
 
   const entriesByIndex = new Map<number, ToolResultWithStatus>();
   const execPromises: Promise<void>[] = [];
+  const useHistoryService = shouldUseChatHistoryService();
 
   let hasRejection = false;
 
@@ -506,10 +532,7 @@ export async function executeStreamedToolCalls(
       callbacks?.onToolStart?.(call.name, call.arguments);
 
       // Check tool permissions using helper
-      const permissionState =
-        await serviceContainer.get<ToolPermissionServiceState>(
-          SERVICE_NAMES.TOOL_PERMISSIONS,
-        );
+      const permissionState = await resolveToolPermissionState();
       const permissionResult = await checkToolPermissionApproval(
         permissionState.permissions,
         call,
@@ -537,23 +560,20 @@ export async function executeStreamedToolCalls(
           call.name,
           "canceled",
         );
-        // Immediate service update for UI feedback
-        try {
-          services.chatHistory.addToolResult(
-            call.id,
-            String(deniedEntry.content),
-            "canceled",
-          );
-        } catch {}
+        // Immediate service update for UI feedback in the primary session.
+        updatePrimaryToolResult(
+          useHistoryService,
+          call.id,
+          String(deniedEntry.content),
+          "canceled",
+        );
         hasRejection = true;
         // Remaining items will be auto-cancelled in subsequent iterations
         continue;
       }
 
       // Immediately mark as calling for instant UI feedback
-      try {
-        services.chatHistory.updateToolStatus(call.id, "calling");
-      } catch {}
+      updatePrimaryToolStatus(useHistoryService, call.id, "calling");
 
       // Start execution immediately for approved calls
       execPromises.push(
@@ -576,13 +596,12 @@ export async function executeStreamedToolCalls(
             entriesByIndex.set(index, entry);
             callbacks?.onToolResult?.(toolResult, call.name, "done");
             // Immediate service update for UI feedback
-            try {
-              services.chatHistory.addToolResult(
-                call.id,
-                String(toolResult),
-                "done",
-              );
-            } catch {}
+            updatePrimaryToolResult(
+              useHistoryService,
+              call.id,
+              String(toolResult),
+              "done",
+            );
           } catch (error) {
             const errorMessage = `Error executing tool ${call.name}: ${
               error instanceof Error ? error.message : String(error)
@@ -599,13 +618,12 @@ export async function executeStreamedToolCalls(
             });
             callbacks?.onToolError?.(errorMessage, call.name);
             // Immediate service update for UI feedback
-            try {
-              services.chatHistory.addToolResult(
-                call.id,
-                errorMessage as string,
-                "errored",
-              );
-            } catch {}
+            updatePrimaryToolResult(
+              useHistoryService,
+              call.id,
+              errorMessage,
+              "errored",
+            );
           }
         })(),
       );
@@ -625,13 +643,12 @@ export async function executeStreamedToolCalls(
       });
       callbacks?.onToolError?.(errorMessage, call.name);
       // Treat permission errors like execution errors but do not stop the batch
-      try {
-        services.chatHistory.addToolResult(
-          call.id,
-          errorMessage as string,
-          "errored",
-        );
-      } catch {}
+      updatePrimaryToolResult(
+        useHistoryService,
+        call.id,
+        errorMessage,
+        "errored",
+      );
     }
   }
 

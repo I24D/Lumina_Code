@@ -24,12 +24,16 @@ Start Talk, or Windows capabilities.
 
 The CLI subagent executor inherits the active permission policy. It no longer
 replaces that policy with `allow *`. This applies equally to normal, Plan, Auto,
-headless, command-line, and personal permission policies.
+headless, command-line, and personal permission policies. Delegated policies
+are deep snapshots, so a later mode switch cannot elevate an in-flight child.
 
-The current stream still temporarily changes process-global system-message and
-chat-history services. Subagent execution is therefore serialized until these
-services become request-scoped. Nested delegation fails explicitly rather than
-deadlocking or silently escalating privileges.
+### Request-scoped parallel execution
+
+System messages, permission state, chat history, streaming terminal output,
+tool results, compaction writes, and usage accounting are request-scoped with
+Node's asynchronous context storage. Independent child sessions can therefore
+run concurrently without mutating the active primary session or one another.
+Nested delegation still fails explicitly to prevent unbounded agent trees.
 
 ### Child sessions
 
@@ -40,6 +44,7 @@ Each subagent run is persisted as a child-session record containing:
 - agent name and lifecycle status (`queued`, `running`, `completed`, `failed`,
   or `canceled`);
 - prompt and generated history;
+- token and cost usage attributed to that child only;
 - failure or cancellation information.
 
 Child records are stored under the CLI session directory's `children` folder.
@@ -48,20 +53,18 @@ They do not pollute the top-level chat list. `cn serve` exposes them through
 
 ## Next ports
 
-1. Make system messages, permissions, tool results, and chat history fully
-   request-scoped so independent child sessions can run in parallel safely.
-2. Extend `cn serve` with a versioned API, event stream, health endpoint, and an
+1. Extend `cn serve` with a versioned API, event stream, health endpoint, and an
    OpenAPI document; generate a TypeScript client from that contract.
-3. Render parent/child sessions in the CLI and Lumina chat UI, including agent,
+2. Render parent/child sessions in the CLI and Lumina chat UI, including agent,
    status, permissions, diff, cancellation, and retry controls.
-4. Isolate write-capable delegated work in Git worktrees and require review
+3. Isolate write-capable delegated work in Git worktrees and require review
    before merging results into the user's working tree.
-5. Move permission policy types and evaluation into a shared core package used
+4. Move permission policy types and evaluation into a shared core package used
    by CLI, VS Code, Start Talk, and Windows Bridge.
-6. Expose diagnostics through a portable LSP manager when no IDE language
+5. Expose diagnostics through a portable LSP manager when no IDE language
    server is available.
-7. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
-8. Add ACP support after the versioned runtime API is stable.
+6. Unify CLI hooks, MCP, skills, and custom tools behind a typed plugin API.
+7. Add ACP support after the versioned runtime API is stable.
 
 ## Explicit non-goals
 

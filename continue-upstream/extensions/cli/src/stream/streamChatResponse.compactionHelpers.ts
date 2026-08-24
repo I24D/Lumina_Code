@@ -8,6 +8,7 @@ import { ToolCall } from "../tools/index.js";
 import { logger } from "../util/logger.js";
 import { validateContextLength } from "../util/tokenizer.js";
 
+import { shouldUseChatHistoryService } from "./executionContext.js";
 import { handleAutoCompaction } from "./streamChatResponse.autoCompaction.js";
 import { StreamCallbacks } from "./streamChatResponse.types.js";
 
@@ -57,6 +58,7 @@ export async function handlePreApiCompaction(
     logger.debug("Pre-API compaction occurred, updating chat history");
     const chatHistorySvc = services.chatHistory;
     if (
+      shouldUseChatHistoryService() &&
       typeof chatHistorySvc?.isReady === "function" &&
       chatHistorySvc.isReady()
     ) {
@@ -87,6 +89,7 @@ export async function handlePostToolValidation(
   // Get updated history after tool execution
   const chatHistorySvc = services.chatHistory;
   if (
+    shouldUseChatHistoryService() &&
     typeof chatHistorySvc?.isReady === "function" &&
     chatHistorySvc.isReady()
   ) {
@@ -123,7 +126,11 @@ export async function handlePostToolValidation(
 
     if (wasCompacted) {
       // Use the service to update history if available, otherwise use local copy
-      if (chatHistorySvc && typeof chatHistorySvc.setHistory === "function") {
+      if (
+        shouldUseChatHistoryService() &&
+        chatHistorySvc &&
+        typeof chatHistorySvc.setHistory === "function"
+      ) {
         chatHistorySvc.setHistory(compactedHistory);
         chatHistory = chatHistorySvc.getHistory();
       } else {
@@ -187,6 +194,7 @@ export async function handleNormalAutoCompaction(
 
   const chatHistorySvc = services.chatHistory;
   if (
+    shouldUseChatHistoryService() &&
     typeof chatHistorySvc?.isReady === "function" &&
     chatHistorySvc.isReady()
   ) {
@@ -206,7 +214,11 @@ export async function handleNormalAutoCompaction(
 
   if (wasCompacted) {
     // Use the service to update history if available, otherwise use local copy
-    if (chatHistorySvc && typeof chatHistorySvc.setHistory === "function") {
+    if (
+      shouldUseChatHistoryService() &&
+      chatHistorySvc &&
+      typeof chatHistorySvc.setHistory === "function"
+    ) {
       chatHistorySvc.setHistory(updatedChatHistory);
       return {
         chatHistory: chatHistorySvc.getHistory(),

@@ -4,12 +4,7 @@ import { createHistoryItem } from "core/util/messageConversion.js";
 
 import { checkToolPermission } from "src/permissions/permissionChecker.js";
 
-import {
-  SERVICE_NAMES,
-  serviceContainer,
-  services,
-} from "../services/index.js";
-import type { ToolPermissionServiceState } from "../services/ToolPermissionService.js";
+import { services } from "../services/index.js";
 import {
   convertToolToChatCompletionTool,
   getAllAvailableTools,
@@ -18,6 +13,10 @@ import {
 } from "../tools/index.js";
 import { logger } from "../util/logger.js";
 
+import {
+  resolveToolPermissionState,
+  shouldUseChatHistoryService,
+} from "./executionContext.js";
 import {
   executeStreamedToolCalls,
   preprocessStreamedToolCalls,
@@ -40,7 +39,9 @@ export async function handleToolCalls(
     options;
   const chatHistorySvc = services.chatHistory;
   const useService =
-    typeof chatHistorySvc?.isReady === "function" && chatHistorySvc.isReady();
+    shouldUseChatHistoryService() &&
+    typeof chatHistorySvc?.isReady === "function" &&
+    chatHistorySvc.isReady();
   if (toolCalls.length === 0) {
     if (content) {
       if (useService) {
@@ -149,11 +150,32 @@ export async function handleToolCalls(
   // Execute the valid preprocessed tool calls
   // Note: executeStreamedToolCalls adds tool results to toolCallStates via
   // services.chatHistory.addToolResult() internally
-  const { hasRejection } = await executeStreamedToolCalls(
+  const { hasRejection, chatHistoryEntries } = await executeStreamedToolCalls(
     preprocessedCalls,
     callbacks,
     isHeadless,
   );
+
+  if (!useService && chatHistoryEntries.length > 0) {
+    const lastAssistant = chatHistory.findLast(
+      (item) => item.message.role === "assistant" && item.toolCallStates,
+    );
+    for (const entry of chatHistoryEntries) {
+      const toolState = lastAssistant?.toolCallStates?.find(
+        (state) => state.toolCallId === entry.tool_call_id,
+      );
+      if (toolState) {
+        toolState.status = entry.status;
+        toolState.output = [
+          {
+            content: stripImages(entry.content) || "",
+            name: "Tool Result",
+            description: "Tool execution result",
+          },
+        ];
+      }
+    }
+  }
 
   if (isHeadless && hasRejection) {
     logger.debug(
@@ -172,10 +194,7 @@ export async function handleToolCalls(
 export async function getRequestTools(isHeadless: boolean) {
   const availableTools = await getAllAvailableTools(isHeadless);
 
-  const permissionsState =
-    await serviceContainer.get<ToolPermissionServiceState>(
-      SERVICE_NAMES.TOOL_PERMISSIONS,
-    );
+  const permissionsState = await resolveToolPermissionState();
 
   const allowedTools: Tool[] = [];
   for (const tool of availableTools) {

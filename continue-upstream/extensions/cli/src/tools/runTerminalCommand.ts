@@ -8,6 +8,7 @@ import {
 
 import { backgroundJobService } from "../services/BackgroundJobService.js";
 import { services } from "../services/index.js";
+import { shouldUseChatHistoryService } from "../stream/executionContext.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
   isGitCommitCommand,
@@ -286,7 +287,7 @@ IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed
       };
 
       const showCurrentOutput = () => {
-        if (!context?.toolCallId) return;
+        if (!context?.toolCallId || !shouldUseChatHistoryService()) return;
         try {
           const currentOutput = stdout + (stderr ? `\nStderr: ${stderr}` : "");
           services.chatHistory.addToolResult(
