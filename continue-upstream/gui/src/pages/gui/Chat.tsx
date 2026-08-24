@@ -14,6 +14,10 @@ import { ErrorBoundary } from "react-error-boundary";
 import styled from "styled-components";
 import { Button, lightGray, vscBackground } from "../../components";
 import { LuminaActivityFeed } from "../../components/LuminaActivityFeed";
+import {
+  LuminaPromptQueue,
+  type QueuedPrompt,
+} from "../../components/LuminaPromptQueue";
 import { LuminaWorkingIndicator } from "../../components/LuminaWorkingIndicator";
 import { useFindWidget } from "../../components/find/FindWidget";
 import TimelineItem from "../../components/gui/TimelineItem";
@@ -127,10 +131,20 @@ export function Chat() {
   );
   const isStreaming = useAppSelector((state) => state.session.isStreaming);
   const [stepsOpen] = useState<(boolean | undefined)[]>([]);
+  const [queuedInputs, setQueuedInputs] = useState<
+    Array<
+      QueuedPrompt & {
+        editorState: JSONContent;
+        modifiers: InputModifiers;
+      }
+    >
+  >([]);
+  const queueDrainRef = useRef(false);
   const mainTextInputRef = useRef<HTMLInputElement>(null);
   const stepsDivRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
   const history = useAppSelector((state) => state.session.history);
+  const sessionId = useAppSelector((state) => state.session.id);
   const showChatScrollbar = useAppSelector(
     (state) => state.config.config.ui?.showChatScrollbar,
   );
@@ -186,6 +200,32 @@ export function Chat() {
       const selectedModelByRole =
         stateSnapshot.config.config.selectedModelByRole;
       const currentMode = stateSnapshot.session.mode;
+
+      if (
+        stateSnapshot.session.isStreaming &&
+        typeof index === "undefined" &&
+        !isCurrentlyInEdit
+      ) {
+        if (!selectedModelByRole.chat) {
+          return;
+        }
+        const preview = editorState.content
+          ?.flatMap((node) => node.content ?? [])
+          .map((node) => node.text ?? "")
+          .join(" ")
+          .trim();
+        setQueuedInputs((current) => [
+          ...current,
+          {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            editorState,
+            modifiers,
+            preview: preview || "Mensaje con contexto adjunto",
+          },
+        ]);
+        editorToClearOnSend?.commands.clearContent();
+        return;
+      }
 
       // Cancel all pending tool calls
       latestPendingToolCalls.forEach((toolCallState) => {
@@ -243,6 +283,23 @@ export function Chat() {
     },
     [dispatch, ideMessenger, reduxStore],
   );
+
+  useEffect(() => {
+    if (isStreaming || queuedInputs.length === 0 || queueDrainRef.current) {
+      return;
+    }
+    queueDrainRef.current = true;
+    const [next, ...remaining] = queuedInputs;
+    setQueuedInputs(remaining);
+    sendInput(next.editorState, next.modifiers);
+    queueDrainRef.current = false;
+  }, [isStreaming, queuedInputs, sendInput]);
+
+  useEffect(() => {
+    // Queued prompts belong to the active conversation and must never leak
+    // into a session selected from the navigation rail.
+    setQueuedInputs([]);
+  }, [sessionId]);
 
   useWebviewListener(
     "newSession",
@@ -402,77 +459,92 @@ export function Chat() {
   const showScrollbar = showChatScrollbar ?? window.innerHeight > 5000;
 
   return (
-    <>
+    <div className="lumina-chat">
       {!!showSessionTabs && !isInEdit && <TabBar ref={tabsRef} />}
       {widget}
       <LuminaAvatarStrip />
 
       <StepsDiv
         ref={stepsDivRef}
-        className={`pt-[8px] ${showScrollbar ? "thin-scrollbar" : "no-scrollbar"} ${history.length > 0 ? "min-h-0 flex-1 overflow-y-scroll" : "shrink-0"}`}
+        className={`lumina-chat-thread ${showScrollbar ? "thin-scrollbar" : "no-scrollbar"}`}
       >
-        <DeprecationBanner dismissable={true} />
-        {highlights}
-        {history
-          .filter((item) => item.message.role !== "system")
-          .map((item, index: number) => (
-            <div
-              key={item.message.id}
-              style={{
-                minHeight: index === history.length - 1 ? "200px" : 0,
-              }}
-            >
-              <ErrorBoundary
-                FallbackComponent={fallbackRender}
-                onReset={() => {
-                  dispatch(newSession());
-                }}
-              >
-                {renderChatHistoryItem(item, index)}
-              </ErrorBoundary>
-              {index === history.length - 1 && <InlineErrorMessage />}
-            </div>
-          ))}
-      </StepsDiv>
-      <LuminaWorkingIndicator />
-      <LuminaActivityFeed />
-      <div className={"relative shrink-0"}>
-        <ContinueInputBox
-          isMainInput
-          isLastUserInput={false}
-          onEnter={(editorState, modifiers, editor) =>
-            sendInput(editorState, modifiers, undefined, editor)
-          }
-          inputId={MAIN_EDITOR_INPUT_ID}
-        />
-
-        <div
-          style={{
-            pointerEvents: isStreaming ? "none" : "auto",
-          }}
-        >
-          <div className="flex flex-row items-center justify-between pb-1 pl-0.5 pr-2">
-            <div className="xs:inline hidden">
-              {history.length === 0 && lastSessionId && !isInEdit && (
-                <NewSessionButton
-                  onClick={async () => {
-                    await dispatch(loadLastSession());
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <ArrowLeftIcon className="h-3 w-3" />
-                  <span className="text-xs">Last Session</span>
-                </NewSessionButton>
-              )}
-            </div>
-          </div>
-          <FatalErrorIndicator />
-          {!hasDismissedExploreDialog && <ExploreDialogWatcher />}
+        <div className="lumina-chat-thread__inner">
+          <DeprecationBanner dismissable={true} />
+          {highlights}
           {history.length === 0 && (
             <EmptyChatBody showOnboardingCard={onboardingCard.show} />
           )}
+          {history
+            .filter((item) => item.message.role !== "system")
+            .map((item, index: number) => (
+              <div
+                key={item.message.id}
+                className="lumina-chat-turn"
+                style={{
+                  minHeight: index === history.length - 1 ? "160px" : 0,
+                }}
+              >
+                <ErrorBoundary
+                  FallbackComponent={fallbackRender}
+                  onReset={() => {
+                    dispatch(newSession());
+                  }}
+                >
+                  {renderChatHistoryItem(item, index)}
+                </ErrorBoundary>
+                {index === history.length - 1 && <InlineErrorMessage />}
+              </div>
+            ))}
+        </div>
+      </StepsDiv>
+      <div className="lumina-chat-runtime">
+        <LuminaPromptQueue
+          prompts={queuedInputs}
+          onRemove={(id) =>
+            setQueuedInputs((current) =>
+              current.filter((prompt) => prompt.id !== id),
+            )
+          }
+        />
+        <LuminaWorkingIndicator />
+        <LuminaActivityFeed />
+      </div>
+      <div className="lumina-chat-composer">
+        <div className="lumina-chat-composer__inner">
+          <ContinueInputBox
+            isMainInput
+            isLastUserInput={false}
+            onEnter={(editorState, modifiers, editor) =>
+              sendInput(editorState, modifiers, undefined, editor)
+            }
+            inputId={MAIN_EDITOR_INPUT_ID}
+          />
+
+          <div
+            style={{
+              pointerEvents: isStreaming ? "none" : "auto",
+            }}
+          >
+            <div className="flex flex-row items-center justify-between pb-1 pl-0.5 pr-2">
+              <div className="xs:inline hidden">
+                {history.length === 0 && lastSessionId && !isInEdit && (
+                  <NewSessionButton
+                    onClick={async () => {
+                      await dispatch(loadLastSession());
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <ArrowLeftIcon className="h-3 w-3" />
+                    <span className="text-xs">Última sesión</span>
+                  </NewSessionButton>
+                )}
+              </div>
+            </div>
+            <FatalErrorIndicator />
+            {!hasDismissedExploreDialog && <ExploreDialogWatcher />}
+          </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

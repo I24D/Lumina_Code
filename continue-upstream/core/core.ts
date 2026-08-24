@@ -101,6 +101,8 @@ import type { IMessenger, Message } from "./protocol/messenger";
 import {
   resolveStartTalkGeminiEnv,
   selectStartTalkGeminiEnv,
+  type StartTalkConfigStatus,
+  type StartTalkConfigUpdate,
   type StartTalkGeminiConfigStore,
 } from "./startTalk/env.js";
 import { clearGoal, getGoal, listGoals, setGoal } from "./goals/goalStore.js";
@@ -869,6 +871,15 @@ export class Core {
       });
     });
 
+    on("startTalk/getConfigStatus", async () =>
+      this.getStartTalkConfigStatus(),
+    );
+
+    on("startTalk/configure", async (msg) => {
+      await this.configureStartTalk(msg.data);
+      return this.getStartTalkConfigStatus();
+    });
+
     on("startTalk/sendAudio", async (msg) => {
       this.startTalkManager.sendAudio(msg.data);
     });
@@ -1451,6 +1462,56 @@ export class Core {
       thinkingLevel,
       voiceName,
     };
+  }
+
+  private async getStartTalkConfigStatus(): Promise<StartTalkConfigStatus> {
+    const workspaceDirs = await this.ide.getWorkspaceDirs();
+    const workspaceConfig = resolveStartTalkGeminiEnv(workspaceDirs);
+    const storedConfig = await this.startTalkConfigStore?.load();
+    const selected = selectStartTalkGeminiEnv(workspaceConfig, storedConfig);
+    const source = workspaceConfig.apiKey
+      ? "workspace"
+      : storedConfig?.apiKey
+        ? "secureStorage"
+        : "missing";
+
+    return {
+      configured: Boolean(selected.apiKey),
+      source,
+      model: selected.model,
+      thinkingLevel: selected.thinkingLevel,
+      voiceName: selected.voiceName,
+    };
+  }
+
+  private async configureStartTalk(
+    update: StartTalkConfigUpdate,
+  ): Promise<void> {
+    if (!this.startTalkConfigStore) {
+      throw new Error("Secure Start Talk configuration is unavailable.");
+    }
+
+    const existing = await this.startTalkConfigStore.load();
+    const workspaceDirs = await this.ide.getWorkspaceDirs();
+    const workspaceConfig = resolveStartTalkGeminiEnv(workspaceDirs);
+    const apiKey =
+      update.apiKey?.trim() || workspaceConfig.apiKey || existing?.apiKey;
+    if (!apiKey) {
+      throw new Error("A Gemini API key is required to configure Start Talk.");
+    }
+
+    await this.startTalkConfigStore.save({
+      apiKey,
+      model: update.model?.trim() || workspaceConfig.model || existing?.model,
+      thinkingLevel:
+        update.thinkingLevel ??
+        workspaceConfig.thinkingLevel ??
+        existing?.thinkingLevel,
+      voiceName:
+        update.voiceName?.trim() ||
+        workspaceConfig.voiceName ||
+        existing?.voiceName,
+    });
   }
 
   private async isItemTooBig(item: ContextItemWithId) {

@@ -17,7 +17,27 @@
 }
 
 :root {
-  --example-var: rgb(30, 30, 30);
+  --lumina-accent: #ff5c5c;
+  --lumina-accent-strong: #f04444;
+  --lumina-accent-soft: rgba(255, 92, 92, 0.12);
+  --lumina-positive: #2eb67d;
+  --lumina-warning: #e8a52b;
+  --lumina-danger: #e05252;
+  --lumina-radius-sm: 6px;
+  --lumina-radius-md: 10px;
+  --lumina-radius-lg: 14px;
+  --lumina-sidebar-width: 258px;
+  --lumina-sidebar-collapsed-width: 62px;
+  --lumina-border: var(--vscode-panel-border, rgba(127, 127, 127, 0.24));
+  --lumina-surface: var(
+    --vscode-sideBar-background,
+    var(--vscode-editor-background)
+  );
+  --lumina-surface-raised: var(
+    --vscode-input-background,
+    rgba(127, 127, 127, 0.09)
+  );
+  --lumina-muted: var(--vscode-descriptionForeground, #9a9ca5);
 }
 
 html,
@@ -51,6 +71,11 @@ body {
 /* To override the default `-webkit-focus-ring-color` that is an ugly orange */
 *:focus {
   outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, var(--lumina-accent));
+  outline-offset: 2px;
 }
 
 @keyframes fadeIn {
@@ -147,14 +172,18 @@ body {
 
 .lumina-workspace-switcher {
   position: relative;
-  z-index: 50;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  z-index: 40;
+  display: flex;
   align-items: center;
-  min-height: 42px;
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.24));
-  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  gap: 8px;
+  min-height: 47px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--lumina-border);
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-background) 94%,
+    var(--vscode-foreground) 6%
+  );
   color: var(--vscode-foreground);
 }
 
@@ -177,10 +206,1646 @@ body {
   object-fit: contain;
 }
 
+.lumina-workspace-switcher__brand {
+  flex: 1;
+}
+
 .lumina-workspace-switcher__runtime {
-  justify-self: end;
+  margin-left: auto;
   color: var(--vscode-descriptionForeground);
   font-weight: 500;
+}
+
+.lumina-shell {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--vscode-editor-background);
+}
+
+.lumina-skip-link {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  z-index: 1000;
+  padding: 7px 12px;
+  border-radius: var(--lumina-radius-sm);
+  background: var(--vscode-button-background, var(--lumina-accent));
+  color: var(--vscode-button-foreground, #fff);
+  transform: translate(-50%, -160%);
+  transition: transform 120ms ease;
+}
+
+.lumina-skip-link:focus {
+  transform: translate(-50%, 0);
+}
+
+.lumina-sidebar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 90;
+  display: flex;
+  width: min(292px, calc(100vw - 42px));
+  min-height: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--lumina-border);
+  background: color-mix(
+    in srgb,
+    var(--lumina-surface) 97%,
+    var(--vscode-foreground) 3%
+  );
+  box-shadow: 18px 0 48px rgba(0, 0, 0, 0.28);
+  transform: translateX(-104%);
+  transition: transform 180ms ease;
+}
+
+.lumina-shell[data-drawer-open] .lumina-sidebar {
+  transform: translateX(0);
+}
+
+.lumina-sidebar__brand {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--lumina-border);
+}
+
+.lumina-sidebar__logo {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  object-fit: contain;
+}
+
+.lumina-sidebar__brand-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.lumina-sidebar__brand-copy strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumina-sidebar__brand-copy span {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--lumina-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.lumina-icon-button {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--lumina-radius-sm);
+  background: transparent;
+  color: inherit;
+}
+
+.lumina-icon-button:hover {
+  border-color: var(--lumina-border);
+  background: var(--vscode-toolbar-hoverBackground, rgba(127, 127, 127, 0.13));
+}
+
+.lumina-icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.lumina-new-chat {
+  display: flex;
+  min-height: 38px;
+  cursor: pointer;
+  align-items: center;
+  gap: 8px;
+  margin: 10px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--lumina-accent) 42%, transparent);
+  border-radius: var(--lumina-radius-md);
+  background: var(--lumina-accent-soft);
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.lumina-new-chat:hover {
+  border-color: var(--lumina-accent);
+  background: color-mix(in srgb, var(--lumina-accent) 18%, transparent);
+}
+
+.lumina-new-chat svg {
+  width: 18px;
+  height: 18px;
+  color: var(--lumina-accent);
+}
+
+.lumina-new-chat span {
+  min-width: 0;
+  flex: 1;
+}
+
+.lumina-new-chat kbd,
+.lumina-command-trigger kbd,
+.lumina-command-palette kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--lumina-border);
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.08);
+  color: var(--lumina-muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.lumina-sidebar__scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+
+.lumina-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.lumina-nav-group__label {
+  padding: 6px 8px 4px;
+  color: var(--lumina-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.lumina-nav-item {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  cursor: pointer;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--lumina-radius-sm);
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  text-align: left;
+}
+
+.lumina-nav-item:hover {
+  background: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1));
+}
+
+.lumina-nav-item[data-active] {
+  border-color: color-mix(in srgb, var(--lumina-accent) 28%, transparent);
+  background: var(--lumina-accent-soft);
+}
+
+.lumina-nav-item > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: var(--lumina-muted);
+}
+
+.lumina-nav-item[data-active] > svg {
+  color: var(--lumina-accent);
+}
+
+.lumina-nav-item__copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.lumina-nav-item__copy strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumina-nav-item__copy small {
+  overflow: hidden;
+  color: var(--lumina-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumina-recents {
+  margin: 12px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--lumina-border);
+}
+
+.lumina-recents__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 5px;
+  color: var(--lumina-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lumina-recents__heading button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: var(--lumina-muted);
+  font: inherit;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.lumina-recents__heading button:hover {
+  color: var(--vscode-textLink-foreground, var(--lumina-accent));
+}
+
+.lumina-recent-session {
+  display: flex;
+  width: 100%;
+  cursor: pointer;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--lumina-radius-sm);
+  background: transparent;
+  color: var(--lumina-muted);
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+}
+
+.lumina-recent-session:hover,
+.lumina-recent-session[data-active] {
+  background: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1));
+  color: var(--vscode-foreground);
+}
+
+.lumina-recent-session svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+}
+
+.lumina-recent-session span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumina-sidebar__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-top: 1px solid var(--lumina-border);
+}
+
+.lumina-nav-collapse {
+  display: none;
+  width: 100%;
+  cursor: pointer;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--lumina-radius-sm);
+  background: transparent;
+  color: var(--lumina-muted);
+  font: inherit;
+  font-size: 10px;
+}
+
+.lumina-nav-collapse:hover {
+  background: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1));
+  color: var(--vscode-foreground);
+}
+
+.lumina-nav-collapse svg {
+  width: 16px;
+  height: 16px;
+}
+
+.lumina-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: none;
+  cursor: default;
+  border: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.lumina-shell[data-drawer-open] .lumina-drawer-backdrop {
+  display: block;
+}
+
+.lumina-workspace {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lumina-workspace__content {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.lumina-menu-button {
+  margin-left: -2px;
+}
+
+.lumina-command-trigger {
+  display: flex;
+  height: 30px;
+  cursor: pointer;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-sm);
+  background: var(--lumina-surface-raised);
+  color: var(--lumina-muted);
+  font: inherit;
+  font-size: 10px;
+}
+
+.lumina-command-trigger:hover {
+  color: var(--vscode-foreground);
+}
+
+.lumina-command-trigger svg {
+  width: 14px;
+  height: 14px;
+}
+
+.lumina-command-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  justify-content: center;
+  padding: min(12vh, 88px) 12px 12px;
+  background: rgba(0, 0, 0, 0.44);
+  backdrop-filter: blur(3px);
+}
+
+.lumina-command-palette {
+  width: min(560px, 100%);
+  max-height: min(520px, 76vh);
+  align-self: flex-start;
+  overflow: hidden;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-lg);
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-background) 96%,
+    var(--vscode-foreground) 4%
+  );
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.46);
+}
+
+.lumina-command-palette__search {
+  display: flex;
+  height: 48px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--lumina-border);
+}
+
+.lumina-command-palette__search > svg {
+  width: 19px;
+  height: 19px;
+  color: var(--lumina-accent);
+}
+
+.lumina-command-palette__search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 13px;
+}
+
+.lumina-command-palette__results {
+  max-height: calc(min(520px, 76vh) - 49px);
+  overflow-y: auto;
+  padding: 7px;
+}
+
+.lumina-command-result {
+  display: flex;
+  width: 100%;
+  cursor: pointer;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--lumina-radius-md);
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  text-align: left;
+}
+
+.lumina-command-result:hover,
+.lumina-command-result:focus-visible {
+  background: var(
+    --vscode-list-activeSelectionBackground,
+    var(--lumina-accent-soft)
+  );
+}
+
+.lumina-command-result__icon {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--lumina-border);
+  border-radius: 8px;
+  background: var(--lumina-surface-raised);
+}
+
+.lumina-command-result__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.lumina-command-result > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lumina-command-result strong {
+  font-size: 11px;
+}
+
+.lumina-command-result small {
+  color: var(--lumina-muted);
+  font-size: 10px;
+}
+
+.lumina-command-result__go {
+  width: 14px;
+  height: 14px;
+  color: var(--lumina-muted);
+}
+
+.lumina-command-palette__empty {
+  margin: 20px;
+  color: var(--lumina-muted);
+  text-align: center;
+}
+
+.lumina-chat {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 50% -18%,
+      color-mix(in srgb, var(--lumina-accent) 6%, transparent),
+      transparent 38%
+    ),
+    var(--vscode-editor-background);
+}
+
+.lumina-chat-header {
+  display: flex;
+  min-height: 60px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--lumina-border);
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-background) 96%,
+    var(--vscode-foreground) 4%
+  );
+}
+
+.lumina-chat-header__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.lumina-chat-header__avatar {
+  width: 35px;
+  height: 35px;
+  flex: 0 0 35px;
+  object-fit: contain;
+}
+
+.lumina-chat-header__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.lumina-chat-header__eyebrow {
+  color: var(--lumina-accent);
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.lumina-chat-header__copy > strong {
+  max-width: min(48vw, 560px);
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumina-chat-header__metadata {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--lumina-muted);
+  font-size: 8px;
+}
+
+.lumina-chat-header__metadata span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumina-chat-header__metadata span + span::before {
+  content: "·";
+  margin-right: 5px;
+  color: var(--lumina-border);
+}
+
+.lumina-chat-header__metadata span:first-child {
+  color: var(--lumina-positive);
+}
+
+.lumina-chat-header__metadata span:first-child::before {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.lumina-chat-header__metadata span[data-running]::before {
+  animation: lumina-status-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes lumina-status-pulse {
+  50% {
+    box-shadow: 0 0 0 4px
+      color-mix(in srgb, var(--lumina-positive) 12%, transparent);
+    opacity: 0.72;
+  }
+}
+
+.lumina-chat-header__preferences {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.lumina-chat-header__preferences label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--lumina-muted);
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.lumina-chat-header__preferences select {
+  min-width: 70px;
+  height: 25px;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-sm);
+  background: var(--lumina-surface-raised);
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 9px;
+  text-transform: none;
+}
+
+.lumina-chat-thread {
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-padding-bottom: 24px;
+}
+
+.lumina-chat-thread__inner,
+.lumina-chat-runtime,
+.lumina-chat-composer__inner {
+  width: min(100%, 980px);
+  margin: 0 auto;
+}
+
+.lumina-chat-thread__inner {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 14px 14px 22px;
+}
+
+.lumina-chat-turn {
+  padding: 4px 0;
+}
+
+.lumina-chat-turn + .lumina-chat-turn {
+  border-top: 1px solid
+    color-mix(in srgb, var(--lumina-border) 52%, transparent);
+}
+
+.lumina-chat-runtime {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  padding: 0 12px;
+}
+
+.lumina-prompt-queue {
+  margin: 4px 0 7px;
+  overflow: hidden;
+  border: 1px solid
+    color-mix(in srgb, var(--lumina-warning) 32%, var(--lumina-border));
+  border-radius: var(--lumina-radius-md);
+  background: color-mix(
+    in srgb,
+    var(--lumina-warning) 6%,
+    var(--vscode-editor-background)
+  );
+}
+
+.lumina-prompt-queue__heading {
+  display: flex;
+  height: 27px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--lumina-warning) 18%, var(--lumina-border));
+  color: var(--lumina-muted);
+  font-size: 9px;
+}
+
+.lumina-prompt-queue__heading svg {
+  width: 13px;
+  height: 13px;
+  color: var(--lumina-warning);
+}
+
+.lumina-prompt-queue__heading strong {
+  color: var(--vscode-foreground);
+}
+
+.lumina-prompt-queue__heading span {
+  display: inline-flex;
+  min-width: 15px;
+  height: 15px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lumina-warning) 16%, transparent);
+  font-size: 8px;
+}
+
+.lumina-prompt-queue__items {
+  max-height: 94px;
+  overflow-y: auto;
+  padding: 3px 6px;
+}
+
+.lumina-prompt-queue__item {
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr) 24px;
+  min-height: 27px;
+  align-items: center;
+  gap: 5px;
+}
+
+.lumina-prompt-queue__item > span {
+  color: var(--lumina-muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8px;
+  text-align: center;
+}
+
+.lumina-prompt-queue__item p {
+  overflow: hidden;
+  margin: 0;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumina-prompt-queue__item button {
+  display: flex;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--lumina-muted);
+}
+
+.lumina-prompt-queue__item button:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(127, 127, 127, 0.13));
+  color: var(--lumina-danger);
+}
+
+.lumina-prompt-queue__item button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.lumina-chat-composer {
+  position: relative;
+  z-index: 12;
+  flex: 0 0 auto;
+  padding: 8px 5px 5px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--lumina-border) 68%, transparent);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--vscode-editor-background) 82%, transparent),
+    var(--vscode-editor-background) 11px
+  );
+  box-shadow: 0 -16px 36px
+    color-mix(in srgb, var(--vscode-editor-background) 72%, transparent);
+}
+
+.lumina-chat-composer__inner > [data-testid^="continue-input-box-"] > div {
+  padding-inline: 7px;
+}
+
+.lumina-chat-composer [data-testid^="continue-input-box-"] > div > div {
+  border-radius: var(--lumina-radius-lg);
+}
+
+.lumina-chat-composer .tiptap {
+  min-height: 52px;
+  max-height: min(34vh, 260px);
+  font-size: max(12px, 1em);
+  line-height: 1.48;
+}
+
+.lumina-chat-composer .tiptap p {
+  margin-block: 3px;
+}
+
+.lumina-empty-chat {
+  display: flex;
+  min-height: 100%;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(20px, 6vh, 68px) 4px 24px;
+}
+
+.lumina-empty-chat__hero {
+  max-width: 620px;
+  margin: 0 auto clamp(18px, 4vh, 36px);
+  text-align: center;
+}
+
+.lumina-empty-chat__spark {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  border: 1px solid color-mix(in srgb, var(--lumina-accent) 30%, transparent);
+  border-radius: 12px;
+  background: var(--lumina-accent-soft);
+  color: var(--lumina-accent);
+  font-size: 21px;
+  box-shadow: 0 10px 34px
+    color-mix(in srgb, var(--lumina-accent) 12%, transparent);
+}
+
+.lumina-empty-chat h1 {
+  margin: 0;
+  font-size: clamp(20px, 3.2vw, 34px);
+  font-weight: 540;
+  letter-spacing: -0.03em;
+}
+
+.lumina-empty-chat__hero p {
+  max-width: 560px;
+  margin: 10px auto 0;
+  color: var(--lumina-muted);
+  font-size: clamp(11px, 1.3vw, 13px);
+  line-height: 1.55;
+}
+
+.lumina-empty-chat__suggestions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: min(100%, 650px);
+  margin: 0 auto 12px;
+}
+
+.lumina-empty-chat__suggestions button {
+  display: flex;
+  min-height: 48px;
+  cursor: pointer;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-md);
+  background: color-mix(in srgb, var(--lumina-surface-raised) 75%, transparent);
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+  transition:
+    border-color 120ms ease,
+    transform 120ms ease,
+    background 120ms ease;
+}
+
+.lumina-empty-chat__suggestions button:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--lumina-accent) 55%,
+    var(--lumina-border)
+  );
+  background: var(--lumina-accent-soft);
+  transform: translateY(-1px);
+}
+
+.lumina-empty-chat__suggestions svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: var(--lumina-accent);
+}
+
+.lumina-settings-page {
+  display: grid;
+  grid-template-columns: 166px minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lumina-settings-nav {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--lumina-border);
+  background: color-mix(
+    in srgb,
+    var(--lumina-surface) 96%,
+    var(--vscode-foreground) 4%
+  );
+}
+
+.lumina-settings-nav__scroll {
+  display: flex;
+  height: 100%;
+  box-sizing: border-box;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 8px;
+  font-size: 11px;
+}
+
+.lumina-settings-nav__scroll button {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.lumina-settings-content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lumina-settings-content__inner {
+  width: min(100%, 920px);
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: clamp(15px, 3vw, 28px);
+}
+
+.lumina-config-section {
+  width: 100%;
+}
+
+.lumina-settings-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-lg);
+  background: color-mix(in srgb, var(--lumina-surface-raised) 76%, transparent);
+}
+
+.lumina-settings-summary__icon {
+  display: flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--lumina-radius-md);
+  background: var(--lumina-accent-soft);
+  color: var(--lumina-warning);
+}
+
+.lumina-settings-summary__icon[data-state="connected"] {
+  background: color-mix(in srgb, var(--lumina-positive) 13%, transparent);
+  color: var(--lumina-positive);
+}
+
+.lumina-settings-summary__icon[data-state="degraded"] {
+  color: var(--lumina-warning);
+}
+
+.lumina-settings-summary__icon[data-state="offline"] {
+  color: var(--lumina-danger);
+}
+
+.lumina-settings-summary__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.lumina-settings-summary > div:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.lumina-settings-summary strong {
+  font-size: 12px;
+}
+
+.lumina-settings-summary span {
+  color: var(--lumina-muted);
+  font-size: 10px;
+}
+
+.lumina-settings-summary button,
+.lumina-settings-actions button,
+.lumina-settings-form__submit button {
+  display: inline-flex;
+  min-height: 32px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-sm);
+  background: var(
+    --vscode-button-secondaryBackground,
+    var(--lumina-surface-raised)
+  );
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  font: inherit;
+  font-size: 10px;
+}
+
+.lumina-settings-summary button:hover,
+.lumina-settings-actions button:hover,
+.lumina-settings-form__submit button:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--lumina-accent) 55%,
+    var(--lumina-border)
+  );
+}
+
+.lumina-settings-summary button:disabled,
+.lumina-settings-form__submit button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.lumina-settings-summary button svg,
+.lumina-settings-actions button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.lumina-runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.lumina-runtime-grid article {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-md);
+  background: color-mix(in srgb, var(--lumina-surface-raised) 52%, transparent);
+}
+
+.lumina-runtime-card__heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.lumina-runtime-card__heading svg {
+  width: 17px;
+  height: 17px;
+  color: var(--lumina-positive);
+}
+
+.lumina-runtime-grid
+  article:not([data-state="connected"])
+  .lumina-runtime-card__heading
+  svg {
+  color: var(--lumina-warning);
+}
+
+.lumina-runtime-grid article strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumina-runtime-grid article > span {
+  color: var(--lumina-muted);
+  font-size: 9px;
+  text-transform: capitalize;
+}
+
+.lumina-runtime-grid code {
+  overflow: hidden;
+  color: var(--lumina-muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumina-settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--lumina-border);
+}
+
+.lumina-settings-actions p,
+.lumina-settings-form__submit p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--lumina-muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.lumina-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-lg);
+}
+
+.lumina-settings-form label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lumina-settings-form label > span {
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.lumina-settings-form label > small {
+  color: var(--lumina-muted);
+  font-size: 9px;
+}
+
+.lumina-settings-form input,
+.lumina-settings-form select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-sm);
+  background: var(--vscode-input-background, var(--lumina-surface-raised));
+  color: var(--vscode-input-foreground, var(--vscode-foreground));
+  font: inherit;
+  font-size: 10px;
+}
+
+.lumina-secret-input {
+  position: relative;
+  display: flex;
+}
+
+.lumina-secret-input input {
+  padding-right: 38px;
+}
+
+.lumina-secret-input button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--lumina-muted);
+}
+
+.lumina-secret-input svg {
+  width: 16px;
+  height: 16px;
+}
+
+.lumina-settings-form__row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lumina-settings-form__submit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 13px;
+  border-top: 1px solid var(--lumina-border);
+}
+
+.lumina-settings-form__submit button {
+  border-color: color-mix(
+    in srgb,
+    var(--lumina-accent) 48%,
+    var(--lumina-border)
+  );
+  background: var(--lumina-accent-soft);
+  color: var(--vscode-foreground);
+}
+
+.lumina-settings-error,
+.lumina-settings-success {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--lumina-danger) 38%, transparent);
+  border-radius: var(--lumina-radius-sm);
+  background: color-mix(in srgb, var(--lumina-danger) 9%, transparent);
+  color: var(--lumina-danger);
+  font-size: 10px;
+}
+
+.lumina-overview-page {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: clamp(14px, 3vw, 30px);
+  background:
+    radial-gradient(
+      circle at 82% -12%,
+      color-mix(in srgb, var(--lumina-accent) 7%, transparent),
+      transparent 36%
+    ),
+    var(--vscode-editor-background);
+}
+
+.lumina-overview-page__hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  width: min(100%, 1040px);
+  box-sizing: border-box;
+  align-items: center;
+  gap: 15px;
+  margin: 0 auto 18px;
+  padding: clamp(15px, 2.5vw, 24px);
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-lg);
+  background: color-mix(in srgb, var(--lumina-surface-raised) 62%, transparent);
+}
+
+.lumina-overview-page__hero-icon {
+  display: flex;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--lumina-accent) 28%, transparent);
+  border-radius: 14px;
+  background: var(--lumina-accent-soft);
+  color: var(--lumina-accent);
+}
+
+.lumina-overview-page__hero-icon svg {
+  width: 25px;
+  height: 25px;
+}
+
+.lumina-overview-page__hero > div:nth-child(2) > span {
+  color: var(--lumina-accent);
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.lumina-overview-page__hero h1 {
+  margin: 2px 0 0;
+  font-size: clamp(19px, 2.6vw, 30px);
+  font-weight: 560;
+  letter-spacing: -0.025em;
+}
+
+.lumina-overview-page__hero p {
+  max-width: 720px;
+  margin: 6px 0 0;
+  color: var(--lumina-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.lumina-overview-page__metric {
+  display: flex;
+  min-width: 74px;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.lumina-overview-page__metric strong {
+  font-size: 20px;
+  font-weight: 540;
+}
+
+.lumina-overview-page__metric span {
+  color: var(--lumina-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.lumina-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  width: min(100%, 1040px);
+  margin: 0 auto;
+}
+
+.lumina-overview-grid article {
+  display: flex;
+  min-width: 0;
+  min-height: 178px;
+  box-sizing: border-box;
+  flex-direction: column;
+  padding: 14px;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-lg);
+  background: color-mix(in srgb, var(--lumina-surface-raised) 48%, transparent);
+  transition:
+    border-color 120ms ease,
+    transform 120ms ease;
+}
+
+.lumina-overview-grid article:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--lumina-accent) 35%,
+    var(--lumina-border)
+  );
+  transform: translateY(-1px);
+}
+
+.lumina-overview-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lumina-overview-card__icon {
+  display: flex;
+  width: 31px;
+  height: 31px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--lumina-accent-soft);
+  color: var(--lumina-accent);
+}
+
+.lumina-overview-card__icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.lumina-overview-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--lumina-muted);
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.lumina-overview-card__status::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lumina-warning);
+  content: "";
+}
+
+.lumina-overview-grid
+  article[data-state="connected"]
+  .lumina-overview-card__status::before {
+  background: var(--lumina-positive);
+}
+
+.lumina-overview-grid
+  article[data-state="offline"]
+  .lumina-overview-card__status::before {
+  background: var(--lumina-danger);
+}
+
+.lumina-overview-grid h2 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.lumina-overview-grid p {
+  margin: 0 0 9px;
+  color: var(--lumina-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.lumina-overview-grid code {
+  overflow: hidden;
+  margin-bottom: 12px;
+  color: var(--lumina-muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumina-overview-grid article > button {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vscode-textLink-foreground, var(--lumina-accent));
+  font: inherit;
+  font-size: 9px;
+  font-weight: 620;
+}
+
+.lumina-overview-grid article > button:hover {
+  text-decoration: underline;
+}
+
+.lumina-overview-grid article > button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.lumina-settings-success {
+  border-color: color-mix(in srgb, var(--lumina-positive) 38%, transparent);
+  background: color-mix(in srgb, var(--lumina-positive) 9%, transparent);
+  color: var(--lumina-positive);
+}
+
+@media (max-width: 680px) {
+  .lumina-settings-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .lumina-settings-nav {
+    border-right: 0;
+    border-bottom: 1px solid var(--lumina-border);
+  }
+
+  .lumina-settings-nav__scroll {
+    display: flex;
+    height: auto;
+    max-width: 100%;
+    flex-direction: row;
+    gap: 3px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px;
+  }
+
+  .lumina-settings-nav__scroll > div,
+  .lumina-settings-nav__scroll > div > div {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 3px;
+  }
+
+  .lumina-settings-nav__scroll > .flex-1,
+  .lumina-settings-nav__scroll hr,
+  .lumina-settings-nav__scroll [role="separator"] {
+    display: none;
+  }
+
+  .lumina-settings-nav__scroll button {
+    width: auto;
+    min-width: 34px;
+  }
+
+  .lumina-runtime-grid,
+  .lumina-settings-form__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lumina-settings-actions,
+  .lumina-settings-form__submit {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lumina-overview-page__hero {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .lumina-overview-page__metric {
+    display: none;
+  }
+
+  .lumina-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 840px) {
+  .lumina-shell {
+    grid-template-columns: var(--lumina-sidebar-width) minmax(0, 1fr);
+    transition: grid-template-columns 180ms ease;
+  }
+
+  .lumina-shell[data-nav-collapsed] {
+    grid-template-columns: var(--lumina-sidebar-collapsed-width) minmax(0, 1fr);
+  }
+
+  .lumina-sidebar {
+    position: relative;
+    z-index: 10;
+    width: auto;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .lumina-sidebar__close,
+  .lumina-menu-button,
+  .lumina-drawer-backdrop {
+    display: none !important;
+  }
+
+  .lumina-nav-collapse {
+    display: flex;
+  }
+
+  .lumina-shell[data-nav-collapsed] .lumina-sidebar__brand {
+    justify-content: center;
+    padding-inline: 8px;
+  }
+
+  .lumina-shell[data-nav-collapsed] .lumina-sidebar__brand-copy,
+  .lumina-shell[data-nav-collapsed] .lumina-new-chat span,
+  .lumina-shell[data-nav-collapsed] .lumina-new-chat kbd,
+  .lumina-shell[data-nav-collapsed] .lumina-nav-group__label,
+  .lumina-shell[data-nav-collapsed] .lumina-nav-item__copy,
+  .lumina-shell[data-nav-collapsed] .lumina-recents,
+  .lumina-shell[data-nav-collapsed] .lumina-nav-collapse span {
+    display: none;
+  }
+
+  .lumina-shell[data-nav-collapsed] .lumina-new-chat,
+  .lumina-shell[data-nav-collapsed] .lumina-nav-item,
+  .lumina-shell[data-nav-collapsed] .lumina-nav-collapse {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .lumina-shell[data-nav-collapsed] .lumina-sidebar__scroll,
+  .lumina-shell[data-nav-collapsed] .lumina-sidebar__footer {
+    padding-inline: 7px;
+  }
+
+  .lumina-shell[data-nav-collapsed] .lumina-new-chat {
+    margin-inline: 10px;
+  }
 }
 
 .lumina-workspace-switcher__runtime > span {
@@ -212,8 +1877,67 @@ body {
     gap: 8px;
   }
 
-  .lumina-workspace-switcher__brand > span:last-child,
-  .lumina-workspace-switcher__runtime {
+  .lumina-workspace-switcher__brand img,
+  .lumina-command-trigger span,
+  .lumina-command-trigger kbd {
     display: none;
+  }
+
+  .lumina-workspace-switcher__runtime {
+    font-size: 0;
+    gap: 0;
+  }
+
+  .lumina-chat-header {
+    min-height: 54px;
+    padding-inline: 9px;
+  }
+
+  .lumina-chat-header__avatar {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+  }
+
+  .lumina-chat-header__copy > strong {
+    max-width: 43vw;
+  }
+
+  .lumina-chat-header__preferences label > span {
+    display: none;
+  }
+
+  .lumina-chat-header__preferences select {
+    min-width: 58px;
+    max-width: 74px;
+  }
+
+  .lumina-chat-thread__inner {
+    padding: 9px 7px 18px;
+  }
+
+  .lumina-chat-composer {
+    padding-inline: 1px;
+  }
+
+  .lumina-chat-composer .tiptap {
+    min-height: 58px;
+  }
+
+  .lumina-empty-chat {
+    justify-content: flex-start;
+    padding-top: 26px;
+  }
+
+  .lumina-empty-chat__suggestions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lumina-sidebar,
+  .lumina-shell,
+  .lumina-skip-link {
+    transition: none;
   }
 }

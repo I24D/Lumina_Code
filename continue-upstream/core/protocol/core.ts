@@ -64,6 +64,10 @@ import type {
   StartTalkVideoSourceInfo,
   StartTalkVideoStartRequest,
 } from "../startTalk/index.js";
+import type {
+  StartTalkConfigStatus,
+  StartTalkConfigUpdate,
+} from "../startTalk/env.js";
 import type { SessionGoal } from "../goals/sessionGoal.js";
 import type { GitHubWorkItem } from "../integrations/GitHubWorkItemService.js";
 import type {
@@ -305,6 +309,8 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     void,
   ];
   "startTalk/connect": [StartTalkConnectRequest, StartTalkConnectResponse];
+  "startTalk/getConfigStatus": [undefined, StartTalkConfigStatus];
+  "startTalk/configure": [StartTalkConfigUpdate, StartTalkConfigStatus];
   "startTalk/sendAudio": [StartTalkAudioChunk, void];
   "startTalk/sendText": [StartTalkTextInput, void];
   "startTalk/startCapture": [StartTalkCaptureRequest, void];

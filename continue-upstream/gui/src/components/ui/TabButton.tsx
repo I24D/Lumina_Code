@@ -16,9 +16,10 @@ export function TabButton({
   tabId,
 }: TabButtonProps) {
   return (
-    <ToolTip content={label} place="right" className="text-xs md:!hidden">
-      <div
-        className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-md hover:brightness-125 md:justify-start ${
+    <ToolTip content={label} place="right" className="text-xs">
+      <button
+        type="button"
+        className={`flex cursor-pointer items-center justify-start gap-1.5 rounded-md hover:brightness-125 ${
           isActive
             ? "bg-vsc-input-background px-2 py-2"
             : "text-description px-2 py-2"
@@ -27,8 +28,8 @@ export function TabButton({
         data-testid={tabId ? `tab-${tabId}` : undefined}
       >
         {icon}
-        <span className="text-description hidden md:inline">{label}</span>
-      </div>
+        <span className="text-description">{label}</span>
+      </button>
     </ToolTip>
   );
 }

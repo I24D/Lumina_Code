@@ -74,6 +74,31 @@ Los trabajos programados se guardan localmente y solo se ejecutan mientras el ho
 
 Estas capacidades forman parte de la experiencia funcional actual. Algunas integraciones requieren credenciales propias o componentes opcionales, tal como se explica en la sección de instalación.
 
+### Una sola interfaz evolucionada
+
+Lumina Code usa **una única GUI React dentro de la extensión**. El lenguaje
+visual y los patrones de navegación desarrollados en Lumina-Openclaw se han
+adaptado directamente al webview existente, sin `iframe`, segunda aplicación ni
+un segundo core. El editor TipTap, el historial de Continue, los diffs, las
+herramientas y los protocolos de la extensión siguen siendo la base funcional.
+
+La experiencia unificada incorpora:
+
+- navegación responsive con modo compacto, sesiones recientes y paleta
+  `Ctrl+K`;
+- chat de ancho legible, compositor ampliado, estado del modelo y mensajes en
+  cola mientras el agente termina el turno actual;
+- paneles reales de Trabajo, Cambios, Automatizaciones, Conocimiento y
+  Conexiones;
+- centro de configuración responsive para modelos, reglas, herramientas MCP,
+  habilidades, permisos, runtime y Start Talk;
+- rutas compatibles con conceptos del workspace Lumina-Openclaw como
+  `/sessions`, `/usage`, `/automations`, `/settings/talk`, `/logs` y `/debug`,
+  redirigidas a superficies nativas de la misma GUI.
+
+La arquitectura y el mapa de absorción están documentados en
+[Workspace unificado](docs/UNIFIED_WORKSPACE.md).
+
 ## Estado del proyecto / Project status
 
 | Área                                      | Estado público                                          |
@@ -174,6 +199,11 @@ START_TALK_GEMINI_MODEL=gemini-2.5-flash-native-audio-latest
 ```
 
 Start Talk busca `GEMINI_API_KEY` en el entorno y en archivos `.env` ascendiendo desde el workspace. También puedes indicar otro archivo mediante la opción de VS Code `lumina.startTalk.envFile`; la extensión importa esa configuración a Secret Storage para reutilizarla en distintos proyectos. Reinicia o recarga el Extension Development Host después de cambiar estas variables.
+
+También puedes configurar la voz desde **Configuración → Start Talk**. La clave
+nueva se entrega al host para guardarla en Secret Storage y nunca se devuelve al
+webview. Un `GEMINI_API_KEY` presente en el `.env` del workspace conserva
+prioridad sobre esa configuración global.
 
 > [!CAUTION]
 > Las claves de Ollama y Gemini son credenciales diferentes y no son intercambiables. No pegues valores reales en este README, commits, issues, capturas o archivos versionados. El `.env` raíz está ignorado por Git; verifica siempre `git status` antes de publicar cambios.

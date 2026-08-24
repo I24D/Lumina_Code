@@ -1,9 +1,15 @@
 import type { LuminaRuntimeStatus } from "core/protocol/ideWebview";
-import { useContext, useEffect, useMemo, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { IdeMessengerContext } from "../context/IdeMessenger";
 import { getLuminaAssetUrl } from "../util/luminaAssets";
 
-export function LuminaWorkspaceSwitcher() {
+export function useLuminaRuntimeStatus() {
   const ideMessenger = useContext(IdeMessengerContext);
   const [runtime, setRuntime] = useState<LuminaRuntimeStatus | null>(null);
 
@@ -48,8 +54,23 @@ export function LuminaWorkspaceSwitcher() {
       .join("\n");
   }, [runtime]);
 
+  return { runtime, runtimeLabel, runtimeTitle };
+}
+
+export function LuminaWorkspaceSwitcher({
+  leading,
+  trailing,
+  pageTitle,
+}: {
+  leading?: ReactNode;
+  trailing?: ReactNode;
+  pageTitle?: string;
+}) {
+  const { runtime, runtimeLabel, runtimeTitle } = useLuminaRuntimeStatus();
+
   return (
     <header className="lumina-workspace-switcher">
+      {leading}
       <div
         className="lumina-workspace-switcher__brand"
         aria-label="Lumina Code"
@@ -60,7 +81,7 @@ export function LuminaWorkspaceSwitcher() {
           alt="Lumina Code mascot"
           draggable={false}
         />
-        <span>Lumina Code</span>
+        <span>{pageTitle || "Lumina Code"}</span>
       </div>
 
       <div
@@ -71,6 +92,7 @@ export function LuminaWorkspaceSwitcher() {
         <span aria-hidden="true" />
         {runtimeLabel}
       </div>
+      {trailing}
     </header>
   );
 }

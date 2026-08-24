@@ -391,7 +391,12 @@ export function createEditorConfig(options: {
     if (!editor) {
       return;
     }
-    if (isStreamingRef.current || (codeToEdit.length === 0 && isInEdit)) {
+    // The main composer remains editable while streaming so the chat can
+    // enqueue a follow-up. Historical/edit inputs stay locked.
+    if (
+      (isStreamingRef.current && !props.isMainInput) ||
+      (codeToEdit.length === 0 && isInEdit)
+    ) {
       return;
     }
 

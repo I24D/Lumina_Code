@@ -272,7 +272,13 @@ function TipTapEditorInner(props: TipTapEditorProps) {
         />
         <InputToolbar
           isMainInput={props.isMainInput}
-          toolbarOptions={props.toolbarOptions}
+          toolbarOptions={{
+            ...props.toolbarOptions,
+            enterText:
+              isStreaming && props.isMainInput
+                ? "Encolar"
+                : props.toolbarOptions?.enterText,
+          }}
           activeKey={activeKey}
           hidden={shouldHideToolbar && !props.isMainInput}
           onAddContextItem={() => insertCharacterWithWhitespace("@")}
@@ -293,7 +299,7 @@ function TipTapEditorInner(props: TipTapEditorProps) {
               }
             });
           }}
-          disabled={isStreaming}
+          disabled={isStreaming && !props.isMainInput}
         />
       </div>
 

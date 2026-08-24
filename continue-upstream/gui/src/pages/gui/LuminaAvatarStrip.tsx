@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAppSelector } from "../../redux/hooks";
+import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import { getLuminaAssetUrl } from "../../util/luminaAssets";
 
 const RESPONSE_LANGUAGES = [
@@ -58,6 +60,10 @@ export function LuminaAvatarIcon({
 }
 
 export function LuminaAvatarStrip() {
+  const title = useAppSelector((state) => state.session.title);
+  const mode = useAppSelector((state) => state.session.mode);
+  const isStreaming = useAppSelector((state) => state.session.isStreaming);
+  const selectedModel = useAppSelector(selectSelectedChatModel);
   const [responseLanguage, setResponseLanguage] = useState(() =>
     initialPreference("responseLanguage", "auto"),
   );
@@ -75,45 +81,54 @@ export function LuminaAvatarStrip() {
   }, [responseLanguage, codeLanguage]);
 
   return (
-    <div className="mx-2 mb-2 mt-1 flex min-h-[46px] items-center justify-between gap-2 rounded border border-vsc-input-border bg-vsc-input-background px-2 py-1.5">
-      <div className="flex min-w-0 items-center gap-2">
-        <LuminaAvatarIcon className="h-8 w-8 flex-shrink-0 object-contain p-0.5" />
-        <div className="min-w-0">
-          <div className="truncate text-xs font-semibold text-foreground">
-            Lumina Code
-          </div>
-          <div className="truncate text-[10px] text-description-muted">
-            Continue-native LLM routing
+    <header className="lumina-chat-header">
+      <div className="lumina-chat-header__identity">
+        <LuminaAvatarIcon className="lumina-chat-header__avatar" />
+        <div className="lumina-chat-header__copy">
+          <span className="lumina-chat-header__eyebrow">Lumina Code</span>
+          <strong title={title}>{title}</strong>
+          <div className="lumina-chat-header__metadata">
+            <span data-running={isStreaming || undefined}>
+              {isStreaming ? "Trabajando" : "Lista"}
+            </span>
+            <span>{mode === "agent" ? "Agente" : "Chat"}</span>
+            {selectedModel?.title && (
+              <span title={selectedModel.title}>{selectedModel.title}</span>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="ml-auto hidden flex-shrink-0 items-center gap-1 min-[460px]:flex">
-        <select
-          className="rounded border border-vsc-input-border bg-vsc-input-background px-1 py-1 text-[10px] text-foreground"
-          title="Response language"
-          value={responseLanguage}
-          onChange={(event) => setResponseLanguage(event.target.value)}
-        >
-          {RESPONSE_LANGUAGES.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          className="rounded border border-vsc-input-border bg-vsc-input-background px-1 py-1 text-[10px] text-foreground"
-          title="Code language"
-          value={codeLanguage}
-          onChange={(event) => setCodeLanguage(event.target.value)}
-        >
-          {CODE_LANGUAGES.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+      <div className="lumina-chat-header__preferences">
+        <label>
+          <span>Respuesta</span>
+          <select
+            title="Response language"
+            value={responseLanguage}
+            onChange={(event) => setResponseLanguage(event.target.value)}
+          >
+            {RESPONSE_LANGUAGES.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Código</span>
+          <select
+            title="Code language"
+            value={codeLanguage}
+            onChange={(event) => setCodeLanguage(event.target.value)}
+          >
+            {CODE_LANGUAGES.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
-    </div>
+    </header>
   );
 }

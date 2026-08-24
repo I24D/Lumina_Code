@@ -8,6 +8,8 @@ import {
   PencilIcon,
   QuestionMarkCircleIcon,
   ShieldCheckIcon,
+  SignalIcon,
+  MicrophoneIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import { ConfigSection } from "./components/ConfigSection";
@@ -20,6 +22,8 @@ import { RulesSection } from "./sections/RulesSection";
 import { SkillsSection } from "./sections/SkillsSection";
 import { ToolsSection } from "./sections/ToolsSection";
 import { UserSettingsSection } from "./sections/UserSettingsSection";
+import { RuntimeSection } from "./sections/RuntimeSection";
+import { StartTalkSection } from "./sections/StartTalkSection";
 
 interface TabOption {
   id: string;
@@ -92,7 +96,9 @@ export const topTabSections: TabSection[] = [
             <SkillsSection />
           </ConfigSection>
         ),
-        icon: <AcademicCapIcon className="xs:h-4 xs:w-4 h-3 w-3 flex-shrink-0" />,
+        icon: (
+          <AcademicCapIcon className="xs:h-4 xs:w-4 h-3 w-3 flex-shrink-0" />
+        ),
       },
     ],
   },
@@ -126,6 +132,34 @@ export const topTabSections: TabSection[] = [
         ),
         icon: (
           <CircleStackIcon className="xs:h-4 xs:w-4 h-3 w-3 flex-shrink-0" />
+        ),
+      },
+    ],
+  },
+  {
+    id: "runtime",
+    showTopDivider: true,
+    tabs: [
+      {
+        id: "runtime",
+        label: "Runtime",
+        component: (
+          <ConfigSection>
+            <RuntimeSection />
+          </ConfigSection>
+        ),
+        icon: <SignalIcon className="xs:h-4 xs:w-4 h-3 w-3 flex-shrink-0" />,
+      },
+      {
+        id: "talk",
+        label: "Start Talk",
+        component: (
+          <ConfigSection>
+            <StartTalkSection />
+          </ConfigSection>
+        ),
+        icon: (
+          <MicrophoneIcon className="xs:h-4 xs:w-4 h-3 w-3 flex-shrink-0" />
         ),
       },
     ],

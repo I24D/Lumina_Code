@@ -1,4 +1,4 @@
-import { RouterProvider, createMemoryRouter } from "react-router-dom";
+import { Navigate, RouterProvider, createMemoryRouter } from "react-router-dom";
 import Layout from "./components/Layout";
 import { MainEditorProvider } from "./components/mainInput/TipTapEditor";
 import { LiveConversationOverlay } from "./components/startTalk/LiveConversationOverlay";
@@ -8,10 +8,12 @@ import { SubmenuContextProvidersProvider } from "./context/SubmenuContextProvide
 import { VscThemeProvider } from "./context/VscTheme";
 import ParallelListeners from "./hooks/ParallelListeners";
 import ConfigPage from "./pages/config";
+import ConnectionsPage from "./pages/connections";
 import ErrorPage from "./pages/error";
 import AssistantPanel from "./pages/assistant";
 import Chat from "./pages/gui";
 import History from "./pages/history";
+import KnowledgePage from "./pages/knowledge";
 import Stats from "./pages/stats";
 import ChangesWalkthrough from "./pages/changes";
 import WorkPanel from "./pages/work";
@@ -64,6 +66,77 @@ const router = createMemoryRouter([
       {
         path: ROUTES.THEME,
         element: <ThemePage />,
+      },
+      {
+        path: ROUTES.CONNECTIONS,
+        element: <ConnectionsPage />,
+      },
+      {
+        path: ROUTES.KNOWLEDGE,
+        element: <KnowledgePage />,
+      },
+      // Route vocabulary compatible with the Lumina-Openclaw workspace. These
+      // are aliases into the SAME React UI and existing Continue/Lumina
+      // backends; they never mount a second application.
+      { path: "/chat", element: <Navigate replace to={ROUTES.HOME} /> },
+      {
+        path: "/sessions",
+        element: <Navigate replace to={ROUTES.HISTORY} />,
+      },
+      { path: "/usage", element: <Navigate replace to={ROUTES.STATS} /> },
+      { path: "/dashboard", element: <Navigate replace to={ROUTES.WORK} /> },
+      { path: "/tasks", element: <Navigate replace to={ROUTES.WORK} /> },
+      {
+        path: "/automations",
+        element: <Navigate replace to={ROUTES.SCHEDULE} />,
+      },
+      {
+        path: "/workboard",
+        element: <Navigate replace to={ROUTES.CHANGES} />,
+      },
+      {
+        path: "/settings/general",
+        element: <Navigate replace to="/config?tab=settings" />,
+      },
+      {
+        path: "/settings/model-providers",
+        element: <Navigate replace to="/config?tab=models" />,
+      },
+      {
+        path: "/settings/mcp",
+        element: <Navigate replace to="/config?tab=tools" />,
+      },
+      {
+        path: "/skills",
+        element: <Navigate replace to="/config?tab=skills" />,
+      },
+      {
+        path: "/settings/memory",
+        element: <Navigate replace to="/config?tab=indexing" />,
+      },
+      {
+        path: "/settings/security",
+        element: <Navigate replace to="/config?tab=privacy" />,
+      },
+      {
+        path: "/settings/talk",
+        element: <Navigate replace to="/config?tab=talk" />,
+      },
+      {
+        path: "/settings/appearance",
+        element: <Navigate replace to={ROUTES.THEME} />,
+      },
+      {
+        path: "/settings/infrastructure",
+        element: <Navigate replace to="/config?tab=runtime" />,
+      },
+      {
+        path: "/logs",
+        element: <Navigate replace to="/config?tab=runtime" />,
+      },
+      {
+        path: "/debug",
+        element: <Navigate replace to="/config?tab=runtime" />,
       },
     ],
   },

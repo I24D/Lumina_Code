@@ -170,7 +170,13 @@ function resolveLuminaPcRoot(
   const candidates = [
     configured,
     process.env.LUMINA_PC_ROOT,
-    path.resolve(context.extensionPath, "../../../..", "Lumina_PC"),
+    // Development layout:
+    //   <repo>/continue-upstream/extensions/vscode
+    //   <repo>/Lumina_PC
+    // Three parent traversals reach <repo>. Four traversals incorrectly
+    // resolved to the drive root (for example C:\\Lumina_PC), which left the
+    // optional local runtime permanently offline in a normal clone.
+    path.resolve(context.extensionPath, "../../..", "Lumina_PC"),
     "C:\\I24D_WhatsApp\\Lumina_PC",
   ].filter((candidate): candidate is string => Boolean(candidate?.trim()));
 

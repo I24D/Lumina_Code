@@ -76,6 +76,19 @@ El proyecto no publicará un árbol de código solamente para poder decir que es
 - [x] Hacer fallar el build si un módulo de Node se filtra al bundle del navegador.
 - [x] Reparar el foco y la ejecución de acciones del menú `/` del chat.
 
+## Fase 4B: Workspace unificado
+
+**Estado: completada**
+
+- [x] Absorber el lenguaje visual de Lumina-Openclaw en la única GUI React.
+- [x] Añadir navegación responsive, modo compacto, sesiones y paleta global.
+- [x] Evolucionar el chat sin reemplazar TipTap, herramientas ni diffs.
+- [x] Añadir cola visible y cancelable para los siguientes turnos.
+- [x] Integrar Conocimiento y Conexiones sobre estado funcional existente.
+- [x] Añadir configuración segura de Start Talk y diagnóstico del runtime.
+- [x] Mantener alias de rutas del ecosistema dentro del mismo router.
+- [x] Cubrir navegación, sesiones, voz, cola y pantalla negra con pruebas.
+
 ## Fase 5: Community beta
 
 **Estado: futura**

@@ -64,6 +64,8 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "stats/getTokensPerDay",
     "stats/getTokensPerModel",
     "startTalk/connect",
+    "startTalk/getConfigStatus",
+    "startTalk/configure",
     "startTalk/sendAudio",
     "startTalk/sendText",
     "startTalk/startCapture",

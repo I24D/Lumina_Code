@@ -8,7 +8,9 @@ export type ConfigTab =
   | "indexing"
   | "privacy"
   | "settings"
-  | "help";
+  | "help"
+  | "runtime"
+  | "talk";
 
 // TODO: Move all the routes here
 export const ROUTES = {
@@ -21,6 +23,9 @@ export const ROUTES = {
   WORK: "/work",
   SCHEDULE: "/schedule",
   ASSISTANT: "/assistant",
+  HISTORY: "/history",
+  CONNECTIONS: "/connections",
+  KNOWLEDGE: "/knowledge",
   // EXAMPLE_ROUTE_WITH_PARAMS: (params: ParamsType) => `/route/${params}`,
 };
 
@@ -40,4 +45,6 @@ export const CONFIG_ROUTES = {
   PRIVACY: buildConfigRoute("privacy"),
   SETTINGS: buildConfigRoute("settings"),
   HELP: buildConfigRoute("help"),
+  RUNTIME: buildConfigRoute("runtime"),
+  TALK: buildConfigRoute("talk"),
 } as const;

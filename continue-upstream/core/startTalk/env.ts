@@ -11,6 +11,23 @@ export type StartTalkGeminiEnv = {
   voiceName?: string;
 };
 
+/** Safe, UI-facing view of Start Talk configuration. Never includes secrets. */
+export type StartTalkConfigStatus = {
+  configured: boolean;
+  source: "workspace" | "secureStorage" | "missing";
+  model?: string;
+  thinkingLevel?: StartTalkThinkingLevel;
+  voiceName?: string;
+};
+
+export type StartTalkConfigUpdate = {
+  /** Stored in the host secret store; it is never returned to the webview. */
+  apiKey?: string;
+  model?: string;
+  thinkingLevel?: StartTalkThinkingLevel;
+  voiceName?: string;
+};
+
 export interface StartTalkGeminiConfigStore {
   load(): Promise<StartTalkGeminiEnv | undefined>;
   save(config: StartTalkGeminiEnv): Promise<void>;

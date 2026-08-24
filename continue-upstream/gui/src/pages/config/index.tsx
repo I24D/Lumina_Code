@@ -1,6 +1,5 @@
 import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import Alert from "../../components/gui/Alert";
 import { Divider } from "../../components/ui/Divider";
 import { TabGroup } from "../../components/ui/TabGroup";
 import { useNavigationListener } from "../../hooks/useNavigationListener";
@@ -25,10 +24,13 @@ function ConfigPage() {
   };
 
   return (
-    <div className="flex h-full flex-row overflow-hidden">
+    <div className="lumina-settings-page">
       {/* Vertical Sidebar - full height */}
-      <div className="bg-vsc-background flex w-12 flex-shrink-0 flex-col border-0 md:w-40">
-        <div className="border-r-border flex flex-1 flex-col overflow-y-auto border-b-0 border-l-0 border-r-2 border-t-0 border-solid p-2 text-xs">
+      <aside
+        className="lumina-settings-nav"
+        aria-label="Secciones de configuración"
+      >
+        <div className="lumina-settings-nav__scroll thin-scrollbar">
           {topTabSections.map((section) => (
             <React.Fragment key={section.id}>
               <TabGroup
@@ -60,27 +62,13 @@ function ConfigPage() {
 
           <AccountDropdown />
         </div>
-      </div>
+      </aside>
 
       {/* Main content area */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Alert for small screens (sm and below) */}
-        <div className="block px-4 py-4 sm:hidden">
-          <Alert type="warning" className="max-w-md">
-            <div className="flex flex-col">
-              <div className="font-medium">Screen width too small</div>
-              <div className="text-description mt-1 text-sm">
-                To view settings, please expand the sidebar by dragging the
-                left/right border
-              </div>
-            </div>
-          </Alert>
-        </div>
-
-        {/* Tab Content for larger screens (md and above) */}
-        <div className="thin-scrollbar relative hidden flex-1 overflow-y-auto sm:block">
+      <div className="lumina-settings-content">
+        <div className="thin-scrollbar relative flex-1 overflow-y-auto">
           <DeprecationBanner dismissable={true} />
-          <div className="space-y-6 px-4 py-4">
+          <div className="lumina-settings-content__inner space-y-6">
             {allTabs.find((tab) => tab.id === activeTab)?.component}
           </div>
         </div>

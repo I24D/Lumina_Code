@@ -26,6 +26,20 @@ type MockResponseHandlers = Partial<{
 }>;
 
 const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
+  "startTalk/getConfigStatus": {
+    configured: true,
+    source: "secureStorage",
+    model: "gemini-2.5-flash-native-audio-latest",
+    thinkingLevel: "medium",
+    voiceName: "Leda",
+  },
+  "startTalk/configure": {
+    configured: true,
+    source: "secureStorage",
+    model: "gemini-2.5-flash-native-audio-latest",
+    thinkingLevel: "medium",
+    voiceName: "Leda",
+  },
   "lumina/runtimeStatus": {
     state: "connected",
     managedByLuminaCode: true,

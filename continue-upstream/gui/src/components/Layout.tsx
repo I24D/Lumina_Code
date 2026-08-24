@@ -13,7 +13,7 @@ import { setShowDialog } from "../redux/slices/uiSlice";
 import { enterEdit, exitEdit } from "../redux/thunks/edit";
 import { saveCurrentSession } from "../redux/thunks/session";
 import { fontSize, isMetaEquivalentKeyPressed } from "../util";
-import { ROUTES } from "../util/navigation";
+import { CONFIG_ROUTES, ROUTES } from "../util/navigation";
 import { FatalErrorIndicator } from "./config/FatalErrorNotice";
 import TextDialog from "./dialogs";
 import { useMainEditor } from "./mainInput/TipTapEditor";
@@ -23,12 +23,12 @@ import {
   useOnboardingCard,
 } from "./OnboardingCard";
 import OSRContextMenu from "./OSRContextMenu";
-import { LuminaWorkspaceSwitcher } from "./LuminaWorkspaceSwitcher";
+import { LuminaAppShell } from "./LuminaNavigation";
 
 const LayoutTopDiv = styled(CustomScrollbarDiv)`
   height: 100%;
   position: relative;
-  overflow-x: hidden;
+  overflow: hidden;
 `;
 
 const GridDiv = styled.div`
@@ -108,7 +108,7 @@ const Layout = () => {
   useWebviewListener(
     "addModel",
     async () => {
-      navigate("/models");
+      navigate(CONFIG_ROUTES.MODELS);
     },
     [navigate],
   );
@@ -201,15 +201,7 @@ const Layout = () => {
       <AuthProvider>
         <LayoutTopDiv>
           <OSRContextMenu />
-          <div
-            style={{
-              scrollbarGutter: "stable both-edges",
-              height: "100%",
-              minHeight: 0,
-              display: "grid",
-              gridTemplateRows: "auto minmax(0, 1fr)",
-            }}
-          >
+          <div style={{ height: "100%", minHeight: 0 }}>
             <TextDialog
               showDialog={showDialog}
               onEnter={() => {
@@ -221,12 +213,13 @@ const Layout = () => {
               message={dialogMessage}
             />
 
-            <LuminaWorkspaceSwitcher />
-            <GridDiv>
-              <Outlet />
-              {/* The fatal error for chat is shown below input */}
-              {!isHome && <FatalErrorIndicator />}
-            </GridDiv>
+            <LuminaAppShell>
+              <GridDiv>
+                <Outlet />
+                {/* The fatal error for chat is shown below input */}
+                {!isHome && <FatalErrorIndicator />}
+              </GridDiv>
+            </LuminaAppShell>
           </div>
           <div style={{ fontSize: fontSize(-4) }} id="tooltip-portal-div" />
         </LayoutTopDiv>
