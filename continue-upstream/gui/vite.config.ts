@@ -1,10 +1,20 @@
 import react from "@vitejs/plugin-react-swc";
 import { resolve } from "path";
 import tailwindcss from "tailwindcss";
+import { createLogger } from "vite";
 import { defineConfig } from "vitest/config";
+import { assertBrowserBuildWarningIsSafe } from "./browserBuildGuard";
+
+const browserSafeLogger = createLogger();
+const viteWarn = browserSafeLogger.warn.bind(browserSafeLogger);
+browserSafeLogger.warn = (message, options) => {
+  assertBrowserBuildWarningIsSafe(message);
+  viteWarn(message, options);
+};
 
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
+  customLogger: browserSafeLogger,
   plugins: [react(), tailwindcss()],
   build: {
     sourcemap: true,

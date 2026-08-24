@@ -269,9 +269,6 @@ function TipTapEditorInner(props: TipTapEditorProps) {
           className={`scroll-container overflow-y-scroll ${props.isMainInput ? "max-h-[70vh]" : ""}`}
           spellCheck={false}
           editor={editor}
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
         />
         <InputToolbar
           isMainInput={props.isMainInput}

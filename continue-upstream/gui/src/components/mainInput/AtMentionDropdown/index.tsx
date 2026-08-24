@@ -338,7 +338,17 @@ const AtMentionDropdown = forwardRef((props: AtMentionDropdownProps, ref) => {
     const item = allItems[index];
 
     if (item.type === "action" && item.action) {
-      item.action();
+      // Slash actions must go through TipTap's suggestion command so the
+      // typed `/query` is removed and the suggestion popup exits cleanly.
+      // Mention actions manage their own text range, but still need to close
+      // the menu and return keyboard focus to the editor.
+      if (item.title.startsWith("/")) {
+        props.command({ ...item, itemType: item.type });
+      } else {
+        item.action();
+        props.onClose();
+        props.editor.commands.focus();
+      }
       return;
     }
 
@@ -551,93 +561,93 @@ const AtMentionDropdown = forwardRef((props: AtMentionDropdownProps, ref) => {
                       {categoryHeader}
                     </div>
                   ) : null}
-                <ItemDiv
-                  as="button"
-                  ref={(el) => (itemRefs.current[index] = el)}
-                  className={`item cursor-pointer ${isSelected ? "is-selected" : ""}`}
-                  key={index}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    selectItem(index);
-                  }}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  data-testid="context-provider-dropdown-item"
-                >
-                  <span className="flex w-full items-center justify-between">
-                    <div className="flex items-center justify-center">
-                      {showFileIconForItem(item) ? (
-                        <FileIcon
-                          height="20px"
-                          width="20px"
-                          filename={item.description}
-                        />
-                      ) : (
-                        <DropdownIcon item={item} className="mr-2" />
-                      )}
-                      <span title={item.id} className="whitespace-nowrap">
-                        {item.title}
-                      </span>
-                      {item.argsHint ? (
-                        <span
-                          className="ml-1.5 whitespace-nowrap opacity-50"
-                          style={{ color: lightGray }}
-                        >
-                          {item.argsHint}
-                        </span>
-                      ) : null}
-                      {"  "}
-                    </div>
-                    <span
-                      style={{
-                        color: lightGray,
-                        float: "right",
-                        textAlign: "right",
-                        opacity:
-                          subMenuTitle || item.type !== "contextProvider"
-                            ? 1
-                            : isSelected
-                              ? 1
-                              : 0,
-                        minWidth: "30px",
-                      }}
-                      className="ml-2 flex items-center overflow-hidden overflow-ellipsis whitespace-nowrap"
-                    >
-                      {item.description}
-                      {item.badge ? (
-                        <span className="ml-2 flex-shrink-0 rounded px-1.5 py-0.5 text-[0.9em] opacity-80 [background-color:var(--vscode-badge-background)] [color:var(--vscode-badge-foreground)]">
-                          {item.badge}
-                        </span>
-                      ) : null}
-                      {item.type === "contextProvider" &&
-                        item.contextProvider?.type === "submenu" && (
-                          <ArrowRightIcon
-                            className="ml-2 flex-shrink-0"
-                            width="1.2em"
-                            height="1.2em"
+                  <ItemDiv
+                    as="button"
+                    ref={(el) => (itemRefs.current[index] = el)}
+                    className={`item cursor-pointer ${isSelected ? "is-selected" : ""}`}
+                    key={index}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      selectItem(index);
+                    }}
+                    onMouseEnter={() => setSelectedIndex(index)}
+                    data-testid="context-provider-dropdown-item"
+                  >
+                    <span className="flex w-full items-center justify-between">
+                      <div className="flex items-center justify-center">
+                        {showFileIconForItem(item) ? (
+                          <FileIcon
+                            height="20px"
+                            width="20px"
+                            filename={item.description}
                           />
+                        ) : (
+                          <DropdownIcon item={item} className="mr-2" />
                         )}
-                      {item.subActions?.map((subAction) => {
-                        const Icon = getIconFromDropdownItem(
-                          subAction.icon,
-                          "action",
-                        );
-                        return (
-                          <HeaderButtonWithToolTip
-                            onClick={(e) => {
-                              subAction.action(item);
-                              e.stopPropagation();
-                              e.preventDefault();
-                              props.onClose();
-                            }}
-                            text={undefined}
+                        <span title={item.id} className="whitespace-nowrap">
+                          {item.title}
+                        </span>
+                        {item.argsHint ? (
+                          <span
+                            className="ml-1.5 whitespace-nowrap opacity-50"
+                            style={{ color: lightGray }}
                           >
-                            <Icon width="1.2em" height="1.2em" />
-                          </HeaderButtonWithToolTip>
-                        );
-                      })}
+                            {item.argsHint}
+                          </span>
+                        ) : null}
+                        {"  "}
+                      </div>
+                      <span
+                        style={{
+                          color: lightGray,
+                          float: "right",
+                          textAlign: "right",
+                          opacity:
+                            subMenuTitle || item.type !== "contextProvider"
+                              ? 1
+                              : isSelected
+                                ? 1
+                                : 0,
+                          minWidth: "30px",
+                        }}
+                        className="ml-2 flex items-center overflow-hidden overflow-ellipsis whitespace-nowrap"
+                      >
+                        {item.description}
+                        {item.badge ? (
+                          <span className="ml-2 flex-shrink-0 rounded px-1.5 py-0.5 text-[0.9em] opacity-80 [background-color:var(--vscode-badge-background)] [color:var(--vscode-badge-foreground)]">
+                            {item.badge}
+                          </span>
+                        ) : null}
+                        {item.type === "contextProvider" &&
+                          item.contextProvider?.type === "submenu" && (
+                            <ArrowRightIcon
+                              className="ml-2 flex-shrink-0"
+                              width="1.2em"
+                              height="1.2em"
+                            />
+                          )}
+                        {item.subActions?.map((subAction) => {
+                          const Icon = getIconFromDropdownItem(
+                            subAction.icon,
+                            "action",
+                          );
+                          return (
+                            <HeaderButtonWithToolTip
+                              onClick={(e) => {
+                                subAction.action(item);
+                                e.stopPropagation();
+                                e.preventDefault();
+                                props.onClose();
+                              }}
+                              text={undefined}
+                            >
+                              <Icon width="1.2em" height="1.2em" />
+                            </HeaderButtonWithToolTip>
+                          );
+                        })}
+                      </span>
                     </span>
-                  </span>
-                </ItemDiv>
+                  </ItemDiv>
                 </div>
               );
             })

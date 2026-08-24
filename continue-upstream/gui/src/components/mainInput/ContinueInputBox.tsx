@@ -14,13 +14,12 @@ import { buildConfigRoute } from "../../util/navigation";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectSlashCommandComboBoxInputs } from "../../redux/selectors";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
-import {
-  clearSessionHistory,
-  setMode,
-} from "../../redux/slices/sessionSlice";
+import { setDialogMessage, setShowDialog } from "../../redux/slices/uiSlice";
+import { clearSessionHistory, setMode } from "../../redux/slices/sessionSlice";
 import { cancelStream } from "../../redux/thunks/cancelStream";
 import { saveCurrentSession, updateSession } from "../../redux/thunks/session";
 import { useCompactConversation } from "../../util/compactConversation";
+import { SessionGoalDialog } from "../dialogs/SessionGoalDialog";
 import {
   buildBuiltInSlashCommands,
   groupSlashCommands,
@@ -167,20 +166,23 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
               .catch(() => undefined);
             return;
           }
-          const text = window.prompt(
-            "¿Qué debe conseguir Lumina antes de parar?",
+          dispatch(
+            setDialogMessage(
+              <SessionGoalDialog
+                onSubmit={async (text) => {
+                  const response = await ideMessenger.request("goals/set", {
+                    sessionId,
+                    text,
+                  });
+                  if (response.status === "error") {
+                    throw new Error(response.error);
+                  }
+                  setSessionGoal(response.content);
+                }}
+              />,
+            ),
           );
-          if (!text?.trim()) {
-            return;
-          }
-          void ideMessenger
-            .request("goals/set", { sessionId, text: text.trim() })
-            .then((res) => {
-              if (res.status !== "error") {
-                setSessionGoal(res.content);
-              }
-            })
-            .catch(() => undefined);
+          dispatch(setShowDialog(true));
         },
         openConfigTab: (tabId) => {
           // La página de ajustes selecciona pestaña por `?tab=`; usar el mismo
