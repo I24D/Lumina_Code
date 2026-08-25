@@ -70,4 +70,81 @@ describe("WorkPanel", () => {
       screen.getByText(/no informa una tarifa verificable/i),
     ).toBeInTheDocument();
   });
+
+  describe("comandos del proyecto", () => {
+    function messengerWithRecipe(recipe: unknown) {
+      const messenger = new MockIdeMessenger();
+      messenger.responses["lumina/assistantState"] = {
+        memory: [],
+        tools: [],
+        steps: [],
+        settings: {
+          fullAccess: false,
+          requireVerification: true,
+          continuousVision: false,
+        },
+        stateDir: "C:/tmp/lumina",
+      };
+      messenger.responses["goals/list"] = [];
+      messenger.responses["history/list"] = [];
+      messenger.responses["stats/getTokensPerDay"] = [];
+      messenger.responses["verify/recipe"] = recipe;
+      return messenger;
+    }
+
+    it("muestra los comandos detectados y de dónde salieron", async () => {
+      const messenger = messengerWithRecipe({
+        name: "Node.js (Vite)",
+        kind: "node-vite",
+        bootstrap: ["pnpm install"],
+        build: ["npm run build"],
+        test: ["npm test"],
+        start: "npm run dev",
+        port: 5173,
+        readinessPath: "/",
+        evidence: ["package.json", "pnpm-lock.yaml"],
+      });
+
+      await renderWithProviders(<WorkPanel />, { mockIdeMessenger: messenger });
+
+      expect(await screen.findByText("Node.js (Vite)")).toBeInTheDocument();
+      expect(screen.getByText("pnpm install")).toBeInTheDocument();
+      expect(screen.getByText("npm test")).toBeInTheDocument();
+      // Sin la evidencia no hay forma de distinguir una detección acertada de
+      // una equivocada.
+      expect(
+        screen.getByText(/package\.json, pnpm-lock\.yaml/),
+      ).toBeInTheDocument();
+    });
+
+    it("omite las filas que el proyecto no tiene", async () => {
+      const messenger = messengerWithRecipe({
+        name: "Python",
+        kind: "python",
+        bootstrap: ["pip install -r requirements.txt"],
+        build: [],
+        test: ["pytest"],
+        evidence: ["requirements.txt"],
+      });
+
+      await renderWithProviders(<WorkPanel />, { mockIdeMessenger: messenger });
+
+      expect(await screen.findByText("Python")).toBeInTheDocument();
+      expect(screen.queryByText("Compilar")).not.toBeInTheDocument();
+      expect(screen.queryByText("Arrancar")).not.toBeInTheDocument();
+    });
+
+    it("no pinta la tarjeta cuando no se detecta nada", async () => {
+      const messenger = messengerWithRecipe(undefined);
+
+      await renderWithProviders(<WorkPanel />, { mockIdeMessenger: messenger });
+
+      // Una tarjeta vacía sugeriría que el proyecto no tiene comandos, que no
+      // es lo mismo que no haberlos podido deducir.
+      await screen.findByText(/Metas de sesión/i);
+      expect(
+        screen.queryByTestId("work-project-recipe"),
+      ).not.toBeInTheDocument();
+    });
+  });
 });

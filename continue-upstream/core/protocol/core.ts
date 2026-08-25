@@ -76,6 +76,7 @@ import type {
 } from "../learning/SessionSearchIndex.js";
 import type { SkillUsageView } from "../learning/types.js";
 import type { TodoSnapshot } from "../planner/types.js";
+import type { VerificationRecipe } from "../verify/types.js";
 import type { GitHubWorkItem } from "../integrations/GitHubWorkItemService.js";
 import type {
   ScheduledTask,
@@ -142,6 +143,7 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   ];
   "sessions/search": [SessionSearchRequest, SessionSearchResponse];
   "todos/list": [undefined, TodoSnapshot];
+  "verify/recipe": [undefined, VerificationRecipe | undefined];
   "history/load": [{ id: string }, Session];
   "history/save": [Session, void];
   "history/share": [{ id: string; outputDir?: string }, void];

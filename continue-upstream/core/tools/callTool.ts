@@ -17,6 +17,7 @@ import { luminaCreateSkillImpl } from "./implementations/luminaCreateSkill";
 import { manageSkillsImpl } from "./implementations/manageSkills";
 import { manageTodosImpl } from "./implementations/manageTodos";
 import { searchSessionsImpl } from "./implementations/searchSessions";
+import { verifyProjectImpl } from "./implementations/verifyProject";
 import { luminaImageGenImpl } from "./implementations/luminaImageGen";
 import { luminaVideoGenImpl } from "./implementations/luminaVideoGen";
 import { luminaWindowsBridgeImpl } from "./implementations/luminaWindowsBridge";
@@ -236,6 +237,8 @@ export async function callBuiltInTool(
       return await manageTodosImpl(args, extras);
     case BuiltInToolNames.SearchSessions:
       return await searchSessionsImpl(args, extras);
+    case BuiltInToolNames.VerifyProject:
+      return await verifyProjectImpl(args, extras);
     case BuiltInToolNames.SearchWeb:
       return await searchWebImpl(args, extras);
     case BuiltInToolNames.FetchUrlContent:

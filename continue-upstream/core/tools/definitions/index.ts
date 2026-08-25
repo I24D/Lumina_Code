@@ -24,6 +24,7 @@ export { readSkillTool } from "./readSkill";
 export { requestRuleTool } from "./requestRule";
 export { runTerminalCommandTool } from "./runTerminalCommand";
 export { searchSessionsTool } from "./searchSessions";
+export { verifyProjectTool } from "./verifyProject";
 export { searchWebTool } from "./searchWeb";
 export { singleFindAndReplaceTool } from "./singleFindAndReplace";
 export { viewDiffTool } from "./viewDiff";

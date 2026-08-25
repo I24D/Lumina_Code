@@ -1,5 +1,6 @@
 import {
   ArrowPathIcon,
+  BeakerIcon,
   CheckCircleIcon,
   ClockIcon,
   ExclamationTriangleIcon,
@@ -9,6 +10,7 @@ import {
 } from "@heroicons/react/24/outline";
 import type { BaseSessionMetadata } from "core";
 import type { SessionGoal } from "core/goals/sessionGoal";
+import type { VerificationRecipe } from "core/verify/types";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AcceptRejectDiffButtons from "../../components/AcceptRejectDiffButtons";
@@ -78,6 +80,21 @@ export default function WorkPanel() {
   const [tokenDays, setTokenDays] = useState<TokenDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [recipe, setRecipe] = useState<VerificationRecipe | undefined>();
+
+  // Kept out of the 3-second refresh below: this reads the project's manifests,
+  // and they do not change while you watch the panel.
+  useEffect(() => {
+    let cancelled = false;
+    void ideMessenger.request("verify/recipe", undefined).then((result) => {
+      if (!cancelled && result.status === "success") {
+        setRecipe(result.content);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ideMessenger]);
 
   const refresh = useCallback(async () => {
     try {
@@ -267,6 +284,41 @@ export default function WorkPanel() {
               applyStates={approvals}
               onAcceptOrReject={() => setTimeout(() => void refresh(), 150)}
             />
+          </section>
+        )}
+
+        {recipe && (
+          <section
+            className="mb-3 rounded-lg border border-solid border-[color:var(--vscode-panel-border)] p-3"
+            data-testid="work-project-recipe"
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="m-0 text-xs font-semibold uppercase opacity-60">
+                Proyecto
+              </h2>
+              <BeakerIcon className="h-4 w-4 opacity-60" />
+            </div>
+            <div className="font-semibold">{recipe.name}</div>
+            <div className="mt-2 flex flex-col gap-1 text-xs">
+              {[
+                ["Instalar", recipe.bootstrap.join(" && ")],
+                ["Compilar", recipe.build.join(" && ")],
+                ["Probar", recipe.test.join(" && ")],
+                ["Arrancar", recipe.start ?? ""],
+              ]
+                .filter(([, command]) => command !== "")
+                .map(([label, command]) => (
+                  <div key={label} className="flex gap-2">
+                    <span className="w-16 flex-none opacity-60">{label}</span>
+                    <code className="min-w-0 break-all">{command}</code>
+                  </div>
+                ))}
+            </div>
+            {/* Sin esto, una detección equivocada es indistinguible de una
+                acertada y no hay forma de saber cuál es. */}
+            <div className="mt-2 text-xs opacity-50">
+              Detectado desde: {recipe.evidence.join(", ")}
+            </div>
           </section>
         )}
 

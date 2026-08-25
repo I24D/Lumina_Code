@@ -88,6 +88,7 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
     items: [],
     counts: { pending: 0, in_progress: 0, completed: 0, cancelled: 0 },
   },
+  "verify/recipe": undefined,
   "config/getSerializedProfileInfo": {
     profileId: "local",
     profiles: [],

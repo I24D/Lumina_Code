@@ -17,6 +17,7 @@ export const getBaseToolDefinitions = () => [
   toolDefinitions.manageSkillsTool,
   toolDefinitions.manageTodosTool,
   toolDefinitions.searchSessionsTool,
+  toolDefinitions.verifyProjectTool,
   toolDefinitions.globSearchTool,
   toolDefinitions.viewDiffTool,
   toolDefinitions.readCurrentlyOpenFileTool,

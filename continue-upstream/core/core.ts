@@ -76,6 +76,8 @@ import { loadMarkdownSkills } from "./config/markdown/loadMarkdownSkills";
 import { getSessionSearchIndex } from "./learning/SessionSearchIndex.js";
 import { getSkillUsageStore } from "./learning/SkillUsageStore.js";
 import { getTodoStore } from "./planner/TodoStore.js";
+import { detectRecipe } from "./verify/detectRecipe.js";
+import { workspaceFiles } from "./verify/workspaceFiles.js";
 import {
   setupLocalConfig,
   setupProviderConfig,
@@ -424,6 +426,14 @@ export class Core {
 
     on("todos/list", async () => {
       return getTodoStore().read();
+    });
+
+    on("verify/recipe", async () => {
+      const dirs = await this.ide.getWorkspaceDirs();
+      if (dirs.length === 0) {
+        return undefined;
+      }
+      return await detectRecipe(workspaceFiles(this.ide, dirs[0]));
     });
 
     on("sessions/search", async (msg) => {

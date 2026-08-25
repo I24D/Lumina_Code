@@ -27,6 +27,7 @@ export enum BuiltInToolNames {
   SearchSessions = "search_sessions",
   ManageSkills = "manage_skills",
   ManageTodos = "manage_todos",
+  VerifyProject = "verify_project",
 
   // excluded from allTools for now
   ViewRepoMap = "view_repo_map",

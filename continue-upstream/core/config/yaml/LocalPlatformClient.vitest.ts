@@ -13,8 +13,18 @@ import { LocalPlatformClient } from "./LocalPlatformClient";
 
 vi.mock("../../util/paths", { spy: true });
 
-/** Presupuesto para los hooks que reimportan el grafo de fixtures entero. */
-const HEAVY_IMPORT_TIMEOUT_MS = 60_000;
+/**
+ * Presupuesto para los hooks que reimportan el grafo de fixtures entero.
+ *
+ * En aislamiento este hook tarda unos 14 s. Lo que lo acerca al límite no es su
+ * propio trabajo sino la contención: la suite ejecuta muchos ficheros a la vez
+ * y este worker se queda sin CPU, así que el coste sube cada vez que se añade
+ * un fichero de test en cualquier otra parte del proyecto. Un plazo que hay que
+ * reajustar por cambios ajenos es la parte arbitraria, no el trabajo — de ahí
+ * un techo amplio: aquí solo debe saltar si la importación se ha colgado de
+ * verdad, no porque la máquina estuviera ocupada.
+ */
+const HEAVY_IMPORT_TIMEOUT_MS = 180_000;
 
 describe("LocalPlatformClient", () => {
   const testFQSN: FQSN = {
