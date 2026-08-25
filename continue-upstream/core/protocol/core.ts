@@ -81,6 +81,12 @@ import type {
   SessionSummary,
 } from "../learning/SessionSearchIndex.js";
 import type { SkillUsageView } from "../learning/types.js";
+import type { SkillLintFinding } from "../learning/types.js";
+import type {
+  SkillDraft,
+  SkillSaveResult,
+} from "../learning/SkillWorkshopService.js";
+import type { LuminaPluginCatalogEntry } from "../config/PluginCatalogService.js";
 import type { TodoSnapshot } from "../planner/types.js";
 import type { VerificationRecipe } from "../verify/types.js";
 import type { GitHubWorkItem } from "../integrations/GitHubWorkItemService.js";
@@ -175,6 +181,16 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "skills/curate": [
     { name: string; action: SkillCurateAction },
     SkillWithUsage[],
+  ];
+  "skills/workshop/lint": [SkillDraft, SkillLintFinding[]];
+  "skills/workshop/save": [
+    { draft: SkillDraft; overwrite?: boolean },
+    { saved: SkillSaveResult; skills: SkillWithUsage[] },
+  ];
+  "plugins/list": [undefined, LuminaPluginCatalogEntry[]];
+  "plugins/setEnabled": [
+    { id: string; enabled: boolean },
+    LuminaPluginCatalogEntry[],
   ];
   "sessions/search": [SessionSearchRequest, SessionSearchResponse];
   "sessions/fork": [ForkSessionRequest, Session];

@@ -9,6 +9,7 @@ import { localPathToUri } from "../../util/pathToUri";
 import { getGlobalFolderWithName } from "../../util/paths";
 import { findUriInDirs, joinPathsToUri } from "../../util/uri";
 import { getAllDotContinueDefinitionFiles } from "../loadLocalAssistants";
+import { getEnabledPluginSkillFiles } from "../PluginCatalogService";
 
 const skillFrontmatterSchema = z.object({
   name: z.string().min(1),
@@ -92,6 +93,7 @@ export async function loadMarkdownSkills(ide: IDE) {
       ).map((file) => file.path),
       ...(await getClaudeSkillsDir(ide)),
       ...(await getLuminaExtraSkillFiles(ide)),
+      ...(await getEnabledPluginSkillFiles(ide)),
     ];
 
     const skillFiles = yamlAndMarkdownFileUris.filter((path) =>

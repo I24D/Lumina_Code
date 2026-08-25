@@ -7,12 +7,12 @@ en `continue-upstream/gui`; no se monta la UI de otro repositorio, no existe un
 
 ## Límites arquitectónicos
 
-| Responsabilidad | Ubicación que sigue siendo canónica |
-| --- | --- |
-| Interfaz React, chat y navegación | `continue-upstream/gui` |
-| Agente, sesiones, voz, scheduler y permisos | `continue-upstream/core` |
-| VS Code, Secret Storage y procesos nativos | `continue-upstream/extensions/vscode` |
-| Orbe nativo de Start Talk | `Start-talk` |
+| Responsabilidad                             | Ubicación que sigue siendo canónica   |
+| ------------------------------------------- | ------------------------------------- |
+| Interfaz React, chat y navegación           | `continue-upstream/gui`               |
+| Agente, sesiones, voz, scheduler y permisos | `continue-upstream/core`              |
+| VS Code, Secret Storage y procesos nativos  | `continue-upstream/extensions/vscode` |
+| Orbe nativo de Start Talk                   | `Start-talk`                          |
 
 El sistema visual adapta la jerarquía, navegación, tarjetas, estados y
 comportamiento responsive de Lumina-Openclaw a las variables de tema de VS Code.
@@ -21,18 +21,18 @@ Continue/Lumina; no incorpora el runtime Lit ni el Gateway de Openclaw.
 
 ## Superficies absorbidas
 
-| Concepto de workspace | Superficie de Lumina Code | Backend real |
-| --- | --- | --- |
-| Chat y sesiones recientes | Chat, sidebar e Historial | History Manager y Redux de sesión |
-| Dashboard, tareas y workboard | Panel de Trabajo | `WorkboardService`, plan del agente, metas, runtime y estadísticas |
-| Revisiones | Recorrido de Cambios | diff del IDE y estados Apply |
-| Automations | Trabajo Programado | `ScheduledTaskService` persistente |
-| Usage | Uso y métricas | base de datos de devdata/tokens |
-| Memory/context | Conocimiento e Indexing | memoria persistente, réplica Supabase opcional, reglas, skills e indexación |
-| Apps/plugins/channels | Conexiones | modelos, MCP, Start Talk y runtime |
-| Security/approvals | Privacidad y Trabajo | políticas de capacidades y aprobaciones |
-| Talk | Configuración de Start Talk | core de voz y VS Code Secret Storage |
-| Logs/debug/infrastructure | Runtime y diagnóstico | estado de componentes y registros del host |
+| Concepto de workspace         | Superficie de Lumina Code   | Backend real                                                                |
+| ----------------------------- | --------------------------- | --------------------------------------------------------------------------- |
+| Chat y sesiones recientes     | Chat, sidebar e Historial   | History Manager y Redux de sesión                                           |
+| Dashboard, tareas y workboard | Panel de Trabajo            | `WorkboardService`, plan del agente, metas, runtime y estadísticas          |
+| Revisiones                    | Recorrido de Cambios        | diff del IDE y estados Apply                                                |
+| Automations                   | Trabajo Programado          | `ScheduledTaskService` persistente                                          |
+| Usage                         | Uso y métricas              | base de datos de devdata/tokens                                             |
+| Memory/context                | Conocimiento e Indexing     | memoria persistente, réplica Supabase opcional, reglas, skills e indexación |
+| Apps/plugins/channels         | Skills y Conexiones         | catálogo local declarativo, Skill Workshop, MCP, Start Talk y runtime       |
+| Security/approvals            | Privacidad y Trabajo        | políticas de capacidades y aprobaciones                                     |
+| Talk                          | Configuración de Start Talk | core de voz y VS Code Secret Storage                                        |
+| Logs/debug/infrastructure     | Runtime y diagnóstico       | estado de componentes y registros del host                                  |
 
 Los alias `/sessions`, `/usage`, `/automations`, `/workboard`,
 `/settings/model-providers`, `/settings/mcp`, `/settings/memory`,
@@ -61,6 +61,14 @@ voz y origen de la configuración. Nunca devuelve la API key.
 al almacén del host. En VS Code se persiste mediante `ExtensionContext.secrets`.
 Un `.env` del workspace conserva prioridad para permitir configuraciones
 reproducibles sin cambiar el comportamiento existente.
+
+## Habilidades y plugins
+
+El Skill Workshop vive dentro de la sección Skills existente y comparte su
+servicio de validación/escritura con la herramienta `create_skill` del agente.
+Los plugins locales son manifiestos declarativos que pueden aportar `SKILL.md`;
+su catálogo no ejecuta módulos JavaScript. Las capacidades ejecutables se
+mantienen en MCP para conservar los límites de permisos y aprobación.
 
 ## Protección y pruebas
 

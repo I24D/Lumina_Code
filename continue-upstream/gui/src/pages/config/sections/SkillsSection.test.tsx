@@ -106,9 +106,7 @@ describe("SkillsSection", () => {
 
     await userEvent.click(await screen.findByTestId("skill-card-deploy"));
 
-    expect(
-      post.mock.calls.some((call) => call[0] === "openFile"),
-    ).toBe(true);
+    expect(post.mock.calls.some((call) => call[0] === "openFile")).toBe(true);
   });
 
   it("says the list is empty only once it is actually known to be", async () => {
@@ -117,5 +115,81 @@ describe("SkillsSection", () => {
     await renderWithProviders(<SkillsSection />, { mockIdeMessenger });
 
     expect(await screen.findByText(/No skills yet/u)).toBeInTheDocument();
+  });
+
+  it("edits and saves a skill through the workshop contract", async () => {
+    const mockIdeMessenger = new MockIdeMessenger();
+    const existing = {
+      ...skill("release-check"),
+      description: "Check a release",
+      content: "## Procedure\n\n1. Run tests.",
+    };
+    mockIdeMessenger.responses["skills/list"] = [existing];
+    mockIdeMessenger.responseHandlers["skills/workshop/save"] = async ({
+      draft,
+    }) => ({
+      saved: {
+        skill: {
+          ...existing,
+          name: draft.name,
+          description: draft.description,
+        },
+        created: false,
+        findings: [],
+      },
+      skills: [{ ...existing, description: draft.description }],
+    });
+    const request = vi.spyOn(mockIdeMessenger, "request");
+    await renderWithProviders(<SkillsSection />, { mockIdeMessenger });
+
+    await userEvent.click(
+      await screen.findByTestId("skill-edit-release-check"),
+    );
+    expect(screen.getByTestId("skill-workshop-name")).toHaveValue(
+      "release-check",
+    );
+    const description = screen.getByTestId("skill-workshop-description");
+    await userEvent.clear(description);
+    await userEvent.type(description, "Validate a production release");
+    await userEvent.click(screen.getByTestId("skill-workshop-save"));
+
+    expect(
+      request.mock.calls.some(
+        ([type, data]) =>
+          type === "skills/workshop/save" &&
+          data.overwrite === true &&
+          data.draft.description === "Validate a production release",
+      ),
+    ).toBe(true);
+  });
+
+  it("activates and deactivates discovered local plugins", async () => {
+    const mockIdeMessenger = new MockIdeMessenger();
+    mockIdeMessenger.responses["plugins/list"] = [
+      {
+        id: "release-pack",
+        name: "Release Pack",
+        version: "1.0.0",
+        description: "Release procedures",
+        path: "/workspace/.continue/plugins/release-pack",
+        enabled: true,
+        skillFiles: [
+          "/workspace/.continue/plugins/release-pack/check/SKILL.md",
+        ],
+        source: "workspace",
+      },
+    ];
+    mockIdeMessenger.responses["plugins/setEnabled"] = [];
+    const request = vi.spyOn(mockIdeMessenger, "request");
+    await renderWithProviders(<SkillsSection />, { mockIdeMessenger });
+
+    await userEvent.click(
+      await screen.findByTestId("plugin-toggle-release-pack"),
+    );
+
+    expect(request).toHaveBeenCalledWith("plugins/setEnabled", {
+      id: "release-pack",
+      enabled: false,
+    });
   });
 });

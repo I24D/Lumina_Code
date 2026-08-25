@@ -76,6 +76,8 @@ import { CodebaseRulesCache } from "./config/markdown/loadCodebaseRules";
 import { loadMarkdownSkills } from "./config/markdown/loadMarkdownSkills";
 import { getSessionSearchIndex } from "./learning/SessionSearchIndex.js";
 import { getSkillUsageStore } from "./learning/SkillUsageStore.js";
+import { SkillWorkshopService } from "./learning/SkillWorkshopService.js";
+import { PluginCatalogService } from "./config/PluginCatalogService.js";
 import { getTodoStore } from "./planner/TodoStore.js";
 import { detectRecipe } from "./verify/detectRecipe.js";
 import { workspaceFiles } from "./verify/workspaceFiles.js";
@@ -356,6 +358,8 @@ export class Core {
   private registerMessageHandlers(ideSettingsPromise: Promise<IdeSettings>) {
     const on = this.messenger.on.bind(this.messenger);
     const worktreeService = new WorktreeService(this.ide);
+    const skillWorkshop = new SkillWorkshopService(this.ide);
+    const pluginCatalog = new PluginCatalogService(this.ide);
     const resolveMemoryConfig = async (): Promise<SupabaseMemoryConfig> => {
       const dirs = await this.ide.getWorkspaceDirs();
       return {
@@ -510,6 +514,28 @@ export class Core {
       // Returning the fresh list saves the settings page a second round trip
       // and guarantees it renders what was actually persisted.
       return await this.listSkillsWithUsage();
+    });
+
+    on("skills/workshop/lint", async (msg) => skillWorkshop.lint(msg.data));
+
+    on("skills/workshop/save", async (msg) => {
+      const saved = await skillWorkshop.save(msg.data.draft, {
+        overwrite: msg.data.overwrite,
+        provenance: "user",
+      });
+      await this.configHandler.reloadConfig("Skill saved from workshop");
+      return { saved, skills: await this.listSkillsWithUsage() };
+    });
+
+    on("plugins/list", async () => pluginCatalog.list());
+
+    on("plugins/setEnabled", async (msg) => {
+      const plugins = await pluginCatalog.setEnabled(
+        msg.data.id,
+        msg.data.enabled,
+      );
+      await this.configHandler.reloadConfig("Plugin catalog changed");
+      return plugins;
     });
 
     on("todos/list", async () => {
