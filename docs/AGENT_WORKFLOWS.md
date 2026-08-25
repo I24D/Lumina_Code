@@ -35,12 +35,22 @@ Esta vista no modifica cambios Git arbitrarios ni hace commits. Su objetivo es r
 Reúne en una sola pantalla:
 
 - sesión activa y modo de trabajo;
+- workboard durable con columnas `backlog`, lista, en curso, revisión,
+  bloqueada y terminada;
+- alta, movimiento y borrado de tarjetas, prioridad, vínculo a la sesión y
+  actividad reciente persistida;
+- plan efímero del agente, separado deliberadamente del trabajo durable;
 - metas activas y consumo de turnos;
 - aprobaciones pendientes;
 - tareas del runtime y su estado;
 - sesiones recientes y tokens conocidos.
 
 Cuando un proveedor no ofrece precios fiables —por ejemplo, un modelo cloud sin tabla local verificable— la interfaz indica que el coste no está disponible en vez de inventar una cifra.
+
+Las tarjetas se guardan atómicamente en
+`~/.continue/lumina-workboard.json`. El workboard sobrevive a cambios de chat y
+reinicios; el plan del agente no, porque sus pasos solo son válidos dentro del
+contexto de la conversación que los produjo.
 
 ## Trabajo programado (`/schedule`)
 

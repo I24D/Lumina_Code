@@ -67,7 +67,7 @@ La interfaz incluye acciones integradas que se abren escribiendo `/` en el chat.
 | `/goal`     | Define una meta con un diálogo nativo. El agente continúa por turnos, usa un juez separado y se detiene al completar, bloquearse, cancelarse o alcanzar el límite. |
 | `/github`   | Prepara una sesión nueva desde la URL de un issue o pull request, incluyendo comentarios y contexto del diff de un PR. No ejecuta el agente automáticamente.       |
 | `/changes`  | Convierte el diff del workspace en un recorrido guiado por archivo y bloque, con navegación al código y aceptación o rechazo de cambios pendientes.                |
-| `/work`     | Reúne sesión activa, metas, aprobaciones, trabajos en ejecución, historial, tokens y disponibilidad de costes.                                                     |
+| `/work`     | Reúne workboard persistente, plan del agente, sesión activa, metas, aprobaciones, actividad, historial, tokens y costes conocidos.                                  |
 | `/schedule` | Crea trabajos persistentes únicos, diarios, semanales o cron; permite pausar, editar, ejecutar ahora y revisar resultados.                                         |
 
 Los trabajos programados se guardan localmente y solo se ejecutan mientras el host de Lumina Code está disponible. Crear una programación es una autorización explícita para ejecutar ese prompt en las fechas configuradas; los límites de herramientas y aprobaciones siguen aplicándose. Consulta [Flujos avanzados del agente](docs/AGENT_WORKFLOWS.md) para conocer el comportamiento, las credenciales y los límites de seguridad.
@@ -128,6 +128,7 @@ La arquitectura y el mapa de absorción están documentados en
 | Chat, edición y agente de código          | **Funcional; requiere configurar un modelo**            |
 | Metas, GitHub, cambios, panel y scheduler | **Funcionales y cubiertos por pruebas automatizadas**   |
 | Sesiones, forks y worktrees Git           | **Funcionales y cubiertos por pruebas automatizadas**   |
+| Workboard, tareas, actividad y dashboard  | **Persistentes y cubiertos por pruebas automatizadas**  |
 | Licencia y atribuciones                   | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE) |
 | Publicación en Visual Studio Marketplace  | Aún no disponible                                       |
 

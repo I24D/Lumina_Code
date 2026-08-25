@@ -89,6 +89,11 @@ import type {
   ScheduledTaskRun,
 } from "../scheduler/ScheduledTaskService.js";
 import type {
+  WorkboardCard,
+  WorkboardCardInput,
+  WorkboardSnapshot,
+} from "../workboard/WorkboardService.js";
+import type {
   CapabilityDefinition,
   LuminaCapability,
   PermissionMap,
@@ -169,6 +174,13 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "worktrees/create": [CreateWorktreeRequest, WorktreeInfo];
   "worktrees/remove": [RemoveWorktreeRequest, void];
   "todos/list": [undefined, TodoSnapshot];
+  "workboard/get": [undefined, WorkboardSnapshot];
+  "workboard/create": [WorkboardCardInput, WorkboardCard];
+  "workboard/update": [
+    { id: string; patch: Partial<WorkboardCardInput> },
+    WorkboardCard,
+  ];
+  "workboard/delete": [{ id: string }, void];
   "verify/recipe": [undefined, VerificationRecipe | undefined];
   "history/load": [{ id: string }, Session];
   "history/save": [Session, void];

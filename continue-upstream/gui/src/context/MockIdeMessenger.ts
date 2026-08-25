@@ -90,6 +90,18 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
     items: [],
     counts: { pending: 0, in_progress: 0, completed: 0, cancelled: 0 },
   },
+  "workboard/get": {
+    cards: [],
+    activity: [],
+    counts: {
+      backlog: 0,
+      ready: 0,
+      in_progress: 0,
+      review: 0,
+      blocked: 0,
+      done: 0,
+    },
+  },
   "verify/recipe": undefined,
   "config/getSerializedProfileInfo": {
     profileId: "local",

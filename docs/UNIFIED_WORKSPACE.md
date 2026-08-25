@@ -24,8 +24,8 @@ Continue/Lumina; no incorpora el runtime Lit ni el Gateway de Openclaw.
 | Concepto de workspace | Superficie de Lumina Code | Backend real |
 | --- | --- | --- |
 | Chat y sesiones recientes | Chat, sidebar e Historial | History Manager y Redux de sesión |
-| Dashboard y tareas | Panel de Trabajo | runtime del asistente, metas y estadísticas |
-| Workboard y revisiones | Recorrido de Cambios | diff del IDE y estados Apply |
+| Dashboard, tareas y workboard | Panel de Trabajo | `WorkboardService`, plan del agente, metas, runtime y estadísticas |
+| Revisiones | Recorrido de Cambios | diff del IDE y estados Apply |
 | Automations | Trabajo Programado | `ScheduledTaskService` persistente |
 | Usage | Uso y métricas | base de datos de devdata/tokens |
 | Memory/context | Conocimiento e Indexing | reglas, skills, configs e indexación |

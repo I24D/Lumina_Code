@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import type { VerificationRecipe } from "core/verify/types";
 import { describe, expect, it } from "vitest";
 import { MockIdeMessenger } from "../../context/MockIdeMessenger";
@@ -70,6 +70,84 @@ describe("WorkPanel", () => {
     expect(
       screen.getByText(/no informa una tarifa verificable/i),
     ).toBeInTheDocument();
+  });
+
+  it("creates a durable workboard card and renders activity", async () => {
+    const messenger = new MockIdeMessenger();
+    messenger.responses["lumina/assistantState"] = {
+      memory: [],
+      tools: [],
+      steps: [],
+      settings: {
+        fullAccess: false,
+        requireVerification: true,
+        continuousVision: false,
+      },
+      stateDir: "C:/tmp/lumina",
+    };
+    messenger.responses["goals/list"] = [];
+    messenger.responses["history/list"] = [];
+    messenger.responses["stats/getTokensPerDay"] = [];
+    messenger.responses["verify/recipe"] = undefined;
+
+    const card = {
+      id: "board-1",
+      title: "Publicar fase 2",
+      description: "",
+      column: "backlog" as const,
+      priority: "high" as const,
+      tags: [],
+      sessionId: "session-id",
+      createdAt: "2026-08-25T12:00:00.000Z",
+      updatedAt: "2026-08-25T12:00:00.000Z",
+    };
+    let created = false;
+    messenger.responseHandlers["workboard/create"] = async (input) => {
+      expect(input).toMatchObject({
+        title: "Publicar fase 2",
+        priority: "high",
+      });
+      created = true;
+      return card;
+    };
+    messenger.responseHandlers["workboard/get"] = async () => ({
+      cards: created ? [card] : [],
+      activity: created
+        ? [
+            {
+              id: "activity-1",
+              cardId: card.id,
+              kind: "created",
+              summary: "Publicar fase 2: Creada en backlog.",
+              createdAt: card.createdAt,
+            },
+          ]
+        : [],
+      counts: {
+        backlog: created ? 1 : 0,
+        ready: 0,
+        in_progress: 0,
+        review: 0,
+        blocked: 0,
+        done: 0,
+      },
+    });
+
+    await renderWithProviders(<WorkPanel />, { mockIdeMessenger: messenger });
+    fireEvent.change(
+      await screen.findByLabelText("Título de la nueva tarjeta"),
+      { target: { value: "Publicar fase 2" } },
+    );
+    fireEvent.change(screen.getByLabelText("Prioridad de la nueva tarjeta"), {
+      target: { value: "high" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /añadir/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Publicar fase 2")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText(/actividad reciente/i));
+    expect(screen.getByText(/Creada en backlog/i)).toBeInTheDocument();
   });
 
   describe("comandos del proyecto", () => {

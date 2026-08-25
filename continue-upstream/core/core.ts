@@ -80,6 +80,7 @@ import { getTodoStore } from "./planner/TodoStore.js";
 import { detectRecipe } from "./verify/detectRecipe.js";
 import { workspaceFiles } from "./verify/workspaceFiles.js";
 import { WorktreeService } from "./worktrees/WorktreeService.js";
+import { WorkboardService } from "./workboard/WorkboardService.js";
 import {
   setupLocalConfig,
   setupProviderConfig,
@@ -145,6 +146,7 @@ export class Core {
   private globalContext = new GlobalContext();
   private startTalkManager: StartTalkManager;
   private scheduledTaskService: ScheduledTaskService;
+  private workboardService: WorkboardService;
   llmLogger = new LLMLogger();
 
   private messageAbortControllers = new Map<string, AbortController>();
@@ -193,6 +195,7 @@ export class Core {
         this.messenger.send("startTalk/event", event);
       });
       this.scheduledTaskService = new ScheduledTaskService();
+      this.workboardService = new WorkboardService();
 
       // Autonomous WhatsApp assistant: watches incoming WhatsApp notifications
       // (Desktop + Enlace móvil), drafts a reply with the chat model and sends it
@@ -459,6 +462,20 @@ export class Core {
 
     on("todos/list", async () => {
       return getTodoStore().read();
+    });
+
+    on("workboard/get", async () => this.workboardService.snapshot());
+
+    on("workboard/create", async (msg) =>
+      this.workboardService.create(msg.data),
+    );
+
+    on("workboard/update", async (msg) =>
+      this.workboardService.update(msg.data.id, msg.data.patch),
+    );
+
+    on("workboard/delete", async (msg) => {
+      this.workboardService.remove(msg.data.id);
     });
 
     on("verify/recipe", async () => {

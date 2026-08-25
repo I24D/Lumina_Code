@@ -5,12 +5,22 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   FlagIcon,
+  PlusIcon,
   PlayCircleIcon,
   ShieldCheckIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import type { BaseSessionMetadata } from "core";
 import type { SessionGoal } from "core/goals/sessionGoal";
+import type { TodoSnapshot } from "core/planner/types";
 import type { VerificationRecipe } from "core/verify/types";
+import {
+  WORKBOARD_COLUMNS,
+  type WorkboardCard,
+  type WorkboardColumn,
+  type WorkboardPriority,
+  type WorkboardSnapshot,
+} from "core/workboard/WorkboardService";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AcceptRejectDiffButtons from "../../components/AcceptRejectDiffButtons";
@@ -25,6 +35,33 @@ import type { AssistantTaskStep } from "../assistant/types";
 
 type RuntimeState = { steps: AssistantTaskStep[] };
 type TokenDay = { day: string; promptTokens: number; generatedTokens: number };
+
+const EMPTY_WORKBOARD: WorkboardSnapshot = {
+  cards: [],
+  activity: [],
+  counts: {
+    backlog: 0,
+    ready: 0,
+    in_progress: 0,
+    review: 0,
+    blocked: 0,
+    done: 0,
+  },
+};
+
+const EMPTY_TODOS: TodoSnapshot = {
+  items: [],
+  counts: { pending: 0, in_progress: 0, completed: 0, cancelled: 0 },
+};
+
+const COLUMN_LABELS: Record<WorkboardColumn, string> = {
+  backlog: "Backlog",
+  ready: "Lista",
+  in_progress: "En curso",
+  review: "Revisión",
+  blocked: "Bloqueada",
+  done: "Terminada",
+};
 
 function formatTokens(value: number) {
   return new Intl.NumberFormat(undefined, { notation: "compact" }).format(
@@ -78,9 +115,16 @@ export default function WorkPanel() {
   const [goals, setGoals] = useState<SessionGoal[]>([]);
   const [sessions, setSessions] = useState<BaseSessionMetadata[]>([]);
   const [tokenDays, setTokenDays] = useState<TokenDay[]>([]);
+  const [workboard, setWorkboard] =
+    useState<WorkboardSnapshot>(EMPTY_WORKBOARD);
+  const [todos, setTodos] = useState<TodoSnapshot>(EMPTY_TODOS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [recipe, setRecipe] = useState<VerificationRecipe | undefined>();
+  const [newCardTitle, setNewCardTitle] = useState("");
+  const [newCardPriority, setNewCardPriority] =
+    useState<WorkboardPriority>("normal");
+  const [mutatingCard, setMutatingCard] = useState<string>();
 
   // Kept out of the 3-second refresh below: this reads the project's manifests,
   // and they do not change while you watch the panel.
@@ -98,23 +142,36 @@ export default function WorkPanel() {
 
   const refresh = useCallback(async () => {
     try {
-      const [runtimeResult, goalsResult, sessionsResult, tokensResult] =
-        await Promise.all([
-          ideMessenger.request("lumina/assistantState", undefined),
-          ideMessenger.request("goals/list", undefined),
-          ideMessenger.request("history/list", { limit: 30 }),
-          ideMessenger.request("stats/getTokensPerDay", undefined),
-        ]);
+      const [
+        runtimeResult,
+        goalsResult,
+        sessionsResult,
+        tokensResult,
+        workboardResult,
+        todosResult,
+      ] = await Promise.all([
+        ideMessenger.request("lumina/assistantState", undefined),
+        ideMessenger.request("goals/list", undefined),
+        ideMessenger.request("history/list", { limit: 30 }),
+        ideMessenger.request("stats/getTokensPerDay", undefined),
+        ideMessenger.request("workboard/get", undefined),
+        ideMessenger.request("todos/list", undefined),
+      ]);
       if (runtimeResult.status === "success") setRuntime(runtimeResult.content);
       if (goalsResult.status === "success") setGoals(goalsResult.content);
       if (sessionsResult.status === "success")
         setSessions(sessionsResult.content);
       if (tokensResult.status === "success") setTokenDays(tokensResult.content);
+      if (workboardResult.status === "success")
+        setWorkboard(workboardResult.content);
+      if (todosResult.status === "success") setTodos(todosResult.content);
       const failure = [
         runtimeResult,
         goalsResult,
         sessionsResult,
         tokensResult,
+        workboardResult,
+        todosResult,
       ].find((result) => result.status === "error");
       setError(failure?.status === "error" ? failure.error : undefined);
     } catch (cause) {
@@ -162,6 +219,58 @@ export default function WorkPanel() {
       loadSession({ sessionId, saveCurrentSession: true }),
     ).unwrap();
     navigate("/");
+  };
+
+  const createCard = async () => {
+    const title = newCardTitle.trim();
+    if (!title) return;
+    setMutatingCard("new");
+    try {
+      const result = await ideMessenger.request("workboard/create", {
+        title,
+        priority: newCardPriority,
+        column: "backlog",
+        sessionId: currentSession.id,
+      });
+      if (result.status === "error") throw new Error(result.error);
+      setNewCardTitle("");
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setMutatingCard(undefined);
+    }
+  };
+
+  const moveCard = async (card: WorkboardCard, column: WorkboardColumn) => {
+    setMutatingCard(card.id);
+    try {
+      const result = await ideMessenger.request("workboard/update", {
+        id: card.id,
+        patch: { column },
+      });
+      if (result.status === "error") throw new Error(result.error);
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setMutatingCard(undefined);
+    }
+  };
+
+  const deleteCard = async (card: WorkboardCard) => {
+    setMutatingCard(card.id);
+    try {
+      const result = await ideMessenger.request("workboard/delete", {
+        id: card.id,
+      });
+      if (result.status === "error") throw new Error(result.error);
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setMutatingCard(undefined);
+    }
   };
 
   return (
@@ -253,6 +362,206 @@ export default function WorkPanel() {
               {currentStatus}
             </span>
           </div>
+        </section>
+
+        <section
+          className="mb-3 rounded-lg border border-solid border-[color:var(--vscode-panel-border)] p-3"
+          data-testid="workboard"
+        >
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <div>
+              <h2 className="m-0 text-xs font-semibold uppercase opacity-60">
+                Workboard persistente
+              </h2>
+              <p className="m-0 mt-1 text-xs opacity-50">
+                Trabajo durable entre sesiones; el plan del agente sigue visible
+                debajo.
+              </p>
+            </div>
+            <span className="rounded-full bg-white/5 px-2 py-1 text-xs opacity-70">
+              {workboard.cards.length} tarjetas
+            </span>
+          </div>
+
+          <div className="mb-3 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+            {WORKBOARD_COLUMNS.map((column) => (
+              <div key={column} className="rounded bg-white/5 p-2 text-center">
+                <div className="text-base font-semibold">
+                  {workboard.counts[column]}
+                </div>
+                <div className="truncate text-[10px] opacity-55">
+                  {COLUMN_LABELS[column]}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <form
+            className="mb-3 flex flex-wrap gap-1.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void createCard();
+            }}
+          >
+            <input
+              className="min-w-40 flex-1 rounded border border-solid border-[color:var(--vscode-input-border)] bg-[color:var(--vscode-input-background)] px-2 py-1.5 text-sm text-[color:var(--vscode-input-foreground)] outline-none"
+              aria-label="Título de la nueva tarjeta"
+              placeholder="Nueva tarea del workboard…"
+              value={newCardTitle}
+              onChange={(event) => setNewCardTitle(event.target.value)}
+              maxLength={240}
+            />
+            <select
+              aria-label="Prioridad de la nueva tarjeta"
+              className="rounded border border-solid border-[color:var(--vscode-dropdown-border)] bg-[color:var(--vscode-dropdown-background)] px-2 text-xs text-[color:var(--vscode-dropdown-foreground)]"
+              value={newCardPriority}
+              onChange={(event) =>
+                setNewCardPriority(event.target.value as WorkboardPriority)
+              }
+            >
+              <option value="low">Baja</option>
+              <option value="normal">Normal</option>
+              <option value="high">Alta</option>
+              <option value="critical">Crítica</option>
+            </select>
+            <button
+              type="submit"
+              disabled={!newCardTitle.trim() || mutatingCard === "new"}
+              className="flex cursor-pointer items-center gap-1 rounded border-0 bg-[color:var(--vscode-button-background)] px-2.5 py-1.5 text-xs text-[color:var(--vscode-button-foreground)] disabled:cursor-default disabled:opacity-50"
+            >
+              <PlusIcon className="h-4 w-4" /> Añadir
+            </button>
+          </form>
+
+          {workboard.cards.length === 0 ? (
+            <p className="m-0 rounded bg-white/5 p-3 text-xs opacity-60">
+              No hay tarjetas. Añade la primera tarea sin perderla al cambiar de
+              chat.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {workboard.cards.slice(0, 40).map((card) => (
+                <article
+                  key={card.id}
+                  className="flex flex-wrap items-center gap-2 rounded border border-solid border-[color:var(--vscode-panel-border)] bg-white/[0.025] p-2"
+                >
+                  <span
+                    className={cn(
+                      "h-2 w-2 flex-none rounded-full",
+                      card.priority === "critical"
+                        ? "bg-red-400"
+                        : card.priority === "high"
+                          ? "bg-amber-400"
+                          : card.priority === "low"
+                            ? "bg-slate-400"
+                            : "bg-sky-400",
+                    )}
+                    title={`Prioridad ${card.priority}`}
+                  />
+                  <button
+                    type="button"
+                    className="min-w-28 flex-1 cursor-pointer border-0 bg-transparent p-0 text-left text-sm text-[color:var(--vscode-foreground)]"
+                    title={card.description || card.title}
+                    onClick={() =>
+                      card.sessionId
+                        ? void openSession(card.sessionId)
+                        : undefined
+                    }
+                  >
+                    <span className="block truncate">{card.title}</span>
+                    {(card.worktreePath || card.tags.length > 0) && (
+                      <small className="block truncate opacity-45">
+                        {[card.worktreePath, ...card.tags]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </small>
+                    )}
+                  </button>
+                  <select
+                    aria-label={`Estado de ${card.title}`}
+                    disabled={mutatingCard === card.id}
+                    className="rounded border border-solid border-[color:var(--vscode-dropdown-border)] bg-[color:var(--vscode-dropdown-background)] px-1.5 py-1 text-xs text-[color:var(--vscode-dropdown-foreground)]"
+                    value={card.column}
+                    onChange={(event) =>
+                      void moveCard(card, event.target.value as WorkboardColumn)
+                    }
+                  >
+                    {WORKBOARD_COLUMNS.map((column) => (
+                      <option key={column} value={column}>
+                        {COLUMN_LABELS[column]}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    aria-label={`Eliminar ${card.title}`}
+                    disabled={mutatingCard === card.id}
+                    className="cursor-pointer border-0 bg-transparent p-1 text-[color:var(--vscode-descriptionForeground)] hover:text-red-300 disabled:opacity-40"
+                    onClick={() => void deleteCard(card)}
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {workboard.activity.length > 0 && (
+            <details className="mt-3 text-xs">
+              <summary className="cursor-pointer opacity-65">
+                Actividad reciente ({workboard.activity.length})
+              </summary>
+              <div className="mt-2 max-h-36 overflow-y-auto border-0 border-l border-solid border-[color:var(--vscode-panel-border)] pl-2">
+                {workboard.activity.slice(0, 20).map((entry) => (
+                  <div key={entry.id} className="mb-1.5 opacity-65">
+                    {entry.summary}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </section>
+
+        <section className="mb-3 rounded-lg border border-solid border-[color:var(--vscode-panel-border)] p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="m-0 text-xs font-semibold uppercase opacity-60">
+              Plan activo del agente
+            </h2>
+            <span className="text-xs opacity-55">
+              {todos.counts.completed}/{todos.items.length}
+            </span>
+          </div>
+          {todos.items.length === 0 ? (
+            <p className="m-0 text-xs opacity-60">No hay un plan activo.</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {todos.items.map((item) => (
+                <div key={item.id} className="flex items-start gap-2 text-xs">
+                  <span
+                    className={cn(
+                      "mt-1 h-2 w-2 flex-none rounded-full",
+                      item.status === "completed"
+                        ? "bg-green-400"
+                        : item.status === "in_progress"
+                          ? "bg-sky-400"
+                          : item.status === "cancelled"
+                            ? "bg-slate-500"
+                            : "bg-amber-400",
+                    )}
+                  />
+                  <span
+                    className={
+                      item.status === "cancelled"
+                        ? "line-through opacity-50"
+                        : ""
+                    }
+                  >
+                    {item.content}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {approvals.length > 0 && (
