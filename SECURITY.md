@@ -4,9 +4,11 @@ Lumina Code interactúa con código, terminales, modelos de IA y herramientas de
 
 ## Versiones soportadas
 
-Todavía no existe una release pública estable. La rama `main` y los commits históricos deben considerarse software en desarrollo y no están recomendados para uso de producción.
-
-Esta sección se actualizará con una matriz de versiones cuando se publique la primera developer preview.
+La rama `main` mantiene el flujo funcional y probado para compilar la extensión
+desde el código fuente. Las builds comunitarias generadas desde `main` reciben
+correcciones de seguridad; los commits históricos y binarios de terceros no se
+consideran versiones soportadas. Todavía no existe una publicación firmada en
+Visual Studio Marketplace.
 
 ## Reportar una vulnerabilidad
 

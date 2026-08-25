@@ -111,6 +111,11 @@ import type {
   PermissionMap,
   PermissionPolicy,
 } from "../privacy/permissions.js";
+import type {
+  SecurityAuditInput,
+  SecurityAuditQuery,
+  SecurityAuditSnapshot,
+} from "../privacy/SecurityAuditService.js";
 import { ContinueErrorReason } from "../util/errors";
 
 export enum OnboardingModes {
@@ -470,6 +475,12 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     PermissionMap,
   ];
   "privacy/resetPermissions": [undefined, PermissionMap];
+  "security/audit/list": [
+    SecurityAuditQuery | undefined,
+    SecurityAuditSnapshot,
+  ];
+  "security/audit/record": [SecurityAuditInput, void];
+  "security/audit/clear": [undefined, { removed: number }];
   // Metas de sesión: el agente sigue trabajando hasta cumplirlas.
   "goals/get": [{ sessionId: string }, SessionGoal | undefined];
   "goals/list": [undefined, SessionGoal[]];

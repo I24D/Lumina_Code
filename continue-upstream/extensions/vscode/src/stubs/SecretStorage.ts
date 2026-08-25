@@ -7,9 +7,10 @@ import * as vscode from "vscode";
 const ENCRYPTION_KEY_NAME = "dev.continue.continue";
 
 /**
- * vscode.SecretStorage is not reliable (often loads older values for a key)
+ * Some VS Code versions have returned stale SecretStorage values for a key,
  * but keytar cannot be used in vscode extensions without majorly complicating the build
- * so we store the encryption key in vscode.SecrteStorage, and handle the encrypted data ourselves
+ * so the encryption key stays in vscode.SecretStorage while values are stored
+ * as authenticated AES-GCM ciphertext in extension global storage.
  */
 export class SecretStorage {
   private globalStoragePath: string;
@@ -55,7 +56,37 @@ export class SecretStorage {
     const tag = cipher.getAuthTag();
 
     const result = Buffer.concat([salt, iv, tag, encrypted]);
-    fs.writeFileSync(filePath, result);
+    const temporary = `${filePath}.tmp`;
+    const backup = `${filePath}.bak`;
+    if (fs.existsSync(backup)) {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(backup);
+      } else {
+        fs.renameSync(backup, filePath);
+      }
+    }
+    fs.writeFileSync(temporary, result);
+    if (process.platform !== "win32") {
+      fs.chmodSync(temporary, 0o600);
+    }
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.renameSync(filePath, backup);
+      }
+      fs.renameSync(temporary, filePath);
+      if (fs.existsSync(backup)) {
+        fs.unlinkSync(backup);
+      }
+    } catch (error) {
+      if (!fs.existsSync(filePath) && fs.existsSync(backup)) {
+        fs.renameSync(backup, filePath);
+      }
+      throw error;
+    } finally {
+      if (fs.existsSync(temporary)) {
+        fs.unlinkSync(temporary);
+      }
+    }
   }
 
   async decrypt(filePath: string): Promise<string> {

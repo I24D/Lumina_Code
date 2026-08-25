@@ -23,7 +23,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { getContinueGlobalPath } from "../util/paths.js";
+import {
+  getContinueGlobalPath,
+  setConfigFilePermissions,
+} from "../util/paths.js";
 
 export type PermissionPolicy = "ask" | "allow" | "block";
 
@@ -162,6 +165,14 @@ function permissionsFilePath(): string {
   return path.join(getContinueGlobalPath(), "lumina-permissions.json");
 }
 
+function persistPermissions(permissions: PermissionMap): void {
+  const file = permissionsFilePath();
+  const temporary = `${file}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(permissions, null, 2), "utf8");
+  fs.renameSync(temporary, file);
+  setConfigFilePermissions(file);
+}
+
 /** Políticas de fábrica, derivadas del registro. */
 export function defaultPermissions(): PermissionMap {
   const defaults: PermissionMap = {};
@@ -238,14 +249,13 @@ export function setPermission(
   capability: LuminaCapability,
   policy: PermissionPolicy,
 ): PermissionMap {
-  const next = sanitizePermissions({ ...getPermissions(), [capability]: policy });
+  const next = sanitizePermissions({
+    ...getPermissions(),
+    [capability]: policy,
+  });
   cache = next;
   try {
-    fs.writeFileSync(
-      permissionsFilePath(),
-      JSON.stringify(next, null, 2),
-      "utf8",
-    );
+    persistPermissions(next);
   } catch {
     // Si el disco falla, la política queda aplicada en memoria para esta
     // sesión: es preferible a ignorar lo que el usuario acaba de decidir.
@@ -258,11 +268,7 @@ export function resetPermissions(): PermissionMap {
   const defaults = defaultPermissions();
   cache = defaults;
   try {
-    fs.writeFileSync(
-      permissionsFilePath(),
-      JSON.stringify(defaults, null, 2),
-      "utf8",
-    );
+    persistPermissions(defaults);
   } catch {
     // Igual que arriba: se conserva en memoria.
   }

@@ -136,6 +136,15 @@ locales declarativos, se pueden activar o desactivar y se cargan sus
 continúan usando MCP y sus políticas de permisos. Consulta
 [Plugins locales y Skill Workshop](docs/PLUGINS_AND_SKILLS.md).
 
+### Seguridad y auditoría local
+
+Las aprobaciones, rechazos, bloqueos por política, cambios de permisos y
+resultados de herramientas generan una auditoría local consultable desde
+**Ajustes → Privacidad**. La traza omite campos sensibles, enmascara tokens y
+rota automáticamente. Los secretos gestionados por VS Code permanecen cifrados
+y los contratos de estado nunca devuelven sus valores a la GUI. Consulta
+[Seguridad y auditoría](docs/SECURITY_AND_AUDIT.md).
+
 ## Estado del proyecto / Project status
 
 | Área                                      | Estado público                                          |
@@ -150,6 +159,7 @@ continúan usando MCP y sus políticas de permisos. Consulta
 | Workboard, tareas, actividad y dashboard  | **Persistentes y cubiertos por pruebas automatizadas**  |
 | Memoria local y réplica Supabase opcional | **Funcionales, con RLS y fallback local**               |
 | Skill Workshop y plugins locales          | **Funcionales, validados y cubiertos por pruebas**      |
+| Permisos, secretos y auditoría            | **Persistentes, redactados y cubiertos por pruebas**    |
 | Licencia y atribuciones                   | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE) |
 | Publicación en Visual Studio Marketplace  | Aún no disponible                                       |
 

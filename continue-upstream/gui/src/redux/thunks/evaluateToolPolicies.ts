@@ -125,6 +125,19 @@ export async function evaluateToolPolicies(
   );
 
   for (const { displayValue, toolCallState } of disabledResults) {
+    void ideMessenger
+      .request("security/audit/record", {
+        category: "tools",
+        action: "policy_blocked",
+        actor: "system",
+        outcome: "blocked",
+        summary: `La política bloqueó ${toolCallState.toolCall.function.name}.`,
+        details: {
+          tool: toolCallState.toolCall.function.name,
+          toolCallId: toolCallState.toolCallId,
+        },
+      })
+      .catch(() => undefined);
     dispatch(errorToolCall({ toolCallId: toolCallState.toolCallId }));
 
     // Use the displayValue from the policy evaluation, or fallback to function name

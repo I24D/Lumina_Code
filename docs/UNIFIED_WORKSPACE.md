@@ -30,7 +30,7 @@ Continue/Lumina; no incorpora el runtime Lit ni el Gateway de Openclaw.
 | Usage                         | Uso y métricas              | base de datos de devdata/tokens                                             |
 | Memory/context                | Conocimiento e Indexing     | memoria persistente, réplica Supabase opcional, reglas, skills e indexación |
 | Apps/plugins/channels         | Skills y Conexiones         | catálogo local declarativo, Skill Workshop, MCP, Start Talk y runtime       |
-| Security/approvals            | Privacidad y Trabajo        | políticas de capacidades y aprobaciones                                     |
+| Security/approvals            | Privacidad y Trabajo        | políticas de capacidades, aprobaciones y auditoría local redactada          |
 | Talk                          | Configuración de Start Talk | core de voz y VS Code Secret Storage                                        |
 | Logs/debug/infrastructure     | Runtime y diagnóstico       | estado de componentes y registros del host                                  |
 
@@ -74,6 +74,8 @@ mantienen en MCP para conservar los límites de permisos y aprobación.
 
 - Vite convierte en error cualquier aviso de módulo Node externalizado para el
   navegador, evitando la causa conocida de pantallas negras.
+- La auditoría durable registra permisos y herramientas sin argumentos
+  completos, omite campos de secretos y rota a los eventos recientes.
 - Las pruebas cubren navegación, paleta, sesiones recientes, cola, estado del
   runtime y configuración segura de Start Talk.
 - `tsc:check` se ejecuta en GUI y core; la extensión se valida además con

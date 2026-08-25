@@ -132,6 +132,7 @@ import {
   resetPermissions,
   setPermission,
 } from "./privacy/permissions.js";
+import { SecurityAuditService } from "./privacy/SecurityAuditService.js";
 import { StartTalkManager } from "./startTalk/index.js";
 import { ScheduledTaskService } from "./scheduler/ScheduledTaskService.js";
 import {
@@ -159,6 +160,7 @@ export class Core {
   private startTalkManager: StartTalkManager;
   private scheduledTaskService: ScheduledTaskService;
   private workboardService: WorkboardService;
+  private securityAudit = new SecurityAuditService();
   private memorySyncStatus: MemorySyncStatus = {
     configured: false,
     provider: "local",
@@ -1222,11 +1224,41 @@ export class Core {
       permissions: getPermissions(),
     }));
 
-    on("privacy/setPermission", async (msg) =>
-      setPermission(msg.data.capability, msg.data.policy),
-    );
+    on("privacy/setPermission", async (msg) => {
+      const permissions = setPermission(msg.data.capability, msg.data.policy);
+      this.securityAudit.record({
+        category: "permissions",
+        action: "permission_changed",
+        actor: "user",
+        outcome: "changed",
+        summary: `${msg.data.capability} cambió a ${permissions[msg.data.capability] ?? "ask"}.`,
+        details: {
+          capability: msg.data.capability,
+          policy: permissions[msg.data.capability] ?? "ask",
+        },
+      });
+      return permissions;
+    });
 
-    on("privacy/resetPermissions", async () => resetPermissions());
+    on("privacy/resetPermissions", async () => {
+      const permissions = resetPermissions();
+      this.securityAudit.record({
+        category: "permissions",
+        action: "permissions_reset",
+        actor: "user",
+        outcome: "changed",
+        summary: "Se restablecieron los permisos predeterminados.",
+      });
+      return permissions;
+    });
+
+    on("security/audit/list", async (msg) => this.securityAudit.list(msg.data));
+    on("security/audit/record", async (msg) => {
+      this.securityAudit.record(msg.data);
+    });
+    on("security/audit/clear", async () => ({
+      removed: this.securityAudit.clear(),
+    }));
 
     on("goals/get", async (msg) => getGoal(msg.data.sessionId));
 
@@ -1661,6 +1693,14 @@ export class Core {
 
     const startedAt = Date.now();
     luminaAgentRuntime.startToolCall(toolCall);
+    this.securityAudit.record({
+      category: "tools",
+      action: "execution_started",
+      actor: "agent",
+      outcome: "allowed",
+      summary: `Inició la herramienta ${toolCall.function.name}.`,
+      details: { tool: toolCall.function.name, toolCallId: toolCall.id },
+    });
 
     try {
       const result = await callTool(tool, toolCall, {
@@ -1680,9 +1720,34 @@ export class Core {
         result,
         Date.now() - startedAt,
       );
+      this.securityAudit.record({
+        category: "tools",
+        action: "execution_finished",
+        actor: "agent",
+        outcome: "succeeded",
+        summary: `Terminó la herramienta ${toolCall.function.name}.`,
+        details: {
+          tool: toolCall.function.name,
+          toolCallId: toolCall.id,
+          durationMs: Date.now() - startedAt,
+        },
+      });
       return result;
     } catch (error) {
       luminaAgentRuntime.failToolCall(toolCall, error, Date.now() - startedAt);
+      this.securityAudit.record({
+        category: "tools",
+        action: "execution_finished",
+        actor: "agent",
+        outcome: "failed",
+        summary: `Falló la herramienta ${toolCall.function.name}.`,
+        details: {
+          tool: toolCall.function.name,
+          toolCallId: toolCall.id,
+          durationMs: Date.now() - startedAt,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
       throw error;
     }
   }

@@ -40,6 +40,20 @@ export const callToolById = createAsyncThunk<
     throw new Error("No model selected");
   }
 
+  void extra.ideMessenger
+    .request("security/audit/record", {
+      category: "tools",
+      action: isAutoApproved ? "auto_approved" : "approved",
+      actor: isAutoApproved ? "system" : "user",
+      outcome: "allowed",
+      summary: `${isAutoApproved ? "Aprobación automática" : "Aprobación del usuario"}: ${toolCallState.toolCall.function.name}.`,
+      details: {
+        tool: toolCallState.toolCall.function.name,
+        toolCallId,
+      },
+    })
+    .catch(() => undefined);
+
   dispatch(
     setToolCallCalling({
       toolCallId,
