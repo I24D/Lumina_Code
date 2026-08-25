@@ -35,3 +35,17 @@ export type VectorSearchResult<T> = {
   item: T;
   score: number;
 };
+
+export type MemoryTombstone = {
+  id: string;
+  deletedAt: string;
+};
+
+export type MemorySnapshot = {
+  version: 1;
+  experiences: ExperienceRecord[];
+  insights: ReflectionInsight[];
+  skillCandidates: SkillCandidate[];
+  tombstones: MemoryTombstone[];
+  updatedAt: string;
+};

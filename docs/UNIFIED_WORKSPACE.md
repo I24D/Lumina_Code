@@ -28,7 +28,7 @@ Continue/Lumina; no incorpora el runtime Lit ni el Gateway de Openclaw.
 | Revisiones | Recorrido de Cambios | diff del IDE y estados Apply |
 | Automations | Trabajo Programado | `ScheduledTaskService` persistente |
 | Usage | Uso y métricas | base de datos de devdata/tokens |
-| Memory/context | Conocimiento e Indexing | reglas, skills, configs e indexación |
+| Memory/context | Conocimiento e Indexing | memoria persistente, réplica Supabase opcional, reglas, skills e indexación |
 | Apps/plugins/channels | Conexiones | modelos, MCP, Start Talk y runtime |
 | Security/approvals | Privacidad y Trabajo | políticas de capacidades y aprobaciones |
 | Talk | Configuración de Start Talk | core de voz y VS Code Secret Storage |

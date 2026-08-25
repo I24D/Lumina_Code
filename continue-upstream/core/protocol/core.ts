@@ -50,6 +50,12 @@ import { ProcessedItem } from "../nextEdit/NextEditPrefetchQueue";
 import { NextEditOutcome } from "../nextEdit/types";
 import type { LuminaAssistantState } from "../orchestrator/index.js";
 import type {
+  ExperienceRecord,
+  MemorySnapshot,
+  VectorSearchResult,
+} from "../memory/types.js";
+import type { MemorySyncStatus } from "../memory/SupabaseMemorySync.js";
+import type {
   StartTalkAudioChunk,
   StartTalkCaptureRequest,
   StartTalkConnectRequest,
@@ -148,6 +154,12 @@ export interface ForkSessionToWorktreeRequest {
   title?: string;
 }
 
+export interface MemoryOverview {
+  snapshot: MemorySnapshot;
+  matches: VectorSearchResult<ExperienceRecord>[];
+  sync: MemorySyncStatus;
+}
+
 export type ToCoreFromIdeOrWebviewProtocol = {
   // Special
   ping: [string, string];
@@ -174,6 +186,13 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "worktrees/create": [CreateWorktreeRequest, WorktreeInfo];
   "worktrees/remove": [RemoveWorktreeRequest, void];
   "todos/list": [undefined, TodoSnapshot];
+  "memory/get": [
+    { query?: string; limit?: number } | undefined,
+    MemoryOverview,
+  ];
+  "memory/delete": [{ id: string }, MemoryOverview];
+  "memory/clear": [undefined, MemoryOverview];
+  "memory/sync": [undefined, MemoryOverview];
   "workboard/get": [undefined, WorkboardSnapshot];
   "workboard/create": [WorkboardCardInput, WorkboardCard];
   "workboard/update": [

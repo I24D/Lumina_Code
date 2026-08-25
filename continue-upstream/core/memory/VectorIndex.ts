@@ -66,7 +66,14 @@ export class VectorIndex<T> {
     this.items.delete(id);
   }
 
-  search(query: string, options: { vector?: number[]; limit?: number } = {}): VectorSearchResult<T>[] {
+  clear(): void {
+    this.items.clear();
+  }
+
+  search(
+    query: string,
+    options: { vector?: number[]; limit?: number } = {},
+  ): VectorSearchResult<T>[] {
     const limit = Math.max(1, options.limit ?? 5);
     return [...this.items.values()]
       .map((item) => {

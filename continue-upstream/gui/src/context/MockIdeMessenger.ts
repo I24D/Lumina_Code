@@ -90,6 +90,18 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
     items: [],
     counts: { pending: 0, in_progress: 0, completed: 0, cancelled: 0 },
   },
+  "memory/get": {
+    snapshot: {
+      version: 1,
+      experiences: [],
+      insights: [],
+      skillCandidates: [],
+      tombstones: [],
+      updatedAt: "1970-01-01T00:00:00.000Z",
+    },
+    matches: [],
+    sync: { configured: false, provider: "local", state: "local" },
+  },
   "workboard/get": {
     cards: [],
     activity: [],

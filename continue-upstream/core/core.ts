@@ -105,7 +105,11 @@ import { PrefetchQueue } from "./nextEdit/NextEditPrefetchQueue";
 import { NextEditProvider } from "./nextEdit/NextEditProvider";
 import { luminaAgentRuntime } from "./orchestrator/index.js";
 import type { FromCoreProtocol, ToCoreProtocol } from "./protocol";
-import { OnboardingModes, type SkillWithUsage } from "./protocol/core";
+import {
+  OnboardingModes,
+  type MemoryOverview,
+  type SkillWithUsage,
+} from "./protocol/core";
 import type { IMessenger, Message } from "./protocol/messenger";
 import {
   resolveStartTalkGeminiEnv,
@@ -129,6 +133,12 @@ import {
 import { StartTalkManager } from "./startTalk/index.js";
 import { ScheduledTaskService } from "./scheduler/ScheduledTaskService.js";
 import {
+  getMemorySyncStatus,
+  SupabaseMemorySync,
+  type MemorySyncStatus,
+  type SupabaseMemoryConfig,
+} from "./memory/SupabaseMemorySync.js";
+import {
   WhatsAppAutoResponder,
   type AutoReplyAuditEntry,
 } from "./startTalk/WhatsAppAutoResponder.js";
@@ -147,6 +157,11 @@ export class Core {
   private startTalkManager: StartTalkManager;
   private scheduledTaskService: ScheduledTaskService;
   private workboardService: WorkboardService;
+  private memorySyncStatus: MemorySyncStatus = {
+    configured: false,
+    provider: "local",
+    state: "local",
+  };
   llmLogger = new LLMLogger();
 
   private messageAbortControllers = new Map<string, AbortController>();
@@ -337,10 +352,47 @@ export class Core {
     }
   }
 
-  /* eslint-disable max-lines-per-function */
+  /* eslint-disable max-lines-per-function, max-statements */
   private registerMessageHandlers(ideSettingsPromise: Promise<IdeSettings>) {
     const on = this.messenger.on.bind(this.messenger);
     const worktreeService = new WorktreeService(this.ide);
+    const resolveMemoryConfig = async (): Promise<SupabaseMemoryConfig> => {
+      const dirs = await this.ide.getWorkspaceDirs();
+      return {
+        url: resolveWorkspaceEnvValue(dirs, ["LUMINA_SUPABASE_URL"]),
+        publishableKey: resolveWorkspaceEnvValue(dirs, [
+          "LUMINA_SUPABASE_PUBLISHABLE_KEY",
+          "SUPABASE_PUBLISHABLE_KEY",
+          "SUPABASE_ANON_KEY",
+        ]),
+        accessToken: resolveWorkspaceEnvValue(dirs, [
+          "LUMINA_SUPABASE_ACCESS_TOKEN",
+        ]),
+        table: resolveWorkspaceEnvValue(dirs, ["LUMINA_SUPABASE_MEMORY_TABLE"]),
+        namespace: resolveWorkspaceEnvValue(dirs, [
+          "LUMINA_SUPABASE_MEMORY_NAMESPACE",
+        ]),
+      };
+    };
+    const memoryOverview = async (
+      query?: string,
+      limit?: number,
+    ): Promise<MemoryOverview> => {
+      const configuredStatus = getMemorySyncStatus(await resolveMemoryConfig());
+      if (
+        configuredStatus.provider !== this.memorySyncStatus.provider ||
+        configuredStatus.configured !== this.memorySyncStatus.configured
+      ) {
+        this.memorySyncStatus = configuredStatus;
+      }
+      return {
+        snapshot: luminaAgentRuntime.getMemorySnapshot(),
+        matches: query?.trim()
+          ? luminaAgentRuntime.searchMemory(query, limit)
+          : [],
+        sync: this.memorySyncStatus,
+      };
+    };
 
     // Note, VsCode's in-process messenger doesn't do anything with this
     // It will only show for jetbrains
@@ -462,6 +514,48 @@ export class Core {
 
     on("todos/list", async () => {
       return getTodoStore().read();
+    });
+
+    on("memory/get", async (msg) =>
+      memoryOverview(msg.data?.query, msg.data?.limit),
+    );
+
+    on("memory/delete", async (msg) => {
+      luminaAgentRuntime.deleteMemory(msg.data.id);
+      return memoryOverview();
+    });
+
+    on("memory/clear", async () => {
+      luminaAgentRuntime.clearMemory();
+      return memoryOverview();
+    });
+
+    on("memory/sync", async () => {
+      const config = await resolveMemoryConfig();
+      const status = getMemorySyncStatus(config);
+      if (!status.configured) {
+        this.memorySyncStatus = status;
+        return memoryOverview();
+      }
+      this.memorySyncStatus = { ...status, state: "syncing" };
+      try {
+        const snapshot = await new SupabaseMemorySync(config).sync(
+          luminaAgentRuntime.getMemorySnapshot(),
+        );
+        luminaAgentRuntime.replaceMemory(snapshot);
+        this.memorySyncStatus = {
+          ...status,
+          state: "synced",
+          lastSyncAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        this.memorySyncStatus = {
+          ...status,
+          state: "error",
+          lastError: error instanceof Error ? error.message : String(error),
+        };
+      }
+      return memoryOverview();
     });
 
     on("workboard/get", async () => this.workboardService.snapshot());

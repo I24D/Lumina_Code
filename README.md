@@ -117,6 +117,16 @@ La experiencia unificada incorpora:
 La arquitectura y el mapa de absorción están documentados en
 [Workspace unificado](docs/UNIFIED_WORKSPACE.md).
 
+### Memoria persistente y Supabase opcional
+
+Las experiencias, reflexiones y candidatos de habilidades se guardan en un
+snapshot local versionado y pueden buscarse o borrarse desde **Conocimiento**.
+Opcionalmente, el usuario puede aplicar la migración incluida y sincronizar una
+réplica Supabase protegida por RLS, usando publishable key y JWT de usuario; una
+configuración ausente o un error remoto nunca desactiva la memoria local.
+Consulta [Memoria local y Supabase](docs/SUPABASE_MEMORY.md) y
+[`.env.example`](.env.example).
+
 ## Estado del proyecto / Project status
 
 | Área                                      | Estado público                                          |
@@ -129,6 +139,7 @@ La arquitectura y el mapa de absorción están documentados en
 | Metas, GitHub, cambios, panel y scheduler | **Funcionales y cubiertos por pruebas automatizadas**   |
 | Sesiones, forks y worktrees Git           | **Funcionales y cubiertos por pruebas automatizadas**   |
 | Workboard, tareas, actividad y dashboard  | **Persistentes y cubiertos por pruebas automatizadas**  |
+| Memoria local y réplica Supabase opcional | **Funcionales, con RLS y fallback local**               |
 | Licencia y atribuciones                   | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE) |
 | Publicación en Visual Studio Marketplace  | Aún no disponible                                       |
 

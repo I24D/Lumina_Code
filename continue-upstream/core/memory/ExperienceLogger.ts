@@ -7,7 +7,12 @@ function createId(prefix: string): string {
 export class ExperienceLogger {
   private readonly records: ExperienceRecord[] = [];
 
-  log(input: Omit<ExperienceRecord, "id" | "createdAt"> & { id?: string; createdAt?: string }): ExperienceRecord {
+  log(
+    input: Omit<ExperienceRecord, "id" | "createdAt"> & {
+      id?: string;
+      createdAt?: string;
+    },
+  ): ExperienceRecord {
     const record: ExperienceRecord = {
       ...input,
       id: input.id ?? createId("exp"),
@@ -21,12 +26,25 @@ export class ExperienceLogger {
 
   list(options: { limit?: number; tag?: string } = {}): ExperienceRecord[] {
     const filtered = options.tag
-      ? this.records.filter((record) => record.tags.includes(options.tag!.toLowerCase()))
+      ? this.records.filter((record) =>
+          record.tags.includes(options.tag!.toLowerCase()),
+        )
       : this.records;
     return filtered.slice(-(options.limit ?? filtered.length));
   }
 
   count(): number {
     return this.records.length;
+  }
+
+  remove(id: string): boolean {
+    const index = this.records.findIndex((record) => record.id === id);
+    if (index === -1) return false;
+    this.records.splice(index, 1);
+    return true;
+  }
+
+  clear(): void {
+    this.records.length = 0;
   }
 }

@@ -1,15 +1,15 @@
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { MemoryService } from "../memory/index.js";
-import type { ExperienceOutcome, ExperienceRecord } from "../memory/index.js";
+import { MemoryPersistence } from "../memory/MemoryPersistence.js";
+import type {
+  ExperienceOutcome,
+  ExperienceRecord,
+  MemorySnapshot,
+  VectorSearchResult,
+} from "../memory/index.js";
 import { TaskLedger } from "../planner/TaskLedger.js";
 import type { LuminaTaskRecord } from "../planner/TaskLedger.js";
 
@@ -121,22 +121,6 @@ function summarizeToolResult(result: ToolResultLike): string {
   );
 }
 
-function isExperienceRecord(value: unknown): value is ExperienceRecord {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const record = value as Partial<ExperienceRecord>;
-  return (
-    typeof record.id === "string" &&
-    typeof record.goal === "string" &&
-    typeof record.summary === "string" &&
-    typeof record.outcome === "string" &&
-    Array.isArray(record.toolNames) &&
-    Array.isArray(record.tags) &&
-    typeof record.createdAt === "string"
-  );
-}
-
 function isTaskRecord(value: unknown): value is LuminaTaskRecord {
   if (!value || typeof value !== "object") {
     return false;
@@ -160,7 +144,12 @@ export class LuminaAgentRuntime {
     process.env.LUMINA_AGENT_STATE_DIR ??
     join(homedir(), ".lumina-code", "agent-state");
   private readonly experiencesPath = join(this.stateDir, "experiences.jsonl");
+  private readonly memoryPath = join(this.stateDir, "memory.json");
   private readonly tasksPath = join(this.stateDir, "tasks.json");
+  private readonly memoryPersistence = new MemoryPersistence(
+    this.memoryPath,
+    this.experiencesPath,
+  );
 
   constructor() {
     this.loadState();
@@ -190,7 +179,7 @@ export class LuminaAgentRuntime {
       this.taskLedger.completeTask(toolCall.id, summary, durationMs);
     }
 
-    const { record } = this.memoryService.logExperience({
+    this.memoryService.logExperience({
       goal: `Tool call: ${toolCall.function.name}`,
       summary,
       outcome,
@@ -204,7 +193,7 @@ export class LuminaAgentRuntime {
       },
     });
 
-    this.appendExperience(record);
+    this.persistMemory();
     this.persistTasks();
   }
 
@@ -216,7 +205,7 @@ export class LuminaAgentRuntime {
     const errorMessage = error instanceof Error ? error.message : String(error);
     this.taskLedger.failTask(toolCall.id, errorMessage, durationMs);
 
-    const { record } = this.memoryService.logExperience({
+    this.memoryService.logExperience({
       goal: `Tool call: ${toolCall.function.name}`,
       summary: errorMessage,
       outcome: "failure",
@@ -229,7 +218,7 @@ export class LuminaAgentRuntime {
       },
     });
 
-    this.appendExperience(record);
+    this.persistMemory();
     this.persistTasks();
   }
 
@@ -293,6 +282,40 @@ export class LuminaAgentRuntime {
     };
   }
 
+  getMemorySnapshot(): MemorySnapshot {
+    return this.memoryService.snapshot();
+  }
+
+  searchMemory(
+    query: string,
+    limit = 20,
+  ): VectorSearchResult<ExperienceRecord>[] {
+    return this.memoryService.searchExperiences(
+      query.trim(),
+      Math.max(1, Math.min(100, limit)),
+    );
+  }
+
+  deleteMemory(id: string): MemorySnapshot {
+    if (!this.memoryService.removeExperience(id)) {
+      throw new Error("La experiencia de memoria no existe.");
+    }
+    this.persistMemory();
+    return this.memoryService.snapshot();
+  }
+
+  clearMemory(): MemorySnapshot {
+    this.memoryService.clear();
+    this.persistMemory();
+    return this.memoryService.snapshot();
+  }
+
+  replaceMemory(snapshot: MemorySnapshot): MemorySnapshot {
+    this.memoryService.replace(snapshot);
+    this.persistMemory();
+    return this.memoryService.snapshot();
+  }
+
   private loadState(): void {
     try {
       mkdirSync(this.stateDir, { recursive: true });
@@ -304,21 +327,10 @@ export class LuminaAgentRuntime {
         }
       }
 
-      if (existsSync(this.experiencesPath)) {
-        const records = readFileSync(this.experiencesPath, "utf8")
-          .split(/\r?\n/)
-          .filter(Boolean)
-          .map((line) => {
-            try {
-              return JSON.parse(line) as unknown;
-            } catch {
-              return undefined;
-            }
-          })
-          .filter(isExperienceRecord)
-          .slice(-200);
-        this.memoryService.hydrate(records);
-      }
+      const snapshot = this.memoryPersistence.load();
+      this.memoryService.replace(snapshot);
+      // Writes the versioned snapshot after importing the legacy JSONL file.
+      this.persistMemory();
     } catch {
       // Runtime state must never block Continue startup.
     }
@@ -337,14 +349,9 @@ export class LuminaAgentRuntime {
     }
   }
 
-  private appendExperience(record: ExperienceRecord): void {
+  private persistMemory(): void {
     try {
-      mkdirSync(this.stateDir, { recursive: true });
-      appendFileSync(
-        this.experiencesPath,
-        `${JSON.stringify(record)}\n`,
-        "utf8",
-      );
+      this.memoryPersistence.save(this.memoryService.snapshot());
     } catch {
       // Persistence is best-effort; tool execution should continue.
     }
