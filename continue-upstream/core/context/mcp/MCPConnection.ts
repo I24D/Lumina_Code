@@ -451,13 +451,30 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
    * @param cwd The cwd parameter provided by user.
    * @returns Current working directory (user-provided cwd or workspace root).
    */
+  /**
+   * `fileURLToPath` is platform-coupled by design: handed a POSIX URI with no
+   * drive letter ("file:///workspace/src") it throws on Windows instead of
+   * converting. A path that cannot be expressed locally cannot serve as a cwd
+   * for `child_process.spawn()` either -- the same situation the remote-URI
+   * branch in `resolveWorkspaceCwd` already degrades gracefully. Returning
+   * undefined lets both callers fall back rather than letting the throw escape
+   * and take the whole MCP connection down.
+   */
+  private fileUriToLocalPath(uri: string): string | undefined {
+    try {
+      return fileURLToPath(uri);
+    } catch {
+      return undefined;
+    }
+  }
+
   private async resolveCwd(cwd?: string) {
     if (!cwd) {
       return this.resolveWorkspaceCwd(undefined);
     }
 
     if (cwd.startsWith("file://")) {
-      return fileURLToPath(cwd);
+      return this.fileUriToLocalPath(cwd) ?? homedir();
     }
 
     // Return cwd if cwd is an absolute path.
@@ -475,7 +492,7 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
       const resolved = await resolveRelativePathInDir(target, IDE);
       if (resolved) {
         if (resolved.startsWith("file://")) {
-          return fileURLToPath(resolved);
+          return this.fileUriToLocalPath(resolved) ?? homedir();
         }
         // Remote URIs (e.g. vscode-remote://ssh-remote+host/path) cannot be
         // used as a local cwd for child_process.spawn(). When the extension

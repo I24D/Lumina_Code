@@ -13,6 +13,9 @@ import { LocalPlatformClient } from "./LocalPlatformClient";
 
 vi.mock("../../util/paths", { spy: true });
 
+/** Presupuesto para los hooks que reimportan el grafo de fixtures entero. */
+const HEAVY_IMPORT_TIMEOUT_MS = 60_000;
+
 describe("LocalPlatformClient", () => {
   const testFQSN: FQSN = {
     packageSlugs: [
@@ -40,6 +43,13 @@ describe("LocalPlatformClient", () => {
       const testFixtures = await import("../../test/fixtures");
       testIde = testFixtures.testIde;
     },
+    // `afterEach` calls `vi.resetModules()`, so this import rebuilds the whole
+    // fixture graph on every test rather than hitting the module cache. That
+    // is genuinely slow -- seconds per test on Windows -- and the default 10s
+    // hook budget sits right on the edge, which made the suite fail a
+    // different number of tests on every run. The work is expected; the
+    // deadline was the arbitrary part.
+    HEAVY_IMPORT_TIMEOUT_MS,
   );
 
   let secretValue: string;
@@ -79,7 +89,7 @@ describe("LocalPlatformClient", () => {
       const utilPaths = await import("../../util/paths");
       getContinueDotEnv = vi.fn(() => envKeyValues);
       utilPaths.getContinueDotEnv = getContinueDotEnv;
-    });
+    }, HEAVY_IMPORT_TIMEOUT_MS);
 
     test("should be able to get secrets from ~/.continue/.env files", async () => {
       const localPlatformClient = new LocalPlatformClient(testIde);
@@ -203,7 +213,7 @@ describe("LocalPlatformClient", () => {
       // Clear any potentially set process.env variables from previous tests in this block
       delete process.env[testFQSN.secretName];
       delete process.env[testFQSN2.secretName];
-    });
+    }, HEAVY_IMPORT_TIMEOUT_MS);
 
     afterEach(() => {
       // Restore original process.env

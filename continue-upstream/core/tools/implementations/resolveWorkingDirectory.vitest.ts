@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 
+/** Para lo que depende de rutas POSIX y no puede valer en Windows. */
+const itOnPosix = it.skipIf(process.platform === "win32");
+
 /**
  * Test suite for workspace directory resolution logic.
  *
@@ -100,12 +103,16 @@ describe("resolveWorkingDirectory", () => {
   });
 
   describe("file:// URIs (local workspaces)", () => {
-    it("should parse basic file:// URI on Unix", () => {
+    // `fileURLToPath` is platform-coupled on purpose: given a POSIX path with
+    // no drive letter it throws on Windows, so `resolveWorkingDirectory`
+    // swallows it and returns the HOME fallback. These two describe POSIX
+    // hosts and cannot hold on Windows without asserting something else.
+    itOnPosix("should parse basic file:// URI on Unix", () => {
       const result = resolveWorkingDirectory(["file:///home/user/project"]);
       expect(result).toBe("/home/user/project");
     });
 
-    it("should decode URL-encoded spaces in file:// URI", () => {
+    itOnPosix("should decode URL-encoded spaces in file:// URI", () => {
       const result = resolveWorkingDirectory([
         "file:///home/user/my%20project",
       ]);
@@ -183,7 +190,9 @@ describe("resolveWorkingDirectory", () => {
   });
 
   describe("comparison with fileURLToPath behavior", () => {
-    it("should match fileURLToPath decoding for equivalent paths", () => {
+    // Calls `fileURLToPath` on a POSIX path directly, which throws outright on
+    // Windows ("File URL path must be absolute") before any assertion runs.
+    itOnPosix("should match fileURLToPath decoding for equivalent paths", () => {
       const fileResult = fileURLToPath("file:///home/user/my%20project");
       const wslResult = resolveWorkingDirectory([
         "vscode-remote://wsl+Ubuntu/home/user/my%20project",

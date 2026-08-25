@@ -5,6 +5,7 @@ import { expect, vi } from "vitest";
 import Parser from "web-tree-sitter";
 import { Position } from "../../../..";
 import { testIde } from "../../../../test/fixtures";
+import { localPathOrUriToPath } from "../../../../util/pathToUri";
 import { getAst, getTreePathAtCursor } from "../../../util/ast";
 import { ImportDefinitionsService } from "../../ImportDefinitionsService";
 import { RootPathContextService } from "../RootPathContextService";
@@ -53,7 +54,13 @@ export async function testRootPathContext(
     "test",
     folderName,
   );
-  const workspaceDir = (await ide.getWorkspaceDirs())[0];
+  // `getWorkspaceDirs` returns URIs, not filesystem paths. Feeding one to
+  // `path.join` produces "file:/C:/Users/..." -- no longer a URI and not a
+  // valid absolute path either, so Node resolves it against the cwd. On Linux
+  // that silently creates a junk directory literally named "file:" next to the
+  // sources and the test still passes; on Windows ":" is illegal inside a path
+  // component and all 43 cases die with ENOPROTOOPT before asserting anything.
+  const workspaceDir = localPathOrUriToPath((await ide.getWorkspaceDirs())[0]);
   const testFolderPath = path.join(workspaceDir, folderName);
   fs.cpSync(folderPath, testFolderPath, {
     recursive: true,

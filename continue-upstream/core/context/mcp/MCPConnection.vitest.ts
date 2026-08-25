@@ -170,9 +170,14 @@ describe("MCPConnection", () => {
         .mockResolvedValue("file:///workspace/src");
       const conn = new MCPConnection(baseOptions, { ide });
 
-      await expect((conn as any).resolveCwd("src")).resolves.toBe(
-        "/workspace/src",
-      );
+      // A drive-letter-less POSIX URI has no Windows equivalent, so there the
+      // contract is the same homedir fallback the remote-URI case uses. It
+      // must degrade, never throw: an unusable cwd should not sink the
+      // connection.
+      const { homedir } = require("os");
+      const expected =
+        process.platform === "win32" ? homedir() : "/workspace/src";
+      await expect((conn as any).resolveCwd("src")).resolves.toBe(expected);
       expect(mockResolve).toHaveBeenCalledWith("src", ide);
     });
 

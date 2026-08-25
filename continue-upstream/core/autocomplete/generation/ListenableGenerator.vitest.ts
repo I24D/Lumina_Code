@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 
 import { ListenableGenerator } from "./ListenableGenerator";
 
@@ -10,6 +10,33 @@ describe("ListenableGenerator", () => {
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
       yield value;
+    }
+  }
+
+  /**
+   * Waits until a listener has actually been handed `value`, instead of
+   * sleeping long enough that it probably has.
+   *
+   * These generators pace themselves with `setTimeout`, so three values at 10ms
+   * take ~30ms and the fixed 50ms waits left barely 20ms of slack. Run under
+   * the full suite that slack disappears, the last value lands after the
+   * assertion, and the failure blames the generator for what is really the
+   * scheduler. Listeners receive `null` when the generator ends, so that is the
+   * signal to wait for; the timeout only exists so a genuine hang still fails.
+   */
+  async function waitForValue(
+    listener: Mock,
+    value: unknown,
+    timeoutMs = 5_000,
+  ) {
+    const deadline = Date.now() + timeoutMs;
+    while (!listener.mock.calls.some(([received]) => received === value)) {
+      if (Date.now() > deadline) {
+        throw new Error(
+          `Listener never received ${String(value)} within ${timeoutMs}ms.`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
     }
   }
 
@@ -52,7 +79,7 @@ describe("ListenableGenerator", () => {
     }, 15);
 
     // Wait for generator to finish
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await waitForValue(listener, null);
 
     expect(listener).toHaveBeenCalledWith(1);
     expect(listener).toHaveBeenCalledWith(2);
@@ -77,14 +104,14 @@ describe("ListenableGenerator", () => {
     lg.listen(initialListener);
 
     // Wait for the first value to be yielded
-    await new Promise((resolve) => setTimeout(resolve, 15));
+    await waitForValue(initialListener, 1);
 
     // Add a second listener
     const newListener = vi.fn();
     lg.listen(newListener);
 
     // Wait for generator to finish
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await waitForValue(newListener, null);
 
     // Both listeners should have received all values
     [initialListener, newListener].forEach((listener) => {
@@ -164,7 +191,7 @@ describe("ListenableGenerator", () => {
     lg.listen(listener);
 
     // Wait for the generator to finish
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await waitForValue(listener, null);
 
     expect(listener).toHaveBeenCalledWith(1);
     expect(listener).toHaveBeenCalledWith(2);

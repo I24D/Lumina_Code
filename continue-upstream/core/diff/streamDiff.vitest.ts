@@ -57,10 +57,24 @@ function displayDiff(diff: DiffLine[]) {
 
 async function expectDiff(file: string) {
   const testFilePath = path.join(__dirname, "test-examples", file + ".diff");
-  const testFileContents = fs.readFileSync(testFilePath, "utf-8");
-  const [oldText, newText, expectedDiff] = testFileContents
+  // Git hands these fixtures over with the host's line endings, so on Windows
+  // they arrive as CRLF. The `\n---\n` separator then never matches, the
+  // destructuring below silently yields `undefined`, and the failure surfaces
+  // as "Cannot read properties of undefined" far from its cause. The subject
+  // here is the diff algorithm, not line endings: normalise and move on.
+  const testFileContents = fs
+    .readFileSync(testFilePath, "utf-8")
+    .replace(/\r\n/g, "\n");
+  const sections = testFileContents
     .split("\n---\n")
     .map((s) => s.replace(/^\n+/, "").trimEnd());
+  if (sections.length < 2) {
+    throw new Error(
+      `${file}.diff is malformed: expected "old", "---", "new" sections ` +
+        `separated by a line containing only "---", found ${sections.length}.`,
+    );
+  }
+  const [oldText, newText, expectedDiff] = sections;
   const oldLines = oldText.split("\n");
   const newLines = newText.split("\n");
   const { streamDiffs, myersDiffs } = await collectDiffs(oldLines, newLines);

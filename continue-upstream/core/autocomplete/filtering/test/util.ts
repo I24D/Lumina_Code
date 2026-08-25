@@ -33,6 +33,28 @@ export async function testAutocompleteFiltering(
     model: "mock",
   });
   llm.completion = test.llmOutput;
+  // Two production defaults make these assertions depend on the clock, which
+  // is why this file used to fail a *different* case on each run rather than
+  // the same one. `llm.autocompleteOptions` is merged last into the resolved
+  // options, so it is the narrowest place to opt out without touching what
+  // ships.
+  //
+  //   modelTimeout (150ms) is handed to `showWhateverWeHaveAtXMs`, which stops
+  //   the line stream once that long has passed, and to
+  //   `stopAfterMaxProcessingTime` at 2.5x. Starved of CPU under the full
+  //   suite a case takes seconds, the cut fires, and a multi-line completion
+  //   arrives truncated to its first line -- the assertion then blames the
+  //   filtering for what the scheduler did.
+  //
+  //   useCache points at a module-level SQLite cache that is keyed by prefix,
+  //   outlives the run, and is written fire-and-forget (`void cache.put(...)`).
+  //   Across 110 cases with overlapping prefixes a neighbour's answer can be
+  //   served instead of this case's, which is never the thing under test.
+  llm.autocompleteOptions = {
+    useCache: false,
+    debounceDelay: 0,
+    modelTimeout: 60_000,
+  };
   const ide = testIde;
   const configHandler = testConfigHandler;
 

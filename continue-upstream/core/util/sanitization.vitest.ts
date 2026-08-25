@@ -174,8 +174,16 @@ describe("validateGitHubRepoUrl", () => {
  * IMPORTANT: These are CRITICAL security tests. The unit tests above verify
  * that sanitization transforms inputs, but only these integration tests prove
  * that the transformed output is safe when executed in a real shell.
+ *
+ * They spawn `/bin/sh`, so they only mean anything on a POSIX host. On Windows
+ * that path does not exist, `execSync` throws, and the helper below turns every
+ * assertion into a comparison against an empty string -- thirteen red tests
+ * that say nothing about the sanitizer. Skipping keeps the Windows run honest
+ * while these still guard every POSIX machine and CI.
  */
-describe("sanitizeShellArgument - integration tests", () => {
+const describeOnPosix = describe.skipIf(process.platform === "win32");
+
+describeOnPosix("sanitizeShellArgument - integration tests", () => {
   // Helper function to safely execute a command with a timeout
   const safeExec = (command: string): string => {
     try {
