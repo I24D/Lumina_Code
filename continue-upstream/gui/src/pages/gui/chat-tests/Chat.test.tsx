@@ -1,4 +1,4 @@
-import { act } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { addAndSelectMockLlm } from "../../../util/test/config";
 import { renderWithProviders } from "../../../util/test/render";
 import {
@@ -8,6 +8,18 @@ import {
 } from "../../../util/test/utils";
 import { Chat } from "../Chat";
 
+/**
+ * El modo activo se lee del botón del selector, no del texto de la página.
+ * Buscarlo suelto es ambiguo desde que el workspace unificado añadió su
+ * propia navegación con las mismas palabras: al conmutar a "Chat" hay dos
+ * coincidencias y la búsqueda falla por ambigüedad, no porque el modo no
+ * haya cambiado.
+ */
+async function expectMode(mode: string): Promise<void> {
+  const button = await getElementByTestId("mode-select-button");
+  await waitFor(() => expect(button).toHaveTextContent(mode));
+}
+
 test("should render input box", async () => {
   await renderWithProviders(<Chat />);
   await getElementByTestId("continue-input-box-main-editor-input");
@@ -15,7 +27,7 @@ test("should render input box", async () => {
 
 test("should be able to toggle modes", async () => {
   await renderWithProviders(<Chat />);
-  await getElementByText("Agent");
+  await expectMode("Agent");
 
   // Simulate cmd+. keyboard shortcut to toggle modes
   act(() => {
@@ -28,7 +40,7 @@ test("should be able to toggle modes", async () => {
   });
 
   // Check that it switched to Chat mode
-  await getElementByText("Chat");
+  await expectMode("Chat");
 
   act(() => {
     document.dispatchEvent(
@@ -40,7 +52,7 @@ test("should be able to toggle modes", async () => {
   });
 
   // Check that it switched to Plan mode
-  await getElementByText("Plan");
+  await expectMode("Plan");
 
   act(() => {
     document.dispatchEvent(
@@ -51,7 +63,7 @@ test("should be able to toggle modes", async () => {
     );
   });
 
-  await getElementByText("Agent");
+  await expectMode("Agent");
 });
 
 test("should send a message and receive a response", async () => {
