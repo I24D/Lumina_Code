@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import type { VerificationRecipe } from "core/verify/types";
 import { describe, expect, it } from "vitest";
 import { MockIdeMessenger } from "../../context/MockIdeMessenger";
 import { renderWithProviders } from "../../util/test/render";
@@ -72,7 +73,7 @@ describe("WorkPanel", () => {
   });
 
   describe("comandos del proyecto", () => {
-    function messengerWithRecipe(recipe: unknown) {
+    function messengerWithRecipe(recipe: VerificationRecipe | undefined) {
       const messenger = new MockIdeMessenger();
       messenger.responses["lumina/assistantState"] = {
         memory: [],

@@ -298,13 +298,101 @@ function findFuzzyMatch(
 }
 
 /**
- * Ordered list of matching strategies to try with their names
+ * Undoes literal escape sequences a model wrote instead of real characters.
+ *
+ * Ported from Hermes's escape-normalised strategy. When a model composes an
+ * edit inside a JSON string it sometimes emits the two characters `\` and `n`
+ * where the file has an actual newline. The search text is then correct in
+ * every respect except that it cannot match anything.
+ *
+ * Only the search side is transformed, so the returned indices refer to the
+ * untouched file and need no remapping.
+ */
+function escapeNormalizedMatch(
+  fileContent: string,
+  searchContent: string,
+): BasicMatchResult | null {
+  const unescaped = searchContent
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t");
+
+  if (unescaped === searchContent) {
+    // Nothing to undo; exactMatch already covered this.
+    return null;
+  }
+  return exactMatch(fileContent, unescaped);
+}
+
+/**
+ * Characters that differ only in typography.
+ *
+ * Every entry is deliberately one UTF-16 unit mapping to one UTF-16 unit, so
+ * normalising the file leaves every index exactly where it was and the match
+ * can be reported against the original content without remapping. The ellipsis
+ * is left out for that reason: it would expand to three characters and shift
+ * everything after it.
+ */
+const TYPOGRAPHIC_EQUIVALENTS: Array<[RegExp, string]> = [
+  [/[‘’‚‛]/g, "'"],
+  [/[“”„‟]/g, '"'],
+  [/[‐‑‒–—―]/g, "-"],
+  [/ /g, " "],
+];
+
+function normalizeTypography(value: string): string {
+  let result = value;
+  for (const [pattern, replacement] of TYPOGRAPHIC_EQUIVALENTS) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
+}
+
+/**
+ * Matches text that differs only in curly quotes, dash width or non-breaking
+ * spaces.
+ *
+ * Ported from Hermes's unicode-normalised strategy. This drift appears when
+ * either side has been through something that prettifies punctuation — a
+ * document, a chat client, an editor's smart-quote setting — and it is
+ * invisible on screen, which makes the resulting failure baffling.
+ */
+function typographyNormalizedMatch(
+  fileContent: string,
+  searchContent: string,
+): BasicMatchResult | null {
+  const normalizedSearch = normalizeTypography(searchContent);
+  const normalizedFile = normalizeTypography(fileContent);
+
+  if (
+    normalizedSearch === searchContent &&
+    normalizedFile === fileContent
+  ) {
+    return null;
+  }
+  // Safe because every replacement above preserves length.
+  return exactMatch(normalizedFile, normalizedSearch);
+}
+
+/**
+ * Ordered list of matching strategies to try with their names.
+ *
+ * The two normalising strategies sit after the exact ones and before the
+ * lossy ones on purpose: they are still exact comparisons, just against a
+ * canonical form, so they cannot match something the author did not mean.
+ * Only after they fail is it worth reaching for case-insensitive and
+ * whitespace-stripped matching, which can.
  */
 const matchingStrategies: Array<{ strategy: MatchStrategy; name: string }> = [
   { strategy: exactMatch, name: "exactMatch" },
   { strategy: trimmedMatch, name: "trimmedMatch" },
+  { strategy: escapeNormalizedMatch, name: "escapeNormalizedMatch" },
+  { strategy: typographyNormalizedMatch, name: "typographyNormalizedMatch" },
   { strategy: caseInsensitiveMatch, name: "caseInsensitiveMatch" },
   { strategy: whitespaceIgnoredMatch, name: "whitespaceIgnoredMatch" },
+  // Similarity-based matching stays off. It was disabled here before, with no
+  // recorded reason, and re-enabling it on a hunch risks the one failure an
+  // edit tool must never have: replacing the wrong region confidently.
   // { strategy: findFuzzyMatch, name: "jaroWinklerFuzzyMatch" },
 ];
 
