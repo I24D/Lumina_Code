@@ -74,6 +74,22 @@ Los trabajos programados se guardan localmente y solo se ejecutan mientras el ho
 
 Estas capacidades forman parte de la experiencia funcional actual. Algunas integraciones requieren credenciales propias o componentes opcionales, tal como se explica en la sección de instalación.
 
+#### Sesiones, forks y worktrees
+
+El centro **Sesiones** permite retomar, buscar, renombrar, exportar, eliminar o
+bifurcar conversaciones. Cada respuesta terminada incluye la acción **Fork**
+para abrir una sesión nueva conservando el contexto exactamente hasta ese
+punto; el linaje queda persistido y el uso/coste de la rama nueva empieza desde
+cero. Crear un fork nunca ejecuta el modelo por sí solo.
+
+La pestaña **Worktrees** administra worktrees Git reales del repositorio activo:
+crea una rama aislada desde `HEAD` u otra referencia, muestra si cada árbol está
+limpio o tiene cambios y puede abrirlo en otra ventana de VS Code. Lumina Code
+no permite eliminar el worktree principal ni uno bloqueado, y Git rechaza por
+defecto la eliminación de un árbol con cambios. Los nuevos directorios se crean
+junto al repositorio, bajo `<repositorio>-worktrees`, para no contaminar el
+workspace principal.
+
 ### Una sola interfaz evolucionada
 
 Lumina Code usa **una única GUI React dentro de la extensión**. El lenguaje
@@ -93,7 +109,8 @@ La experiencia unificada incorpora:
 - centro de configuración responsive para modelos, reglas, herramientas MCP,
   habilidades, permisos, runtime y Start Talk;
 - rutas compatibles con conceptos del workspace Lumina-Openclaw como
-  `/sessions`, `/usage`, `/automations`, `/settings/talk`, `/logs` y `/debug`,
+  `/sessions`, `/worktrees`, `/usage`, `/automations`, `/settings/talk`, `/logs`
+  y `/debug`,
   redirigidas a superficies nativas de la misma GUI.
 
 La arquitectura y el mapa de absorción están documentados en
@@ -109,6 +126,7 @@ La arquitectura y el mapa de absorción están documentados en
 | Start Talk y puente nativo de voz         | **Funcional; requiere Gemini API**                      |
 | Chat, edición y agente de código          | **Funcional; requiere configurar un modelo**            |
 | Metas, GitHub, cambios, panel y scheduler | **Funcionales y cubiertos por pruebas automatizadas**   |
+| Sesiones, forks y worktrees Git           | **Funcionales y cubiertos por pruebas automatizadas**   |
 | Licencia y atribuciones                   | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE) |
 | Publicación en Visual Studio Marketplace  | Aún no disponible                                       |
 

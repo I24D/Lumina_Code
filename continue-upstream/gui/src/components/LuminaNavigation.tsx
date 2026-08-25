@@ -89,8 +89,8 @@ const SECONDARY_ITEMS: NavigationItem[] = [
     icon: LinkIcon,
   },
   {
-    label: "Historial",
-    description: "Todas las conversaciones",
+    label: "Sesiones",
+    description: "Chats, forks y worktrees",
     path: ROUTES.HISTORY,
     icon: ClockIcon,
   },
@@ -116,6 +116,9 @@ const ALL_ITEMS = [...PRIMARY_ITEMS, ...SECONDARY_ITEMS, ...SETTINGS_ITEMS];
 function isRouteActive(pathname: string, path: string) {
   if (path === ROUTES.HOME) {
     return pathname === ROUTES.HOME || pathname === ROUTES.HOME_INDEX;
+  }
+  if (path === ROUTES.HISTORY) {
+    return [ROUTES.HISTORY, "/sessions", "/worktrees"].includes(pathname);
   }
   return pathname === path || pathname.startsWith(`${path}/`);
 }

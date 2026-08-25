@@ -87,6 +87,48 @@ export const updateSession = createAsyncThunk<void, Session, ThunkApiType>(
   },
 );
 
+export const forkSession = createAsyncThunk<
+  Session,
+  {
+    sessionId: string;
+    historyIndex?: number;
+    title?: string;
+    saveCurrentSession?: boolean;
+  },
+  ThunkApiType
+>(
+  "session/fork",
+  async (
+    { sessionId, historyIndex, title, saveCurrentSession: saveCurrent },
+    { extra, dispatch },
+  ) => {
+    if (saveCurrent) {
+      await dispatch(
+        saveCurrentSession({
+          openNewSession: false,
+          generateTitle: true,
+        }),
+      ).unwrap();
+    }
+
+    const result = await extra.ideMessenger.request("sessions/fork", {
+      sessionId,
+      historyIndex,
+      title,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
+
+    dispatch(newSession(result.content));
+    await dispatch(refreshSessionMetadata({}));
+    if (result.content.chatModelTitle) {
+      void dispatch(selectChatModelForProfile(result.content.chatModelTitle));
+    }
+    return result.content;
+  },
+);
+
 /*
  this is only used for the custom focusContinueSessionId command at the moment
 */
@@ -170,7 +212,7 @@ export const loadLastSession = createAsyncThunk<void, void, ThunkApiType>(
     }
     dispatch(newSession(session));
     if (session.chatModelTitle) {
-      dispatch(selectChatModelForProfile(session.chatModelTitle));
+      void dispatch(selectChatModelForProfile(session.chatModelTitle));
     }
   },
 );
@@ -260,6 +302,9 @@ export const saveCurrentSession = createAsyncThunk<
       history: session.history,
       mode: session.mode,
       chatModelTitle: selectedChatModel?.title ?? null,
+      parentSessionId: session.parentSessionId,
+      parentHistoryIndex: session.parentHistoryIndex,
+      worktreePath: session.worktreePath,
     };
 
     const result = await dispatch(updateSession(updatedSession));

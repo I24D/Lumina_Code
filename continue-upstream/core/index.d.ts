@@ -281,6 +281,12 @@ export interface Session {
   title: string;
   workspaceDirectory: string;
   history: ChatHistoryItem[];
+  /** Session this conversation was forked from, when applicable. */
+  parentSessionId?: string;
+  /** Last history item retained from the parent session. */
+  parentHistoryIndex?: number;
+  /** Git worktree associated with this session. */
+  worktreePath?: string;
   /** Optional: per-session UI mode (chat/agent/plan/background) */
   mode?: MessageModes;
   /** Optional: title of the selected chat model for this session */
@@ -295,6 +301,9 @@ export interface BaseSessionMetadata {
   dateCreated: string;
   workspaceDirectory: string;
   messageCount?: number;
+  parentSessionId?: string;
+  parentHistoryIndex?: number;
+  worktreePath?: string;
 }
 
 export interface RangeInFile {

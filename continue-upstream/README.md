@@ -9,10 +9,11 @@
 > are preserved below and in [`../NOTICE`](../NOTICE).
 
 Lumina-specific workflows currently include Session Goals, GitHub issue/PR
-session preparation, guided changes, a work dashboard and persistent scheduled
-agent work. The single React webview also provides the responsive Lumina
-workspace, recent sessions, prompt queue, Connections, Knowledge, runtime
-diagnostics and secure Start Talk configuration. Open the chat and type `/` to
+session preparation, guided changes, a work dashboard, persistent scheduled
+agent work, session forks and safe Git worktree management. The single React
+webview also provides the responsive Lumina workspace, recent sessions, prompt
+queue, Connections, Knowledge, runtime diagnostics and secure Start Talk
+configuration. Open the chat and type `/` to
 discover agent actions. Their behavior and safety boundaries are documented in
 [`../docs/AGENT_WORKFLOWS.md`](../docs/AGENT_WORKFLOWS.md), while the unified UI
 architecture is described in

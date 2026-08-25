@@ -208,6 +208,9 @@ type SessionState = {
   isStreaming: boolean;
   title: string;
   id: string;
+  parentSessionId?: string;
+  parentHistoryIndex?: number;
+  worktreePath?: string;
   streamAborter: AbortController;
   mainEditorContentTrigger?: JSONContent | undefined;
   symbols: FileSymbolMap;
@@ -700,6 +703,9 @@ export const sessionSlice = createSlice({
         state.history = payload.history as any;
         state.title = payload.title;
         state.id = payload.sessionId;
+        state.parentSessionId = payload.parentSessionId;
+        state.parentHistoryIndex = payload.parentHistoryIndex;
+        state.worktreePath = payload.worktreePath;
         if (payload.mode) {
           state.mode = payload.mode;
         }
@@ -707,6 +713,9 @@ export const sessionSlice = createSlice({
         state.history = [];
         state.title = NEW_SESSION_TITLE;
         state.id = uuidv4();
+        state.parentSessionId = undefined;
+        state.parentHistoryIndex = undefined;
+        state.worktreePath = undefined;
       }
     },
     /**

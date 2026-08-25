@@ -267,6 +267,14 @@ export class VsCodeMessenger {
       );
     });
 
+    this.onWebview("worktrees/open", async (msg) => {
+      await vscode.commands.executeCommand(
+        "vscode.openFolder",
+        vscode.Uri.file(msg.data.path),
+        { forceNewWindow: true },
+      );
+    });
+
     /** PASS THROUGH FROM WEBVIEW TO CORE AND BACK **/
     WEBVIEW_TO_CORE_PASS_THROUGH.forEach((messageType) => {
       this.onWebview(messageType, async (msg) => {

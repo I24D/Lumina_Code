@@ -81,8 +81,9 @@ const router = createMemoryRouter([
       { path: "/chat", element: <Navigate replace to={ROUTES.HOME} /> },
       {
         path: "/sessions",
-        element: <Navigate replace to={ROUTES.HISTORY} />,
+        element: <History />,
       },
+      { path: "/worktrees", element: <History /> },
       { path: "/usage", element: <Navigate replace to={ROUTES.STATS} /> },
       { path: "/dashboard", element: <Navigate replace to={ROUTES.WORK} /> },
       { path: "/tasks", element: <Navigate replace to={ROUTES.WORK} /> },

@@ -221,3 +221,48 @@ describe("Many sessions created", () => {
     expect(sessions.length).toBe(0);
   });
 });
+
+describe("Session forks", () => {
+  beforeEach(() => historyManager.clearAll());
+  afterEach(() => historyManager.clearAll());
+
+  test("forks a session at a selected history item and persists its lineage", () => {
+    const source: Session = {
+      sessionId: "fork-source",
+      title: "Investigate a failure",
+      workspaceDirectory: "file:///workspace/project",
+      history: [
+        { message: { role: "user", content: "first" }, contextItems: [] },
+        { message: { role: "assistant", content: "answer" }, contextItems: [] },
+        { message: { role: "user", content: "second" }, contextItems: [] },
+      ] as Session["history"],
+      mode: "agent",
+      chatModelTitle: "Kimi K3",
+      usage: { promptTokens: 10, completionTokens: 5, totalCost: 0.1 },
+    };
+    historyManager.save(source);
+
+    const forked = historyManager.fork(source.sessionId, { historyIndex: 1 });
+
+    expect(forked.sessionId).not.toBe(source.sessionId);
+    expect(forked.history).toHaveLength(2);
+    expect(forked.parentSessionId).toBe(source.sessionId);
+    expect(forked.parentHistoryIndex).toBe(1);
+    expect(forked.chatModelTitle).toBe("Kimi K3");
+    expect(forked.usage).toBeUndefined();
+    expect(historyManager.load(forked.sessionId)).toEqual(forked);
+  });
+
+  test("rejects an invalid fork point", () => {
+    historyManager.save({
+      sessionId: "fork-invalid",
+      title: "Invalid fork",
+      workspaceDirectory: "",
+      history: [],
+    });
+
+    expect(() =>
+      historyManager.fork("fork-invalid", { historyIndex: 0 }),
+    ).toThrow("history index 0 is out of range");
+  });
+});

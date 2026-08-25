@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { v4 as uuidv4 } from "uuid";
 
 import { BaseSessionMetadata, Session } from "../index.js";
 import { ListHistoryOptions } from "../protocol/core.js";
@@ -108,6 +109,50 @@ export class HistoryManager {
     }
   }
 
+  fork(
+    sessionId: string,
+    options: { historyIndex?: number; title?: string } = {},
+  ): Session {
+    const sourceFile = getSessionFilePath(sessionId);
+    if (!fs.existsSync(sourceFile)) {
+      throw new Error(`Session file ${sourceFile} does not exist`);
+    }
+
+    const source = this.load(sessionId);
+    const historyIndex = options.historyIndex;
+    if (
+      historyIndex !== undefined &&
+      (!Number.isInteger(historyIndex) ||
+        historyIndex < 0 ||
+        historyIndex >= source.history.length)
+    ) {
+      throw new Error(
+        `Cannot fork session ${sessionId}: history index ${historyIndex} is out of range`,
+      );
+    }
+
+    const history =
+      historyIndex === undefined
+        ? source.history
+        : source.history.slice(0, historyIndex + 1);
+    const forked: Session = {
+      sessionId: uuidv4(),
+      title: options.title?.trim() || `${source.title} (fork)`,
+      workspaceDirectory: source.workspaceDirectory,
+      history: JSON.parse(JSON.stringify(history)),
+      parentSessionId: source.sessionId,
+      parentHistoryIndex:
+        historyIndex ??
+        (source.history.length > 0 ? source.history.length - 1 : undefined),
+      worktreePath: source.worktreePath,
+      mode: source.mode,
+      chatModelTitle: source.chatModelTitle,
+    };
+
+    this.save(forked);
+    return forked;
+  }
+
   save(session: Session) {
     // Save the main session json file
     // Explicitely rewriting here to influence the written key order in the file!
@@ -118,6 +163,15 @@ export class HistoryManager {
       workspaceDirectory: session.workspaceDirectory,
       history: session.history,
     };
+    if (session.parentSessionId !== undefined) {
+      orderedSession.parentSessionId = session.parentSessionId;
+    }
+    if (session.parentHistoryIndex !== undefined) {
+      orderedSession.parentHistoryIndex = session.parentHistoryIndex;
+    }
+    if (session.worktreePath !== undefined) {
+      orderedSession.worktreePath = session.worktreePath;
+    }
     if (session.mode) {
       orderedSession.mode = session.mode;
     }
@@ -159,6 +213,9 @@ export class HistoryManager {
           sessionMetadata.title = session.title;
           sessionMetadata.workspaceDirectory = session.workspaceDirectory;
           sessionMetadata.messageCount = messageCount;
+          sessionMetadata.parentSessionId = session.parentSessionId;
+          sessionMetadata.parentHistoryIndex = session.parentHistoryIndex;
+          sessionMetadata.worktreePath = session.worktreePath;
           found = true;
           break;
         }
@@ -171,6 +228,9 @@ export class HistoryManager {
           dateCreated: String(Date.now()),
           workspaceDirectory: session.workspaceDirectory,
           messageCount,
+          parentSessionId: session.parentSessionId,
+          parentHistoryIndex: session.parentHistoryIndex,
+          worktreePath: session.worktreePath,
         };
         sessionsList.push(sessionMetadata);
       }

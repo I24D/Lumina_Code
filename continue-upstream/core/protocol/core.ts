@@ -79,6 +79,11 @@ import type { TodoSnapshot } from "../planner/types.js";
 import type { VerificationRecipe } from "../verify/types.js";
 import type { GitHubWorkItem } from "../integrations/GitHubWorkItemService.js";
 import type {
+  CreateWorktreeRequest,
+  RemoveWorktreeRequest,
+  WorktreeInfo,
+} from "../worktrees/WorktreeService.js";
+import type {
   ScheduledTask,
   ScheduledTaskInput,
   ScheduledTaskRun,
@@ -125,6 +130,12 @@ export interface SessionSearchResponse {
   recent: SessionSummary[];
 }
 
+export interface ForkSessionRequest {
+  sessionId: string;
+  historyIndex?: number;
+  title?: string;
+}
+
 export type ToCoreFromIdeOrWebviewProtocol = {
   // Special
   ping: [string, string];
@@ -142,6 +153,13 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     SkillWithUsage[],
   ];
   "sessions/search": [SessionSearchRequest, SessionSearchResponse];
+  "sessions/fork": [ForkSessionRequest, Session];
+  "worktrees/list": [
+    { workspaceDirectory?: string } | undefined,
+    WorktreeInfo[],
+  ];
+  "worktrees/create": [CreateWorktreeRequest, WorktreeInfo];
+  "worktrees/remove": [RemoveWorktreeRequest, void];
   "todos/list": [undefined, TodoSnapshot];
   "verify/recipe": [undefined, VerificationRecipe | undefined];
   "history/load": [{ id: string }, Session];

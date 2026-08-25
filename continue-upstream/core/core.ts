@@ -78,6 +78,7 @@ import { getSkillUsageStore } from "./learning/SkillUsageStore.js";
 import { getTodoStore } from "./planner/TodoStore.js";
 import { detectRecipe } from "./verify/detectRecipe.js";
 import { workspaceFiles } from "./verify/workspaceFiles.js";
+import { WorktreeService } from "./worktrees/WorktreeService.js";
 import {
   setupLocalConfig,
   setupProviderConfig,
@@ -335,6 +336,7 @@ export class Core {
   /* eslint-disable max-lines-per-function */
   private registerMessageHandlers(ideSettingsPromise: Promise<IdeSettings>) {
     const on = this.messenger.on.bind(this.messenger);
+    const worktreeService = new WorktreeService(this.ide);
 
     // Note, VsCode's in-process messenger doesn't do anything with this
     // It will only show for jetbrains
@@ -396,6 +398,23 @@ export class Core {
     on("history/clear", (msg) => {
       historyManager.clearAll();
     });
+
+    on("sessions/fork", (msg) => {
+      const forked = historyManager.fork(msg.data.sessionId, {
+        historyIndex: msg.data.historyIndex,
+        title: msg.data.title,
+      });
+      getTodoStore().setActiveSession(forked.sessionId);
+      return forked;
+    });
+
+    on("worktrees/list", (msg) =>
+      worktreeService.list(msg.data?.workspaceDirectory),
+    );
+
+    on("worktrees/create", (msg) => worktreeService.create(msg.data));
+
+    on("worktrees/remove", (msg) => worktreeService.remove(msg.data));
 
     // Memory — procedural (skills) and episodic (past sessions)
     on("skills/list", async () => {

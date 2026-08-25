@@ -1,6 +1,7 @@
 import {
   ArrowDownOnSquareIcon,
   PencilSquareIcon,
+  Square2StackIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import { BaseSessionMetadata } from "core";
@@ -13,6 +14,7 @@ import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { exitEdit } from "../../redux/thunks/edit";
 import {
   deleteSession,
+  forkSession,
   getSession,
   loadSession,
   updateSession,
@@ -145,6 +147,23 @@ export function HistoryTableRow({
                 })}
               </span> */}
         </div>
+        {(sessionMetadata.parentSessionId || sessionMetadata.worktreePath) && (
+          <div className="text-description-muted text-2xs flex flex-wrap gap-1">
+            {sessionMetadata.parentSessionId && (
+              <span className="bg-vsc-background rounded-full px-2 py-0.5">
+                fork
+              </span>
+            )}
+            {sessionMetadata.worktreePath && (
+              <span
+                className="bg-vsc-background max-w-full truncate rounded-full px-2 py-0.5"
+                title={sessionMetadata.worktreePath}
+              >
+                {getUriPathBasename(sessionMetadata.worktreePath)}
+              </span>
+            )}
+          </div>
+        )}
       </td>
 
       {hovered && !editing && (
@@ -171,6 +190,30 @@ export function HistoryTableRow({
                   <ArrowDownOnSquareIcon width="1em" height="1em" />
                 </HeaderButtonWithToolTip>
               )}
+              <HeaderButtonWithToolTip
+                text="Fork chat"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    await dispatch(
+                      forkSession({
+                        sessionId: sessionMetadata.sessionId,
+                        // Forking a past chat navigates away from whatever is
+                        // currently open, so preserve that chat first too.
+                        saveCurrentSession: true,
+                      }),
+                    ).unwrap();
+                    navigate("/");
+                  } catch (error) {
+                    ideMessenger.post("showToast", [
+                      "error",
+                      `Could not fork chat: ${error instanceof Error ? error.message : String(error)}`,
+                    ]);
+                  }
+                }}
+              >
+                <Square2StackIcon width="1em" height="1em" />
+              </HeaderButtonWithToolTip>
               <HeaderButtonWithToolTip
                 text="Delete"
                 onClick={async (e) => {
