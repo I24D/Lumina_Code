@@ -265,4 +265,24 @@ describe("Session forks", () => {
       historyManager.fork("fork-invalid", { historyIndex: 0 }),
     ).toThrow("history index 0 is out of range");
   });
+
+  test("can associate a fork with an isolated worktree", () => {
+    historyManager.save({
+      sessionId: "worktree-source",
+      title: "Main workspace chat",
+      workspaceDirectory: "file:///repo",
+      history: [],
+    });
+
+    const forked = historyManager.fork("worktree-source", {
+      workspaceDirectory: "file:///repo-worktrees/feature",
+      worktreePath: "C:\\repo-worktrees\\feature",
+    });
+
+    expect(forked.workspaceDirectory).toBe("file:///repo-worktrees/feature");
+    expect(forked.worktreePath).toBe("C:\\repo-worktrees\\feature");
+    expect(historyManager.load(forked.sessionId).worktreePath).toBe(
+      "C:\\repo-worktrees\\feature",
+    );
+  });
 });

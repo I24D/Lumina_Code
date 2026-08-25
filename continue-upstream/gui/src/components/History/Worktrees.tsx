@@ -1,14 +1,16 @@
 import {
   ArrowPathIcon,
   ArrowTopRightOnSquareIcon,
+  ChatBubbleLeftRightIcon,
   CodeBracketIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import type { WorktreeInfo } from "core/worktrees/WorktreeService";
 import { useContext, useEffect, useState } from "react";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
-import { useAppDispatch } from "../../redux/hooks";
+import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { setDialogMessage, setShowDialog } from "../../redux/slices/uiSlice";
+import { forkCurrentSessionToWorktree } from "../../redux/thunks/session";
 import ConfirmationDialog from "../dialogs/ConfirmationDialog";
 import { Button } from "../ui";
 
@@ -24,6 +26,8 @@ export function Worktrees() {
   const [baseRef, setBaseRef] = useState("HEAD");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [forkCurrentChat, setForkCurrentChat] = useState(true);
+  const historyLength = useAppSelector((state) => state.session.history.length);
 
   const showError = (message: string) =>
     ideMessenger.post("showToast", ["error", message]);
@@ -49,6 +53,28 @@ export function Worktrees() {
     void refresh();
   }, []);
 
+  const forkIntoWorktree = async (worktree: WorktreeInfo) => {
+    try {
+      const session = await dispatch(
+        forkCurrentSessionToWorktree({ worktreePath: worktree.path }),
+      ).unwrap();
+      ideMessenger.post("worktrees/open", {
+        path: worktree.path,
+        sessionId: session.sessionId,
+      });
+      ideMessenger.post("showToast", [
+        "info",
+        "La sesión bifurcada se abrirá en el worktree.",
+      ]);
+      return true;
+    } catch (error) {
+      showError(
+        `No se pudo bifurcar la sesión en el worktree: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  };
+
   const createWorktree = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!branchName.trim() || creating) return;
@@ -67,6 +93,9 @@ export function Worktrees() {
         "info",
         `Worktree creado para ${response.content.branch ?? branchName}.`,
       ]);
+      if (forkCurrentChat && historyLength > 0) {
+        await forkIntoWorktree(response.content);
+      }
     } catch (error) {
       showError(
         `No se pudo crear el worktree: ${error instanceof Error ? error.message : String(error)}`,
@@ -146,6 +175,15 @@ export function Worktrees() {
               {creating ? "Creando…" : "Crear worktree"}
             </Button>
           </div>
+          <label className="text-description flex cursor-pointer items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={forkCurrentChat}
+              disabled={historyLength === 0}
+              onChange={(event) => setForkCurrentChat(event.target.checked)}
+            />
+            Bifurcar el chat actual y abrirlo en el nuevo worktree
+          </label>
         </form>
       </section>
 
@@ -218,6 +256,19 @@ export function Worktrees() {
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
+                  {!worktree.isMain && historyLength > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      title="Bifurcar el chat actual en este worktree"
+                      onClick={() => void forkIntoWorktree(worktree)}
+                    >
+                      <span className="flex items-center gap-1">
+                        <ChatBubbleLeftRightIcon className="h-3.5 w-3.5" />
+                        Sesión
+                      </span>
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"

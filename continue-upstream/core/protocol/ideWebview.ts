@@ -66,7 +66,8 @@ export type ToIdeFromWebviewProtocol = ToIdeFromWebviewOrCoreProtocol & {
   "edit/addCurrentSelection": [undefined, void];
   "edit/clearDecorations": [undefined, void];
   "session/share": [{ sessionId: string }, void];
-  "worktrees/open": [{ path: string }, void];
+  "worktrees/open": [{ path: string; sessionId?: string }, void];
+  "worktrees/claimSession": [undefined, string | undefined];
 };
 
 export type ToWebviewFromIdeProtocol = ToWebviewFromIdeOrCoreProtocol & {

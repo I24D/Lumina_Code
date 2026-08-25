@@ -136,6 +136,13 @@ export interface ForkSessionRequest {
   title?: string;
 }
 
+export interface ForkSessionToWorktreeRequest {
+  sessionId: string;
+  worktreePath: string;
+  historyIndex?: number;
+  title?: string;
+}
+
 export type ToCoreFromIdeOrWebviewProtocol = {
   // Special
   ping: [string, string];
@@ -154,6 +161,7 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   ];
   "sessions/search": [SessionSearchRequest, SessionSearchResponse];
   "sessions/fork": [ForkSessionRequest, Session];
+  "sessions/forkToWorktree": [ForkSessionToWorktreeRequest, Session];
   "worktrees/list": [
     { workspaceDirectory?: string } | undefined,
     WorktreeInfo[],

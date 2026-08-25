@@ -88,7 +88,8 @@ limpio o tiene cambios y puede abrirlo en otra ventana de VS Code. Lumina Code
 no permite eliminar el worktree principal ni uno bloqueado, y Git rechaza por
 defecto la eliminación de un árbol con cambios. Los nuevos directorios se crean
 junto al repositorio, bajo `<repositorio>-worktrees`, para no contaminar el
-workspace principal.
+workspace principal. Si se bifurca el chat al crear o abrir un worktree, la
+nueva ventana reclama esa sesión una sola vez y la carga automáticamente.
 
 ### Una sola interfaz evolucionada
 

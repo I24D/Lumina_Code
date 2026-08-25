@@ -208,6 +208,19 @@ export class WorktreeService {
     return this.listFromRoot(await this.repositoryRoot(workspaceDirectory));
   }
 
+  async getRegistered(
+    requestedPath: string,
+    workspaceDirectory?: string,
+  ): Promise<WorktreeInfo> {
+    const worktree = (await this.list(workspaceDirectory)).find((candidate) =>
+      samePath(candidate.path, requestedPath),
+    );
+    if (!worktree) {
+      throw new Error("The requested path is not a registered worktree");
+    }
+    return worktree;
+  }
+
   async create(request: CreateWorktreeRequest): Promise<WorktreeInfo> {
     const branchName = assertSafeGitRef(request.branchName, "Branch name");
     const baseRef = assertSafeGitRef(

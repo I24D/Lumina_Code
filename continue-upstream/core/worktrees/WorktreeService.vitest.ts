@@ -68,6 +68,16 @@ describe("WorktreeService safety", () => {
       "main worktree cannot be removed",
     );
   });
+
+  it("only resolves paths registered by Git", async () => {
+    const service = new WorktreeService(ide);
+    await expect(service.getRegistered(root)).resolves.toEqual(
+      expect.objectContaining({ path: root, isMain: true }),
+    );
+    await expect(service.getRegistered("/repo/not-registered")).rejects.toThrow(
+      "not a registered worktree",
+    );
+  });
 });
 
 describe("WorktreeService Git integration", () => {

@@ -40,7 +40,7 @@ export const refreshSessionMetadata = createAsyncThunk<
   ThunkApiType
 >("session/refreshMetadata", async ({ offset, limit }, { dispatch, extra }) => {
   const result = await extra.ideMessenger.request("history/list", {
-    limit,
+    limit: limit ?? 500,
     offset,
   });
   if (result.status === "error") {
@@ -125,6 +125,38 @@ export const forkSession = createAsyncThunk<
     if (result.content.chatModelTitle) {
       void dispatch(selectChatModelForProfile(result.content.chatModelTitle));
     }
+    return result.content;
+  },
+);
+
+export const forkCurrentSessionToWorktree = createAsyncThunk<
+  Session,
+  { worktreePath: string; historyIndex?: number; title?: string },
+  ThunkApiType
+>(
+  "session/forkToWorktree",
+  async (
+    { worktreePath, historyIndex, title },
+    { extra, dispatch, getState },
+  ) => {
+    const sessionId = getState().session.id;
+    await dispatch(
+      saveCurrentSession({
+        openNewSession: false,
+        generateTitle: true,
+      }),
+    ).unwrap();
+
+    const result = await extra.ideMessenger.request("sessions/forkToWorktree", {
+      sessionId,
+      worktreePath,
+      historyIndex,
+      title,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
+    await dispatch(refreshSessionMetadata({}));
     return result.content;
   },
 );

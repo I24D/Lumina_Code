@@ -114,10 +114,19 @@ function ParallelListeners() {
         await handleConfigUpdate(true, result.content);
       }
       dispatch(setConfigLoading(false));
-      if (initialSessionId) {
+      const pendingWorktreeSession = await ideMessenger.request(
+        "worktrees/claimSession",
+        undefined,
+      );
+      const sessionToLoad =
+        pendingWorktreeSession.status === "success" &&
+        pendingWorktreeSession.content
+          ? pendingWorktreeSession.content
+          : initialSessionId;
+      if (sessionToLoad) {
         await dispatch(
           loadSession({
-            sessionId: initialSessionId,
+            sessionId: sessionToLoad,
             saveCurrentSession: false,
           }),
         );

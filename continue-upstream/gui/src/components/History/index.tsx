@@ -19,12 +19,17 @@ import {
   setAllSessionMetadata,
 } from "../../redux/slices/sessionSlice";
 import { setDialogMessage, setShowDialog } from "../../redux/slices/uiSlice";
-import { refreshSessionMetadata } from "../../redux/thunks/session";
+import { exitEdit } from "../../redux/thunks/edit";
+import {
+  loadSession,
+  refreshSessionMetadata,
+} from "../../redux/thunks/session";
 import { getFontSize, getPlatform } from "../../util";
 import { ROUTES } from "../../util/navigation";
 import ConfirmationDialog from "../dialogs/ConfirmationDialog";
 import { Button } from "../ui";
 import { HistoryTableRow } from "./HistoryTableRow";
+import { SessionBranchTree } from "./SessionBranchTree";
 import { SessionContentResults } from "./SessionContentResults";
 import { groupSessionsByDate, parseDate } from "./util";
 
@@ -34,7 +39,7 @@ import { groupSessionsByDate, parseDate } from "./util";
  * Messages are searched full-text in core, which is the only way to find a
  * conversation by something said inside it.
  */
-type SearchScope = "titles" | "messages";
+type SearchScope = "titles" | "messages" | "branches";
 
 export function History() {
   const dispatch = useAppDispatch();
@@ -44,7 +49,9 @@ export function History() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [searchScope, setSearchScope] = useState<SearchScope>("titles");
-  const searchingMessages = searchScope === "messages" && searchTerm.trim() !== "";
+  const searchingMessages =
+    searchScope === "messages" && searchTerm.trim() !== "";
+  const showingBranches = searchScope === "branches";
 
   const minisearch = useRef<MiniSearch>(
     new MiniSearch({
@@ -56,9 +63,14 @@ export function History() {
   const allSessionMetadata = useAppSelector(
     (state) => state.session.allSessionMetadata,
   );
+  const currentSessionId = useAppSelector((state) => state.session.id);
   const isSessionMetadataLoading = useAppSelector(
     (state) => state.session.isSessionMetadataLoading,
   );
+
+  useEffect(() => {
+    void dispatch(refreshSessionMetadata({ limit: 500 }));
+  }, [dispatch]);
 
   useEffect(() => {
     try {
@@ -154,6 +166,16 @@ export function History() {
     dispatch(setShowDialog(true));
   };
 
+  const openSession = async (sessionId: string) => {
+    await dispatch(exitEdit({}));
+    if (sessionId !== currentSessionId) {
+      await dispatch(
+        loadSession({ sessionId, saveCurrentSession: true }),
+      ).unwrap();
+    }
+    navigate(ROUTES.HOME);
+  };
+
   return (
     <div
       style={{ fontSize: getFontSize() }}
@@ -166,7 +188,9 @@ export function History() {
           placeholder={
             searchScope === "titles"
               ? "Search session titles"
-              : "Search inside conversations"
+              : searchScope === "messages"
+                ? "Search inside conversations"
+                : "Filter conversation branches"
           }
           type="text"
           value={searchTerm}
@@ -186,7 +210,7 @@ export function History() {
       </div>
 
       <div className="mb-2 flex justify-center gap-1 text-xs">
-        {(["titles", "messages"] as const).map((scope) => (
+        {(["titles", "messages", "branches"] as const).map((scope) => (
           <button
             key={scope}
             type="button"
@@ -199,7 +223,11 @@ export function History() {
             }`}
             onClick={() => setSearchScope(scope)}
           >
-            {scope === "titles" ? "Titles" : "Message contents"}
+            {scope === "titles"
+              ? "Titles"
+              : scope === "messages"
+                ? "Message contents"
+                : "Branches"}
           </button>
         ))}
       </div>
@@ -207,6 +235,11 @@ export function History() {
       <div className="thin-scrollbar flex w-full flex-1 flex-col overflow-y-auto">
         {searchingMessages ? (
           <SessionContentResults query={searchTerm} />
+        ) : showingBranches ? (
+          <SessionBranchTree
+            sessions={filteredAndSortedSessions}
+            onOpen={(sessionId) => void openSession(sessionId)}
+          />
         ) : (
           <>
             {filteredAndSortedSessions.length === 0 && (

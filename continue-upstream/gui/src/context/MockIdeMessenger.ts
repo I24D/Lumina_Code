@@ -85,6 +85,7 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
   "skills/curate": [],
   "sessions/search": { hits: [], recent: [] },
   "worktrees/list": [],
+  "worktrees/claimSession": undefined,
   "todos/list": {
     items: [],
     counts: { pending: 0, in_progress: 0, completed: 0, cancelled: 0 },

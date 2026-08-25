@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join as joinPath } from "node:path";
+import { pathToFileURL } from "node:url";
 import * as URI from "uri-js";
 import { v4 as uuidv4 } from "uuid";
 
@@ -405,6 +406,19 @@ export class Core {
         title: msg.data.title,
       });
       getTodoStore().setActiveSession(forked.sessionId);
+      return forked;
+    });
+
+    on("sessions/forkToWorktree", async (msg) => {
+      const worktree = await worktreeService.getRegistered(
+        msg.data.worktreePath,
+      );
+      const forked = historyManager.fork(msg.data.sessionId, {
+        historyIndex: msg.data.historyIndex,
+        title: msg.data.title,
+        workspaceDirectory: pathToFileURL(worktree.path).toString(),
+        worktreePath: worktree.path,
+      });
       return forked;
     });
 

@@ -111,7 +111,12 @@ export class HistoryManager {
 
   fork(
     sessionId: string,
-    options: { historyIndex?: number; title?: string } = {},
+    options: {
+      historyIndex?: number;
+      title?: string;
+      workspaceDirectory?: string;
+      worktreePath?: string;
+    } = {},
   ): Session {
     const sourceFile = getSessionFilePath(sessionId);
     if (!fs.existsSync(sourceFile)) {
@@ -138,13 +143,14 @@ export class HistoryManager {
     const forked: Session = {
       sessionId: uuidv4(),
       title: options.title?.trim() || `${source.title} (fork)`,
-      workspaceDirectory: source.workspaceDirectory,
+      workspaceDirectory:
+        options.workspaceDirectory ?? source.workspaceDirectory,
       history: JSON.parse(JSON.stringify(history)),
       parentSessionId: source.sessionId,
       parentHistoryIndex:
         historyIndex ??
         (source.history.length > 0 ? source.history.length - 1 : undefined),
-      worktreePath: source.worktreePath,
+      worktreePath: options.worktreePath ?? source.worktreePath,
       mode: source.mode,
       chatModelTitle: source.chatModelTitle,
     };

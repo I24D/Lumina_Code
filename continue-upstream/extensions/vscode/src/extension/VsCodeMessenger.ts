@@ -268,11 +268,53 @@ export class VsCodeMessenger {
     });
 
     this.onWebview("worktrees/open", async (msg) => {
+      if (msg.data.sessionId) {
+        const pending = this.context.globalState.get<Record<string, string>>(
+          "lumina.pendingWorktreeSessions",
+          {},
+        );
+        const key =
+          process.platform === "win32"
+            ? msg.data.path.toLowerCase()
+            : msg.data.path;
+        await this.context.globalState.update(
+          "lumina.pendingWorktreeSessions",
+          {
+            ...pending,
+            [key]: msg.data.sessionId,
+          },
+        );
+      }
       await vscode.commands.executeCommand(
         "vscode.openFolder",
         vscode.Uri.file(msg.data.path),
         { forceNewWindow: true },
       );
+    });
+
+    this.onWebview("worktrees/claimSession", async () => {
+      const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspacePath) {
+        return undefined;
+      }
+      const pending = this.context.globalState.get<Record<string, string>>(
+        "lumina.pendingWorktreeSessions",
+        {},
+      );
+      const key =
+        process.platform === "win32"
+          ? workspacePath.toLowerCase()
+          : workspacePath;
+      const sessionId = pending[key];
+      if (sessionId) {
+        const next = { ...pending };
+        delete next[key];
+        await this.context.globalState.update(
+          "lumina.pendingWorktreeSessions",
+          next,
+        );
+      }
+      return sessionId;
     });
 
     /** PASS THROUGH FROM WEBVIEW TO CORE AND BACK **/

@@ -19,6 +19,7 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "skills/curate",
     "sessions/search",
     "sessions/fork",
+    "sessions/forkToWorktree",
     "worktrees/list",
     "worktrees/create",
     "worktrees/remove",
