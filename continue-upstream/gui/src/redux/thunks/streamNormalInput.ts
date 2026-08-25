@@ -1,5 +1,6 @@
 import { createAsyncThunk, unwrapResult } from "@reduxjs/toolkit";
 import { LLMFullCompletionOptions, ModelDescription } from "core";
+import { classifyLlmError } from "core/llm/classifyLlmError";
 import { getRuleId } from "core/llm/rules/getSystemMessageWithRules";
 import { ToCoreProtocol } from "core/protocol";
 import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
@@ -178,13 +179,17 @@ export const streamNormalInput = createAsyncThunk<
     });
 
     if (precompiledRes.status === "error") {
-      if (precompiledRes.error.includes("Not enough context")) {
-        dispatch(setInlineErrorMessage("out-of-context"));
-        dispatch(setInactive());
-        return;
-      } else {
+      // Classifying instead of matching one phrase: an unrecognised provider
+      // error used to be thrown and reach the user as raw text, which for the
+      // common cases (no credit, wrong key, rate limited) says nothing about
+      // what to do next.
+      const diagnosis = classifyLlmError(precompiledRes.error);
+      if (diagnosis.category === "unknown") {
         throw new Error(precompiledRes.error);
       }
+      dispatch(setInlineErrorMessage(diagnosis.category));
+      dispatch(setInactive());
+      return;
     }
 
     const { compiledChatMessages, didPrune, contextPercentage } =
