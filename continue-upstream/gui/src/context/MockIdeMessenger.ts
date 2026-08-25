@@ -81,6 +81,13 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
   "history/list": [],
   "docs/getIndexedPages": [],
   "history/save": undefined,
+  "skills/list": [],
+  "skills/curate": [],
+  "sessions/search": { hits: [], recent: [] },
+  "todos/list": {
+    items: [],
+    counts: { pending: 0, in_progress: 0, completed: 0, cancelled: 0 },
+  },
   "config/getSerializedProfileInfo": {
     profileId: "local",
     profiles: [],

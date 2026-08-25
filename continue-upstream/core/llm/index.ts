@@ -11,6 +11,12 @@ import Handlebars from "handlebars";
 import { DevDataSqliteDb } from "../data/devdataSqlite.js";
 import { DataLogger } from "../data/log.js";
 import {
+  isRepetitionLoop,
+  MIN_RESPONSE_CHARS,
+  REPETITION_CHECK_INTERVAL_CHARS,
+  REPETITION_ERROR_MESSAGE,
+} from "./repetitionGuard.js";
+import {
   CacheBehavior,
   ChatMessage,
   Chunk,
@@ -1171,6 +1177,29 @@ export abstract class BaseLLM implements ILLM {
     let usage: Usage | undefined = undefined;
     let citations: null | string[] = null;
 
+    // Running length, so the repetition check can be gated without paying for
+    // a join() on every chunk.
+    let completionChars = 0;
+    let checkedAtChars = 0;
+    const guardAgainstRepetition = (added: string[]) => {
+      for (const part of added) {
+        completionChars += part.length;
+      }
+      if (
+        completionChars < MIN_RESPONSE_CHARS ||
+        completionChars - checkedAtChars < REPETITION_CHECK_INTERVAL_CHARS
+      ) {
+        return;
+      }
+      checkedAtChars = completionChars;
+      if (isRepetitionLoop(completion.join(""))) {
+        // Stopping here is the point: left alone the model spends the rest of
+        // its budget on the same fragment, and the whole thing comes back as
+        // context on the next turn.
+        throw new Error(REPETITION_ERROR_MESSAGE);
+      }
+    };
+
     try {
       if (this.templateMessages) {
         for await (const chunk of this._streamComplete(
@@ -1231,6 +1260,7 @@ export abstract class BaseLLM implements ILLM {
             const result = this.processChatChunk(chunk, interaction);
             completion.push(...result.completion);
             thinking.push(...result.thinking);
+            guardAgainstRepetition(result.completion);
             if (result.usage !== null) {
               usage = result.usage;
             }
@@ -1257,6 +1287,7 @@ export abstract class BaseLLM implements ILLM {
             const result = this.processChatChunk(chunk, interaction);
             completion.push(...result.completion);
             thinking.push(...result.thinking);
+            guardAgainstRepetition(result.completion);
             if (result.usage !== null) {
               usage = result.usage;
             }

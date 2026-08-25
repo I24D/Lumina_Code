@@ -30,6 +30,8 @@ export interface SlashCommandContext {
   goalSummary?: string;
   /** Prepara una sesión nueva con el contexto de un issue o PR. */
   openGitHubSession: () => void;
+  /** Destila esta conversación en una skill reutilizable. */
+  learnSkillFromSession: () => void;
   /** Cuántos mensajes hay ahora, para saber si hay algo que compactar. */
   historyLength: number;
   /** Abre una pestaña concreta de los ajustes. */
@@ -52,6 +54,8 @@ export const SLASH_CATEGORY = {
   session: "SESIÓN",
   model: "MODELO",
   tools: "HERRAMIENTAS",
+  /** Las skills aprendidas, ofrecidas como `/nombre-de-la-skill`. */
+  skills: "SKILLS",
 } as const;
 
 /**
@@ -187,6 +191,19 @@ export function buildBuiltInSlashCommands(
       action: () => context.openConfigTab("settings"),
     },
     {
+      title: "/learn",
+      // Es lo contrario de /compact: aquel tira contexto para seguir, este se
+      // queda con lo aprendido antes de que la conversación se cierre.
+      description:
+        context.historyLength > 1
+          ? "Guardar lo que acabamos de resolver como skill reutilizable"
+          : "Nada que aprender todavía en esta conversación",
+      type: "action",
+      category: SLASH_CATEGORY.tools,
+      icon: "academic",
+      action: context.learnSkillFromSession,
+    },
+    {
       title: "/skills",
       description: "Habilidades reutilizables que Lumina puede ejecutar",
       type: "action",
@@ -265,6 +282,7 @@ export function groupSlashCommands(items: ComboBoxItem[]): ComboBoxItem[] {
     SLASH_CATEGORY.session,
     SLASH_CATEGORY.model,
     SLASH_CATEGORY.tools,
+    SLASH_CATEGORY.skills,
   ];
   const rank = (item: ComboBoxItem) => {
     if (!item.category) {

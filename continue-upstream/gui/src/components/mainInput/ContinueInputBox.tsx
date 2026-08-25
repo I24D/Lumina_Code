@@ -6,13 +6,19 @@ import {
   SlashCommandSource,
 } from "core";
 import type { SessionGoal } from "core/goals/sessionGoal";
+// Direct module path, never the learning/ barrel: that barrel also exports the
+// filesystem-backed skill store, which cannot exist in the webview bundle.
+import { buildLearnPrompt } from "core/learning/learnPrompt";
 import { memo, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { defaultBorderRadius, vscBackground } from "..";
 import { buildConfigRoute } from "../../util/navigation";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
-import { selectSlashCommandComboBoxInputs } from "../../redux/selectors";
+import {
+  selectSkillSlashCommands,
+  selectSlashCommandComboBoxInputs,
+} from "../../redux/selectors";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import { setDialogMessage, setShowDialog } from "../../redux/slices/uiSlice";
 import {
@@ -24,7 +30,9 @@ import {
 } from "../../redux/slices/sessionSlice";
 import { cancelStream } from "../../redux/thunks/cancelStream";
 import { saveCurrentSession, updateSession } from "../../redux/thunks/session";
+import { streamResponseThunk } from "../../redux/thunks/streamResponse";
 import { useCompactConversation } from "../../util/compactConversation";
+import { textToEditorState } from "../startTalk/voiceDelegation";
 import { GitHubSessionDialog } from "../dialogs/GitHubSessionDialog";
 import { SessionGoalDialog } from "../dialogs/SessionGoalDialog";
 import {
@@ -120,6 +128,7 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
   const availableSlashCommands = useAppSelector(
     selectSlashCommandComboBoxInputs,
   );
+  const skillCommands = useAppSelector(selectSkillSlashCommands);
   const availableContextProviders = useAppSelector(
     (state) => state.config.config.contextProviders,
   );
@@ -192,6 +201,23 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
             });
         },
         historyLength,
+        learnSkillFromSession: () => {
+          // Con un solo mensaje no hay procedimiento que destilar todavía, y
+          // guardar una skill vacía ensucia el índice para siempre.
+          if (historyLength < 2) {
+            ideMessenger.post("showToast", [
+              "info",
+              "Todavía no hay nada que aprender: resuelve algo primero y vuelve a /learn.",
+            ]);
+            return;
+          }
+          void dispatch(
+            streamResponseThunk({
+              editorState: textToEditorState(buildLearnPrompt()),
+              modifiers: { noContext: false, useCodebase: false },
+            }),
+          );
+        },
         goalSummary: sessionGoal?.text,
         openGitHubSession: () => {
           dispatch(
@@ -310,8 +336,12 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
           : false,
       );
     }
-    return groupSlashCommands([...builtInCommands, ...availableSlashCommands]);
-  }, [isInEdit, availableSlashCommands, builtInCommands]);
+    return groupSlashCommands([
+      ...builtInCommands,
+      ...availableSlashCommands,
+      ...skillCommands,
+    ]);
+  }, [isInEdit, availableSlashCommands, builtInCommands, skillCommands]);
 
   const filteredContextProviders = useMemo(() => {
     if (isInEdit) {

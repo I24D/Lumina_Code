@@ -331,6 +331,15 @@ export function getLanceDbPath(): string {
   return path.join(getIndexFolderPath(), "lancedb");
 }
 
+/**
+ * Episodic memory: the full-text index over past chat sessions. Kept in its own
+ * database rather than index.sqlite so that rebuilding the codebase index — or
+ * a migration on it — never costs the user their conversation history recall.
+ */
+export function getSessionSearchSqlitePath(): string {
+  return path.join(getIndexFolderPath(), "sessionSearch.sqlite");
+}
+
 export function getTabAutocompleteCacheSqlitePath(): string {
   return path.join(getIndexFolderPath(), "autocompleteCache.sqlite");
 }

@@ -38,6 +38,7 @@ import {
   SerializedContinueConfig,
   Session,
   SiteIndexingConfig,
+  Skill,
   SlashCommandDescWithSource,
   StreamDiffLinesPayload,
   ToolCall,
@@ -69,6 +70,12 @@ import type {
   StartTalkConfigUpdate,
 } from "../startTalk/env.js";
 import type { SessionGoal } from "../goals/sessionGoal.js";
+import type {
+  SessionSearchHit,
+  SessionSummary,
+} from "../learning/SessionSearchIndex.js";
+import type { SkillUsageView } from "../learning/types.js";
+import type { TodoSnapshot } from "../planner/types.js";
 import type { GitHubWorkItem } from "../integrations/GitHubWorkItemService.js";
 import type {
   ScheduledTask,
@@ -94,6 +101,29 @@ export interface ListHistoryOptions {
   workspaceDirectory?: string;
 }
 
+/**
+ * A skill as it appears in settings: the SKILL.md on disk plus how it has
+ * actually been used. `usage` is absent for a skill that has never been read
+ * or written through the tools — the honest representation of "no data yet",
+ * which the UI renders differently from "used zero times".
+ */
+export type SkillWithUsage = Skill & { usage?: SkillUsageView };
+
+export type SkillCurateAction = "archive" | "unarchive" | "pin" | "unpin";
+
+export interface SessionSearchRequest {
+  /** Omit or leave blank to browse recent sessions instead of searching. */
+  query?: string;
+  limit?: number;
+  currentWorkspaceOnly?: boolean;
+}
+
+export interface SessionSearchResponse {
+  hits: SessionSearchHit[];
+  /** Populated instead of `hits` when no query was supplied. */
+  recent: SessionSummary[];
+}
+
 export type ToCoreFromIdeOrWebviewProtocol = {
   // Special
   ping: [string, string];
@@ -103,6 +133,15 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   // History
   "history/list": [ListHistoryOptions, BaseSessionMetadata[]];
   "history/delete": [{ id: string }, void];
+
+  // Procedural memory (skills) and episodic memory (past sessions)
+  "skills/list": [undefined, SkillWithUsage[]];
+  "skills/curate": [
+    { name: string; action: SkillCurateAction },
+    SkillWithUsage[],
+  ];
+  "sessions/search": [SessionSearchRequest, SessionSearchResponse];
+  "todos/list": [undefined, TodoSnapshot];
   "history/load": [{ id: string }, Session];
   "history/save": [Session, void];
   "history/share": [{ id: string; outputDir?: string }, void];

@@ -15,6 +15,7 @@ function makeContext(overrides = {}) {
     historyLength: 4,
     toggleSessionGoal: vi.fn(),
     openGitHubSession: vi.fn(),
+    learnSkillFromSession: vi.fn(),
     goalSummary: undefined as string | undefined,
     openConfigTab: vi.fn(),
     navigateTo: vi.fn(),
@@ -84,6 +85,27 @@ describe("buildBuiltInSlashCommands", () => {
       makeContext({ goalSummary: "que pasen los tests" }),
     ).find((c) => c.title === "/goal")!;
     expect(con.description).toContain("que pasen los tests");
+  });
+
+  it("/learn destila la conversación en una skill", () => {
+    const context = makeContext();
+    buildBuiltInSlashCommands(context).find(
+      (command) => command.title === "/learn",
+    )!.action!();
+
+    expect(context.learnSkillFromSession).toHaveBeenCalledOnce();
+  });
+
+  it("/learn avisa cuando la conversación aún no da para una skill", () => {
+    const vacia = buildBuiltInSlashCommands(
+      makeContext({ historyLength: 1 }),
+    ).find((c) => c.title === "/learn")!;
+    expect(vacia.description).toMatch(/nada que aprender/i);
+
+    const llena = buildBuiltInSlashCommands(
+      makeContext({ historyLength: 8 }),
+    ).find((c) => c.title === "/learn")!;
+    expect(llena.description).toMatch(/skill reutilizable/i);
   });
 
   it("/github abre el flujo de sesión desde issue o PR", () => {

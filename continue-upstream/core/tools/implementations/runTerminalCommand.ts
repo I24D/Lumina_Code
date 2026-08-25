@@ -3,12 +3,13 @@ import childProcess from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
+import { redactSecrets } from "../../util/redactSecrets";
 
 // Default timeout for terminal commands (2 minutes)
 const DEFAULT_TOOL_TIMEOUT_MS = 120_000;
 
 // Automatically decode the buffer according to the platform to avoid garbled Chinese
-function getDecodedOutput(data: Buffer): string {
+function decodeBuffer(data: Buffer): string {
   if (process.platform === "win32") {
     try {
       let out = iconv.decode(data, "utf-8");
@@ -22,6 +23,24 @@ function getDecodedOutput(data: Buffer): string {
   } else {
     return data.toString();
   }
+}
+
+/**
+ * Decodes a chunk of process output and masks any credentials in it.
+ *
+ * This is the one place both stdout and stderr pass through, and everything
+ * downstream \u2014 the transcript sent to the model provider, the saved session,
+ * the UI \u2014 reads from what it returns. A command that dumps the environment
+ * or prints a remote URL with a token in it would otherwise put that
+ * credential somewhere it cannot be taken back from.
+ *
+ * Redaction happens per chunk, so a credential split across a chunk boundary
+ * can survive. Buffering to avoid that would delay live output, which is the
+ * point of streaming; the partial value that leaks in that case is not usable
+ * on its own.
+ */
+function getDecodedOutput(data: Buffer): string {
+  return redactSecrets(decodeBuffer(data)).text;
 } // Simple helper function to use login shell on Unix/macOS and PowerShell on Windows
 function getShellCommand(command: string): { shell: string; args: string[] } {
   if (process.platform === "win32") {

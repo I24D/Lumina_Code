@@ -1,5 +1,6 @@
 import { ToolImpl } from ".";
 import { loadMarkdownSkills } from "../../config/markdown/loadMarkdownSkills";
+import { getSkillUsageStore } from "../../learning/SkillUsageStore";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
 import { getStringArg } from "../parseArgs";
 
@@ -17,6 +18,11 @@ export const readSkillImpl: ToolImpl = async (args, extras) => {
       `Skill "${skillName}" not found. Available skills: ${availableSkills || "none"}`,
     );
   }
+
+  // Pulling the body into context is the one unambiguous signal that a skill
+  // earned its place. It is what ranks the skill index and what keeps it from
+  // going stale.
+  getSkillUsageStore().recordUse(skill.name);
 
   let content = skill.content;
 

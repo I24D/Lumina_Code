@@ -24,6 +24,9 @@ export enum BuiltInToolNames {
   GenerateImage = "generate_image",
   GenerateVideo = "generate_video",
   CreateSkill = "create_skill",
+  SearchSessions = "search_sessions",
+  ManageSkills = "manage_skills",
+  ManageTodos = "manage_todos",
 
   // excluded from allTools for now
   ViewRepoMap = "view_repo_map",

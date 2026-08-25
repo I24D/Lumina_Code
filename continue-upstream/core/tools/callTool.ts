@@ -14,6 +14,9 @@ import { fileGlobSearchImpl } from "./implementations/globSearch";
 import { grepSearchImpl } from "./implementations/grepSearch";
 import { lsToolImpl } from "./implementations/lsTool";
 import { luminaCreateSkillImpl } from "./implementations/luminaCreateSkill";
+import { manageSkillsImpl } from "./implementations/manageSkills";
+import { manageTodosImpl } from "./implementations/manageTodos";
+import { searchSessionsImpl } from "./implementations/searchSessions";
 import { luminaImageGenImpl } from "./implementations/luminaImageGen";
 import { luminaVideoGenImpl } from "./implementations/luminaVideoGen";
 import { luminaWindowsBridgeImpl } from "./implementations/luminaWindowsBridge";
@@ -227,6 +230,12 @@ export async function callBuiltInTool(
       return await luminaVideoGenImpl(args, extras);
     case BuiltInToolNames.CreateSkill:
       return await luminaCreateSkillImpl(args, extras);
+    case BuiltInToolNames.ManageSkills:
+      return await manageSkillsImpl(args, extras);
+    case BuiltInToolNames.ManageTodos:
+      return await manageTodosImpl(args, extras);
+    case BuiltInToolNames.SearchSessions:
+      return await searchSessionsImpl(args, extras);
     case BuiltInToolNames.SearchWeb:
       return await searchWebImpl(args, extras);
     case BuiltInToolNames.FetchUrlContent:

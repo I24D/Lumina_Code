@@ -72,6 +72,10 @@ import {
   isContinueConfigRelatedUri,
 } from "./config/loadLocalAssistants";
 import { CodebaseRulesCache } from "./config/markdown/loadCodebaseRules";
+import { loadMarkdownSkills } from "./config/markdown/loadMarkdownSkills";
+import { getSessionSearchIndex } from "./learning/SessionSearchIndex.js";
+import { getSkillUsageStore } from "./learning/SkillUsageStore.js";
+import { getTodoStore } from "./planner/TodoStore.js";
 import {
   setupLocalConfig,
   setupProviderConfig,
@@ -96,7 +100,7 @@ import { PrefetchQueue } from "./nextEdit/NextEditPrefetchQueue";
 import { NextEditProvider } from "./nextEdit/NextEditProvider";
 import { luminaAgentRuntime } from "./orchestrator/index.js";
 import type { FromCoreProtocol, ToCoreProtocol } from "./protocol";
-import { OnboardingModes } from "./protocol/core";
+import { OnboardingModes, type SkillWithUsage } from "./protocol/core";
 import type { IMessenger, Message } from "./protocol/messenger";
 import {
   resolveStartTalkGeminiEnv,
@@ -368,10 +372,15 @@ export class Core {
     });
 
     on("history/load", (msg) => {
+      // The working task list belongs to one conversation. These two handlers
+      // are the only place core learns which conversation is in front of the
+      // user, so they are where the list follows along.
+      getTodoStore().setActiveSession(msg.data.id);
       return historyManager.load(msg.data.id);
     });
 
     on("history/save", (msg) => {
+      getTodoStore().setActiveSession(msg.data.sessionId);
       historyManager.save(msg.data);
     });
 
@@ -384,6 +393,68 @@ export class Core {
 
     on("history/clear", (msg) => {
       historyManager.clearAll();
+    });
+
+    // Memory — procedural (skills) and episodic (past sessions)
+    on("skills/list", async () => {
+      return await this.listSkillsWithUsage();
+    });
+
+    on("skills/curate", async (msg) => {
+      const store = getSkillUsageStore();
+      const { name, action } = msg.data;
+      switch (action) {
+        case "archive":
+          store.setArchived(name, true);
+          break;
+        case "unarchive":
+          store.setArchived(name, false);
+          break;
+        case "pin":
+          store.setPinned(name, true);
+          break;
+        case "unpin":
+          store.setPinned(name, false);
+          break;
+      }
+      // Returning the fresh list saves the settings page a second round trip
+      // and guarantees it renders what was actually persisted.
+      return await this.listSkillsWithUsage();
+    });
+
+    on("todos/list", async () => {
+      return getTodoStore().read();
+    });
+
+    on("sessions/search", async (msg) => {
+      const index = getSessionSearchIndex();
+      const { query, limit, currentWorkspaceOnly } = msg.data;
+
+      let workspaceDirectory: string | undefined;
+      if (currentWorkspaceOnly) {
+        workspaceDirectory = (await this.ide.getWorkspaceDirs())[0];
+      }
+
+      try {
+        await index.refresh();
+      } catch {
+        // Stale results beat no results; the index is still queryable.
+      }
+
+      if (!query || query.trim() === "") {
+        return {
+          hits: [],
+          recent: await index.browse(limit ?? 20, workspaceDirectory),
+        };
+      }
+      return {
+        hits: await index.search({
+          query: query.trim(),
+          limit,
+          workspaceDirectory,
+        }),
+        recent: [],
+      };
     });
 
     on("devdata/log", async (msg) => {
@@ -1512,6 +1583,27 @@ export class Core {
         workspaceConfig.voiceName ||
         existing?.voiceName,
     });
+  }
+
+  /**
+   * Skills on disk, joined with how they have actually been used.
+   *
+   * The SKILL.md files are the source of truth for which skills exist, and the
+   * usage file only decorates them. Driving it the other way round would let a
+   * telemetry entry for a deleted skill show up in settings as a skill the user
+   * cannot open.
+   */
+  private async listSkillsWithUsage(): Promise<SkillWithUsage[]> {
+    const { skills } = await loadMarkdownSkills(this.ide);
+    const usageByName = new Map(
+      getSkillUsageStore()
+        .viewAll()
+        .map((view) => [view.name, view]),
+    );
+    return skills.map((skill) => ({
+      ...skill,
+      usage: usageByName.get(skill.name),
+    }));
   }
 
   private async isItemTooBig(item: ContextItemWithId) {

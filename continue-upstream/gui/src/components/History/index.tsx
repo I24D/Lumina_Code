@@ -25,7 +25,16 @@ import { ROUTES } from "../../util/navigation";
 import ConfirmationDialog from "../dialogs/ConfirmationDialog";
 import { Button } from "../ui";
 import { HistoryTableRow } from "./HistoryTableRow";
+import { SessionContentResults } from "./SessionContentResults";
 import { groupSessionsByDate, parseDate } from "./util";
+
+/**
+ * Titles are searched in the browser over metadata already in the store, so
+ * they are instant but only find a conversation the user can already name.
+ * Messages are searched full-text in core, which is the only way to find a
+ * conversation by something said inside it.
+ */
+type SearchScope = "titles" | "messages";
 
 export function History() {
   const dispatch = useAppDispatch();
@@ -34,6 +43,8 @@ export function History() {
   const ideMessenger = useContext(IdeMessengerContext);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchScope, setSearchScope] = useState<SearchScope>("titles");
+  const searchingMessages = searchScope === "messages" && searchTerm.trim() !== "";
 
   const minisearch = useRef<MiniSearch>(
     new MiniSearch({
@@ -152,7 +163,11 @@ export function History() {
         <input
           className="bg-vsc-input-background text-vsc-foreground flex-1 rounded-md border border-none py-1 pl-2 pr-8 text-sm outline-none focus:outline-none"
           ref={searchInputRef}
-          placeholder="Search past sessions"
+          placeholder={
+            searchScope === "titles"
+              ? "Search session titles"
+              : "Search inside conversations"
+          }
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -170,43 +185,68 @@ export function History() {
         )}
       </div>
 
-      <div className="thin-scrollbar flex w-full flex-1 flex-col overflow-y-auto">
-        {filteredAndSortedSessions.length === 0 && (
-          <div className="m-3 text-center">
-            {isSessionMetadataLoading ? (
-              "Loading Sessions..."
-            ) : (
-              <>
-                No past sessions found. To start a new session, either click the
-                "+" button or use the keyboard shortcut:{" "}
-                <Shortcut>meta L</Shortcut>
-              </>
-            )}
-          </div>
-        )}
+      <div className="mb-2 flex justify-center gap-1 text-xs">
+        {(["titles", "messages"] as const).map((scope) => (
+          <button
+            key={scope}
+            type="button"
+            data-testid={`history-scope-${scope}`}
+            aria-pressed={searchScope === scope}
+            className={`cursor-pointer rounded-full border-none px-2 py-0.5 transition-colors ${
+              searchScope === scope
+                ? "bg-vsc-background text-vsc-foreground"
+                : "text-description-muted bg-transparent"
+            }`}
+            onClick={() => setSearchScope(scope)}
+          >
+            {scope === "titles" ? "Titles" : "Message contents"}
+          </button>
+        ))}
+      </div>
 
-        <table className="flex w-full flex-1 flex-col">
-          <tbody className="">
-            {sessionGroups.map((group, groupIndex) => (
-              <Fragment key={group.label}>
-                <tr
-                  className={`user-select-none sticky mb-3 ml-2 flex h-6 justify-start text-left text-base font-bold opacity-75 ${
-                    groupIndex === 0 ? "mt-2" : "mt-8"
-                  }`}
-                >
-                  <td colSpan={3}>{group.label}</td>
-                </tr>
-                {group.sessions.map((session, sessionIndex) => (
-                  <HistoryTableRow
-                    key={session.sessionId}
-                    sessionMetadata={session}
-                    index={sessionIndex}
-                  />
+      <div className="thin-scrollbar flex w-full flex-1 flex-col overflow-y-auto">
+        {searchingMessages ? (
+          <SessionContentResults query={searchTerm} />
+        ) : (
+          <>
+            {filteredAndSortedSessions.length === 0 && (
+              <div className="m-3 text-center">
+                {isSessionMetadataLoading ? (
+                  "Loading Sessions..."
+                ) : (
+                  <>
+                    No past sessions found. To start a new session, either click
+                    the "+" button or use the keyboard shortcut:{" "}
+                    <Shortcut>meta L</Shortcut>
+                  </>
+                )}
+              </div>
+            )}
+
+            <table className="flex w-full flex-1 flex-col">
+              <tbody className="">
+                {sessionGroups.map((group, groupIndex) => (
+                  <Fragment key={group.label}>
+                    <tr
+                      className={`user-select-none sticky mb-3 ml-2 flex h-6 justify-start text-left text-base font-bold opacity-75 ${
+                        groupIndex === 0 ? "mt-2" : "mt-8"
+                      }`}
+                    >
+                      <td colSpan={3}>{group.label}</td>
+                    </tr>
+                    {group.sessions.map((session, sessionIndex) => (
+                      <HistoryTableRow
+                        key={session.sessionId}
+                        sessionMetadata={session}
+                        index={sessionIndex}
+                      />
+                    ))}
+                  </Fragment>
                 ))}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          </>
+        )}
       </div>
 
       <div className="border-border flex flex-col items-end justify-center border-0 border-t border-solid px-2 py-3 text-xs">

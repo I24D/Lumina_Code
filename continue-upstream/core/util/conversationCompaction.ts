@@ -1,4 +1,5 @@
 import { ChatHistoryItem, ILLM, ToolResultChatMessage } from "..";
+import { getTodoStore } from "../planner/TodoStore";
 import { HistoryManager } from "./history";
 import { stripImages } from "./messageContent";
 
@@ -95,11 +96,22 @@ export async function compactConversation({
     {},
   );
 
+  // Carry the outstanding task list through the compaction.
+  //
+  // The summary is written by the model from the transcript, so anything it
+  // forgets to mention is gone. The task list is the one piece of state that
+  // is known exactly rather than recalled, and losing it is precisely how a
+  // long task silently drops its remaining steps after a compaction.
+  const outstandingWork = getTodoStore().formatForCompaction();
+  const summary = stripImages(response.content);
+
   // Update the target message with the conversation summary
   const updatedHistory = [...session.history];
   updatedHistory[index] = {
     ...updatedHistory[index],
-    conversationSummary: stripImages(response.content),
+    conversationSummary: outstandingWork
+      ? `${summary}\n\n${outstandingWork}`
+      : summary,
   };
 
   // Update the session with the new history
