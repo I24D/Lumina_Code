@@ -72,6 +72,17 @@ describe("notification announcements", () => {
     expect(prompt).not.toContain("useful notification");
   });
 
+  it("separa poder responder de tener que leer", () => {
+    // Un mensaje marcado group_blocked o ambiguous se sigue leyendo: esa
+    // etiqueta solo gobierna si puede OFRECER responder.
+    const prompt = buildNotificationAnnouncementPrompt([
+      { ...phoneLinkNotification, replyEligibility: "group_blocked" },
+    ]);
+
+    expect(prompt).toContain("never decide whether you read it");
+    expect(prompt).toContain("Read EVERY notification");
+  });
+
   it("sends the message text once, not three times", () => {
     // Iba en `sender`, `message` y `mobileMessage` a la vez, y el propio prompt
     // le pide omitir el texto repetido: por eso resumía en vez de leerlo entero.

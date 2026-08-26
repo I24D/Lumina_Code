@@ -34,6 +34,36 @@ describe("enrichPhoneLinkNotification", () => {
     });
   });
 
+  it("no confunde unos dos puntos en mitad de una frase con un grupo", () => {
+    // Caso real: el asistente del usuario le escribe por Telegram y el mensaje
+    // lleva dos puntos antes de una lista. Se marcaba como grupo, y con eso
+    // quedaba bloqueado para responder aunque el usuario lo autorizara.
+    expect(
+      enrichPhoneLinkNotification(
+        phoneLinkNotification([
+          "Telegram",
+          "Lumina OpenClaw",
+          "Sí, estoy listo y activo. Todas las reglas están en mi memoria:\n1. Informe hecho",
+        ]),
+      ),
+    ).toMatchObject({
+      conversationKind: "direct",
+      replyEligibility: "eligible",
+    });
+  });
+
+  it("sigue reconociendo el prefijo de quien habla en un grupo", () => {
+    expect(
+      enrichPhoneLinkNotification(
+        phoneLinkNotification([
+          "Telegram",
+          "Equipo Lumina",
+          "Marta: ya subi los cambios",
+        ]),
+      ).replyEligibility,
+    ).toBe("group_blocked");
+  });
+
   it("blocks WhatsApp group notifications", () => {
     expect(
       enrichPhoneLinkNotification(

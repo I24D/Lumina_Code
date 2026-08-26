@@ -30,7 +30,18 @@ const SMS_APP_LABEL = "SMS";
  */
 const MIN_PHONE_NUMBER_DIGITS = 10;
 const GROUP_TITLE_PATTERN = /\b(group|grupo|community|comunidad)\b/iu;
-const GROUP_MESSAGE_PATTERN = /^[^:\n]{1,80}:\s+\S/u;
+/**
+ * En un grupo, Enlace Móvil antepone quién habla: "Marta: ya subí los cambios".
+ *
+ * Esto era `^[^:\n]{1,80}:\s+\S`, que daba por grupo CUALQUIER texto con dos
+ * puntos en los primeros 80 caracteres. Un mensaje directo perfectamente normal
+ * —"Sí, estoy listo. Todas las reglas están en mi memoria:"— quedaba marcado
+ * como grupo, y con él bloqueado para responder aunque el usuario lo
+ * autorizara. Ahora se exige que lo que precede a los dos puntos parezca un
+ * NOMBRE: corto y sin puntuación de frase, y seguido de un espacio, no de un
+ * salto de línea.
+ */
+const GROUP_MESSAGE_PATTERN = /^[^:\n.!?,;]{1,32}: \S/u;
 const AGGREGATE_PATTERN = /\b(\d+\s+(messages?|mensajes?|chats?)|new messages|mensajes nuevos)\b/iu;
 const SENSITIVE_PATTERN =
   /\b(otp|one[- ]time|passcode|password|contrasena|contraseña|verification code|codigo de verificacion|código de verificación|security code|bank|banco|credit card|tarjeta de credito|tarjeta de crédito|wire transfer|transferencia|social security|ssn|money|dinero|payment|pago|pay|pagar|venmo|cash ?app|zelle|buy|comprar|sell|vender|appointment|cita|meeting|reunion|reunión|address|direccion|dirección)\b/iu;
