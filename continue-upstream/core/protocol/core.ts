@@ -105,7 +105,7 @@ import type {
   WorkboardCard,
   WorkboardCardInput,
   WorkboardSnapshot,
-} from "../workboard/WorkboardService.js";
+} from "../workboard/types.js";
 import type {
   CapabilityDefinition,
   LuminaCapability,

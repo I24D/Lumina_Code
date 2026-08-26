@@ -20,7 +20,7 @@ import {
   type WorkboardColumn,
   type WorkboardPriority,
   type WorkboardSnapshot,
-} from "core/workboard/WorkboardService";
+} from "core/workboard/types";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AcceptRejectDiffButtons from "../../components/AcceptRejectDiffButtons";

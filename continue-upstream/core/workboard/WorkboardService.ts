@@ -3,58 +3,25 @@ import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
 
 import { getContinueGlobalPath } from "../util/paths.js";
+import { WORKBOARD_COLUMNS } from "./types.js";
+import type {
+  WorkboardActivity,
+  WorkboardCard,
+  WorkboardCardInput,
+  WorkboardColumn,
+  WorkboardPriority,
+  WorkboardSnapshot,
+} from "./types.js";
 
-export const WORKBOARD_COLUMNS = [
-  "backlog",
-  "ready",
-  "in_progress",
-  "review",
-  "blocked",
-  "done",
-] as const;
-
-export type WorkboardColumn = (typeof WORKBOARD_COLUMNS)[number];
-export type WorkboardPriority = "low" | "normal" | "high" | "critical";
-
-export interface WorkboardCard {
-  id: string;
-  title: string;
-  description: string;
-  column: WorkboardColumn;
-  priority: WorkboardPriority;
-  tags: string[];
-  sessionId?: string;
-  worktreePath?: string;
-  createdAt: string;
-  updatedAt: string;
-  completedAt?: string;
-}
-
-export interface WorkboardActivity {
-  id: string;
-  cardId: string;
-  kind: "created" | "updated" | "moved" | "deleted";
-  summary: string;
-  fromColumn?: WorkboardColumn;
-  toColumn?: WorkboardColumn;
-  createdAt: string;
-}
-
-export interface WorkboardSnapshot {
-  cards: WorkboardCard[];
-  activity: WorkboardActivity[];
-  counts: Record<WorkboardColumn, number>;
-}
-
-export interface WorkboardCardInput {
-  title: string;
-  description?: string;
-  column?: WorkboardColumn;
-  priority?: WorkboardPriority;
-  tags?: string[];
-  sessionId?: string;
-  worktreePath?: string;
-}
+export { WORKBOARD_COLUMNS } from "./types.js";
+export type {
+  WorkboardActivity,
+  WorkboardCard,
+  WorkboardCardInput,
+  WorkboardColumn,
+  WorkboardPriority,
+  WorkboardSnapshot,
+} from "./types.js";
 
 type WorkboardStore = {
   version: 1;
@@ -193,12 +160,15 @@ export class WorkboardService {
       card.worktreePath = optionalText(patch.worktreePath, 4_000);
     }
     card.updatedAt = this.now().toISOString();
-    if (card.column === "done" && previousColumn !== "done") {
-      card.completedAt = card.updatedAt;
-    } else if (card.column !== "done") {
+    if (card.column === "done") {
+      card.completedAt =
+        previousColumn === "done" ? card.completedAt : card.updatedAt;
+    } else {
       card.completedAt = undefined;
     }
-    if (previousColumn !== card.column) {
+    if (previousColumn === card.column) {
+      this.record(card, "updated", "Tarjeta actualizada.");
+    } else {
       this.record(
         card,
         "moved",
@@ -208,8 +178,6 @@ export class WorkboardService {
           toColumn: card.column,
         },
       );
-    } else {
-      this.record(card, "updated", "Tarjeta actualizada.");
     }
     this.persist();
     return cloneCard(card);
