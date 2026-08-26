@@ -16,6 +16,14 @@ import {
 export type LuminaRuntimeStatus = {
   state: "connected" | "degraded" | "offline" | "starting";
   managedByLuminaCode: boolean;
+  device: {
+    id: string;
+    name: string;
+    platform: string;
+    architecture: string;
+    transport: "local";
+    remoteOperations: false;
+  };
   components: Array<{
     name: "core" | "windowsBridge" | "modelRouter";
     label: string;
@@ -23,7 +31,14 @@ export type LuminaRuntimeStatus = {
     endpoint: string;
     /** Whether this component is required by the detected runtime profile. */
     required: boolean;
+    kind: "worker";
+    lastHeartbeatAt: string;
   }>;
+  operations: {
+    healthCheck: true;
+    restartManagedRuntime: boolean;
+    remoteExecution: false;
+  };
   checkedAt: string;
 };
 
@@ -39,6 +54,7 @@ export type ToIdeFromWebviewProtocol = ToIdeFromWebviewOrCoreProtocol & {
   toggleFullScreen: [{ newWindow?: boolean } | undefined, void];
   "startTalk/launchOrb": [undefined, void];
   "lumina/runtimeStatus": [undefined, LuminaRuntimeStatus];
+  "lumina/runtimeRestart": [undefined, LuminaRuntimeStatus];
   insertAtCursor: [{ text: string }, void];
   copyText: [{ text: string }, void];
   "jetbrains/isOSREnabled": [undefined, boolean];

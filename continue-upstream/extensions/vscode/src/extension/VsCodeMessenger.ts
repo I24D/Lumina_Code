@@ -27,7 +27,10 @@ import { getExtensionUri } from "../util/vscode";
 import { VsCodeIde } from "../VsCodeIde";
 import { VsCodeWebviewProtocol } from "../webviewProtocol";
 
-import { getLuminaRuntimeStatus } from "./backendLifecycle";
+import {
+  getLuminaRuntimeStatus,
+  restartLuminaRuntime,
+} from "./backendLifecycle";
 import { VsCodeExtension } from "./VsCodeExtension";
 
 type ToIdeOrWebviewFromCoreProtocol = ToIdeFromCoreProtocol &
@@ -119,6 +122,9 @@ export class VsCodeMessenger {
 
     this.onWebview("lumina/runtimeStatus", () =>
       getLuminaRuntimeStatus(this.context),
+    );
+    this.onWebview("lumina/runtimeRestart", () =>
+      restartLuminaRuntime(this.context),
     );
 
     this.onWebview("acceptDiff", async ({ data: { filepath, streamId } }) => {

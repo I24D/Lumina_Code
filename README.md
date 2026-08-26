@@ -153,6 +153,15 @@ lista explícita de contactos confiables. El monitor no envía mensajes y **Full
 Access no puede saltarse la aprobación** de `reply` o `publish_status`. Consulta
 [Contratos de canales](docs/CHANNELS.md).
 
+### Dispositivo y workers locales
+
+**Ajustes → Runtime** muestra el dispositivo real, los workers de Core, Windows
+Bridge y Model Router y sus heartbeats. El reinicio administrado exige dos
+clics, queda auditado y espera la liberación de puertos para impedir procesos
+duplicados. La ejecución remota permanece cerrada hasta disponer de
+emparejamiento y revocación seguros. Consulta
+[Dispositivo y workers](docs/DEVICES_AND_WORKERS.md).
+
 ## Estado del proyecto / Project status
 
 | Área                                      | Estado público                                          |
@@ -169,6 +178,7 @@ Access no puede saltarse la aprobación** de `reply` o `publish_status`. Consult
 | Skill Workshop y plugins locales          | **Funcionales, validados y cubiertos por pruebas**      |
 | Permisos, secretos y auditoría            | **Persistentes, redactados y cubiertos por pruebas**    |
 | WhatsApp y contratos de canales           | **Manuales por defecto; envíos con aprobación fija**    |
+| Dispositivo, workers y operaciones        | **Inventario local real; remoto cerrado por seguridad** |
 | Licencia y atribuciones                   | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE) |
 | Publicación en Visual Studio Marketplace  | Aún no disponible                                       |
 

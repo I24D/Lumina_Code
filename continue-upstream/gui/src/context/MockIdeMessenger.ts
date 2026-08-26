@@ -43,6 +43,14 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
   "lumina/runtimeStatus": {
     state: "connected",
     managedByLuminaCode: true,
+    device: {
+      id: "mock-machine",
+      name: "Development PC",
+      platform: "win32",
+      architecture: "x64",
+      transport: "local",
+      remoteOperations: false,
+    },
     components: [
       {
         name: "core",
@@ -50,6 +58,8 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
         status: "connected",
         endpoint: "127.0.0.1:3000/health",
         required: true,
+        kind: "worker",
+        lastHeartbeatAt: "2026-07-17T00:00:00.000Z",
       },
       {
         name: "windowsBridge",
@@ -57,6 +67,8 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
         status: "connected",
         endpoint: "127.0.0.1:8765/health",
         required: true,
+        kind: "worker",
+        lastHeartbeatAt: "2026-07-17T00:00:00.000Z",
       },
       {
         name: "modelRouter",
@@ -64,8 +76,34 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
         status: "connected",
         endpoint: "127.0.0.1:4321/health",
         required: true,
+        kind: "worker",
+        lastHeartbeatAt: "2026-07-17T00:00:00.000Z",
       },
     ],
+    operations: {
+      healthCheck: true,
+      restartManagedRuntime: true,
+      remoteExecution: false,
+    },
+    checkedAt: "2026-07-17T00:00:00.000Z",
+  },
+  "lumina/runtimeRestart": {
+    state: "connected",
+    managedByLuminaCode: true,
+    device: {
+      id: "mock-machine",
+      name: "Development PC",
+      platform: "win32",
+      architecture: "x64",
+      transport: "local",
+      remoteOperations: false,
+    },
+    components: [],
+    operations: {
+      healthCheck: true,
+      restartManagedRuntime: true,
+      remoteExecution: false,
+    },
     checkedAt: "2026-07-17T00:00:00.000Z",
   },
   fileExists: true,

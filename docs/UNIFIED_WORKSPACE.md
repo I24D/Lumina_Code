@@ -33,6 +33,7 @@ Continue/Lumina; no incorpora el runtime Lit ni el Gateway de Openclaw.
 | Security/approvals            | Privacidad y Trabajo        | políticas de capacidades, aprobaciones y auditoría local redactada          |
 | Talk                          | Configuración de Start Talk | core de voz y VS Code Secret Storage                                        |
 | Logs/debug/infrastructure     | Runtime y diagnóstico       | estado de componentes y registros del host                                  |
+| Devices/workers               | Runtime y diagnóstico       | dispositivo local, heartbeats y reinicio administrado seguro                |
 
 Los alias `/sessions`, `/usage`, `/automations`, `/workboard`,
 `/settings/model-providers`, `/settings/mcp`, `/settings/memory`,
@@ -76,6 +77,14 @@ WhatsApp Desktop y Enlace móvil comparten una política durable, pero conservan
 herramientas separadas. El modo predeterminado es manual. El ingreso opcional
 solo redacta borradores para contactos confiables y no posee una ruta de envío;
 una entrega real exige aprobación incluso cuando Full Access está activo.
+
+## Dispositivo y workers
+
+El supervisor de la extensión publica el dispositivo local y trata Core,
+Windows Bridge y Model Router como workers sondeados. El reinicio con doble
+confirmación espera que los puertos queden libres antes de volver a arrancar.
+La ejecución remota se declara desactivada hasta que exista un transporte con
+emparejamiento, identidad, expiración y revocación reales.
 
 ## Protección y pruebas
 

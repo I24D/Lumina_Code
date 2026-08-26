@@ -2,6 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as http from "node:http";
 import * as net from "node:net";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import * as vscode from "vscode";
@@ -23,12 +24,27 @@ export type LuminaRuntimeComponentStatus = {
   status: "connected" | "starting" | "offline";
   endpoint: string;
   required: boolean;
+  kind: "worker";
+  lastHeartbeatAt: string;
 };
 
 export type LuminaRuntimeStatus = {
   state: "connected" | "degraded" | "offline" | "starting";
   managedByLuminaCode: boolean;
+  device: {
+    id: string;
+    name: string;
+    platform: string;
+    architecture: string;
+    transport: "local";
+    remoteOperations: false;
+  };
   components: LuminaRuntimeComponentStatus[];
+  operations: {
+    healthCheck: true;
+    restartManagedRuntime: boolean;
+    remoteExecution: false;
+  };
   checkedAt: string;
 };
 
@@ -197,14 +213,8 @@ function hasUnifiedRuntime(luminaPcRoot: string): boolean {
   );
 }
 
-function resolveStandaloneBridgeRoot(
-  luminaPcRoot: string,
-): string | undefined {
-  const bridgeRoot = path.join(
-    luminaPcRoot,
-    "apps",
-    "lumina-windows-bridge",
-  );
+function resolveStandaloneBridgeRoot(luminaPcRoot: string): string | undefined {
+  const bridgeRoot = path.join(luminaPcRoot, "apps", "lumina-windows-bridge");
   return fs.existsSync(path.join(bridgeRoot, "src", "server.ts")) &&
     fs.existsSync(path.join(bridgeRoot, "package.json"))
     ? bridgeRoot
@@ -384,19 +394,12 @@ async function startManagedRuntime(
 
   if (!hasUnifiedRuntime(luminaPcRoot)) {
     startWindowsBridgeRecovery(context);
-    for (
-      let attempt = 0;
-      attempt < STARTUP_POLL_ATTEMPTS;
-      attempt += 1
-    ) {
+    for (let attempt = 0; attempt < STARTUP_POLL_ATTEMPTS; attempt += 1) {
       if (await probeComponent(PROBES[1])) {
         log("Standalone Windows Bridge is ready.");
         return;
       }
-      if (
-        !windowsBridgeRecoveryProcess &&
-        !windowsBridgeRecoveryLock
-      ) {
+      if (!windowsBridgeRecoveryProcess && !windowsBridgeRecoveryLock) {
         return;
       }
       await sleep(STARTUP_POLL_INTERVAL_MS);
@@ -482,11 +485,7 @@ export function startLuminaRuntime(
         if (!health.get("windowsBridge")) {
           startWindowsBridgeRecovery(context);
         }
-        if (
-          !runtimeReady &&
-          !runtimeProcess &&
-          !startPromise
-        ) {
+        if (!runtimeReady && !runtimeProcess && !startPromise) {
           log("Runtime components went offline; taking over supervision.");
           void beginRuntimeStartup(context);
         }
@@ -534,6 +533,7 @@ export async function getLuminaRuntimeStatus(
           windowsBridgeRecoveryProcess.exitCode === null,
       )
     : Boolean(runtimeProcess && runtimeProcess.exitCode === null);
+  const checkedAt = new Date().toISOString();
   const components = PROBES.map<LuminaRuntimeComponentStatus>((definition) => ({
     name: definition.name,
     label: definition.label,
@@ -544,8 +544,12 @@ export async function getLuminaRuntimeStatus(
         : "offline",
     endpoint: `${definition.host}:${definition.port}${definition.path ?? ""}`,
     required: requiredNames.has(definition.name),
+    kind: "worker",
+    lastHeartbeatAt: health.get(definition.name) ? checkedAt : "",
   }));
-  const requiredComponents = components.filter((component) => component.required);
+  const requiredComponents = components.filter(
+    (component) => component.required,
+  );
   const connectedCount = requiredComponents.filter(
     (component) => component.status === "connected",
   ).length;
@@ -562,9 +566,48 @@ export async function getLuminaRuntimeStatus(
   return {
     state,
     managedByLuminaCode: ownsRuntime,
+    device: {
+      id: vscode.env.machineId,
+      name: os.hostname(),
+      platform: process.platform,
+      architecture: process.arch,
+      transport: "local",
+      remoteOperations: false,
+    },
     components,
-    checkedAt: new Date().toISOString(),
+    operations: {
+      healthCheck: true,
+      restartManagedRuntime: ownsRuntime,
+      remoteExecution: false,
+    },
+    checkedAt,
   };
+}
+
+export async function restartLuminaRuntime(
+  context: vscode.ExtensionContext,
+): Promise<LuminaRuntimeStatus> {
+  if (!ownsRuntime) {
+    throw new Error(
+      "El runtime no pertenece a esta ventana; no se reiniciará un proceso externo.",
+    );
+  }
+  stopLuminaRuntime();
+  // Do not race a new process against ports still owned by the old process.
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const health = await readComponentHealth();
+    if (![...health.values()].some(Boolean)) {
+      break;
+    }
+    await sleep(250);
+    if (attempt === 19) {
+      throw new Error(
+        "El runtime anterior sigue escuchando; se evitó iniciar un duplicado.",
+      );
+    }
+  }
+  await startLuminaRuntime(context);
+  return getLuminaRuntimeStatus(context);
 }
 
 export function stopLuminaRuntime(): void {

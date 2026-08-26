@@ -3,10 +3,15 @@ import * as vscode from "vscode";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
 function coreUrl(): string {
-  return (process.env.LUMINA_CORE_URL || "http://127.0.0.1:3000").replace(/\/+$/u, "");
+  return (process.env.LUMINA_CORE_URL || "http://127.0.0.1:3000").replace(
+    /\/+$/u,
+    "",
+  );
 }
 
-export function startLuminaRuntimeHeartbeat(context: vscode.ExtensionContext): void {
+export function startLuminaRuntimeHeartbeat(
+  context: vscode.ExtensionContext,
+): void {
   const instanceId = `${vscode.env.machineId}:${vscode.env.sessionId}`;
   const send = async () => {
     const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "";
@@ -16,6 +21,11 @@ export function startLuminaRuntimeHeartbeat(context: vscode.ExtensionContext): v
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instanceId,
+          deviceId: vscode.env.machineId,
+          workerId: `vscode:${vscode.env.sessionId}`,
+          transport: "local",
+          remoteOperations: false,
+          capabilities: ["code", "workspace", "tool-approval", "start-talk"],
           workspace,
           version: String(context.extension.packageJSON?.version || ""),
           userId: process.env.LUMINA_CANONICAL_USER_ID || "lumina-user:owner",
