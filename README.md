@@ -51,6 +51,8 @@ El objetivo no es crear otro cuadro de chat. Es construir un colaborador técnic
 
 - Agente de código dentro de VS Code.
 - Experiencia de voz nativa **Start Talk** con orbe de escritorio.
+- Búsquedas de Start Talk auditables en el chat: consulta, proveedor, fuentes
+  y extractos realmente entregados al modelo cuando el proveedor los expone.
 - Contexto y memoria entre sesiones.
 - Enrutamiento entre proveedores de modelos y opciones locales.
 - Herramientas responsables para archivos, terminal y flujos de desarrollo.

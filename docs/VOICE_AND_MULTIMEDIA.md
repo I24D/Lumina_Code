@@ -45,6 +45,25 @@ notificaciones y acciones de escritorio conservan controles de privacidad
 independientes. Una transcripción de voz nunca equivale por sí misma a aprobar
 una tarea o una acción sensible.
 
+## Transparencia de las búsquedas web
+
+Cada búsqueda realizada durante una conversación aparece en el panel de
+actividad de Start Talk. La tarjeta se puede desplegar para revisar la consulta
+enviada, el proveedor, el resumen recibido y las fuentes citadas.
+
+- Con Tavily o Brave, Lumina muestra también los extractos exactos entregados
+  al modelo de voz. Esto permite comprobar qué material estaba realmente en su
+  contexto, sin afirmar que leyó una página completa cuando solo recibió un
+  fragmento.
+- La búsqueda nativa de Google Live solo expone al cliente las consultas y las
+  citas. En ese caso la interfaz lo indica expresamente: los extractos que
+  Google procesó en sus servidores no están disponibles para mostrarlos.
+- Solo se pueden abrir enlaces `http` o `https`; credenciales y fragmentos de
+  URL se eliminan antes de enviarlos a la interfaz.
+
+La actividad conserva las 50 operaciones más recientes de la sesión para que
+una conversación larga no aumente la memoria sin límite.
+
 ## Diagnóstico rápido
 
 1. Abre **Ajustes de conversación → Entrada de audio** y actualiza la lista.

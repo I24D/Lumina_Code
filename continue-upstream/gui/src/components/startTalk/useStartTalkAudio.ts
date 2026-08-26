@@ -1381,7 +1381,7 @@ export function useStartTalkAudio({
           );
 
           if (existingIndex < 0) {
-            return current.concat(event.activity);
+            return current.concat(event.activity).slice(-50);
           }
 
           return current.map((activity, index) =>

@@ -4,6 +4,7 @@ import { resetLuminaEnvCache } from "../luminaBridge/luminaEnv.js";
 import {
   clip,
   DEFAULT_VOICE_SEARCH_LIMITS,
+  discloseNativeGrounding,
   resolveProviderOrder,
   searchWebForVoice,
   shapeForVoice,
@@ -84,6 +85,47 @@ describe("shapeForVoice", () => {
     });
     expect(shaped.answer).toBeUndefined();
     expect(shaped.provider).toBe("brave");
+  });
+
+  it("descarta protocolos que no se pueden abrir con seguridad", () => {
+    const shaped = shapeForVoice("q", "tavily", {
+      sources: [
+        { title: "script", url: "javascript:alert(1)", snippet: "x" },
+        { title: "file", url: "file:///secret", snippet: "x" },
+        { title: "web", url: "https://safe.example/page", snippet: "ok" },
+      ],
+    });
+    expect(shaped.sources.map((source) => source.url)).toEqual([
+      "https://safe.example/page",
+    ]);
+  });
+});
+
+describe("discloseNativeGrounding", () => {
+  it("shows Google queries and citations without claiming page excerpts", () => {
+    expect(
+      discloseNativeGrounding({
+        webSearchQueries: ["current test account"],
+        groundingChunks: [
+          {
+            web: {
+              title: "Current account documentation",
+              uri: "https://example.com/current",
+            },
+          },
+        ],
+      }),
+    ).toEqual({
+      query: "current test account",
+      provider: "google",
+      sources: [
+        {
+          title: "Current account documentation",
+          url: "https://example.com/current",
+        },
+      ],
+      visibility: "metadata-only",
+    });
   });
 });
 

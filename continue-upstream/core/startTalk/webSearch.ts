@@ -18,6 +18,8 @@
  * decir "no pude buscar eso" en vez de romper el turno.
  */
 import { readLuminaEnv } from "../luminaBridge/luminaEnv.js";
+import type { GroundingMetadata } from "@google/genai";
+import type { StartTalkWebSearchDisclosure } from "./types.js";
 
 /** Una fuente citable, ya recortada a tamaño de voz. */
 export interface VoiceSearchSource {
@@ -53,6 +55,63 @@ export const DEFAULT_VOICE_SEARCH_LIMITS: VoiceSearchLimits = {
   maxSnippetChars: 220,
 };
 
+/** Accepts only user-openable HTTP(S) source URLs and strips embedded auth. */
+export function safeWebUrl(value: string): string | undefined {
+  const raw = String(value ?? "").trim();
+  if (!raw) return undefined;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return undefined;
+    }
+    if (parsed.username || parsed.password || parsed.hash) {
+      parsed.username = "";
+      parsed.password = "";
+      parsed.hash = "";
+      return parsed.toString();
+    }
+    return raw;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Shapes the limited metadata exposed by native Google Live grounding. */
+export function discloseNativeGrounding(
+  metadata: GroundingMetadata | undefined,
+): StartTalkWebSearchDisclosure | undefined {
+  if (!metadata) return undefined;
+  const queries = (metadata.webSearchQueries ?? [])
+    .map((query) => query.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  const sources = (metadata.groundingChunks ?? [])
+    .flatMap((chunk) => {
+      const url = safeWebUrl(chunk.web?.uri ?? "");
+      if (!url) return [];
+      return [
+        {
+          title: String(chunk.web?.title ?? url)
+            .trim()
+            .slice(0, 160),
+          url,
+        },
+      ];
+    })
+    .filter(
+      (source, index, all) =>
+        all.findIndex((candidate) => candidate.url === source.url) === index,
+    )
+    .slice(0, 8);
+  if (!queries.length && !sources.length) return undefined;
+  return {
+    query: queries.join(" · ") || "Consulta generada por Google",
+    provider: "google",
+    sources,
+    visibility: "metadata-only",
+  };
+}
+
 /**
  * Timeout corto a propósito: esto ocurre en mitad de una conversación hablada.
  * Más de unos segundos y el silencio ya resulta raro; es preferible admitir que
@@ -70,7 +129,9 @@ export function clip(text: string, maxChars: number): string {
   }
   const cut = clean.slice(0, maxChars);
   const lastSpace = cut.lastIndexOf(" ");
-  return (lastSpace > maxChars * 0.6 ? cut.slice(0, lastSpace) : cut).trim() + "…";
+  return (
+    (lastSpace > maxChars * 0.6 ? cut.slice(0, lastSpace) : cut).trim() + "…"
+  );
 }
 
 /**
@@ -86,7 +147,7 @@ export function shapeForVoice(
   const seen = new Set<string>();
   const sources: VoiceSearchSource[] = [];
   for (const source of raw.sources) {
-    const url = String(source.url ?? "").trim();
+    const url = safeWebUrl(source.url);
     if (!url || seen.has(url)) {
       continue;
     }
@@ -101,7 +162,9 @@ export function shapeForVoice(
     }
   }
 
-  const answer = raw.answer ? clip(raw.answer, limits.maxAnswerChars) : undefined;
+  const answer = raw.answer
+    ? clip(raw.answer, limits.maxAnswerChars)
+    : undefined;
   return { query, provider, ...(answer ? { answer } : {}), sources };
 }
 
@@ -238,7 +301,10 @@ export async function searchWebForVoice(
   const providers: Record<
     string,
     {
-      run: (q: string, l: VoiceSearchLimits) => Promise<VoiceSearchPayload | null>;
+      run: (
+        q: string,
+        l: VoiceSearchLimits,
+      ) => Promise<VoiceSearchPayload | null>;
       keyName: string;
     }
   > = {

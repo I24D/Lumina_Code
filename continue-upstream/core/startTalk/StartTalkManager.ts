@@ -23,7 +23,7 @@ import {
 } from "../privacy/permissions.js";
 import { SoundEventDetector } from "./SoundEventDetector.js";
 import { TurnMetricsTracker } from "./TurnMetrics.js";
-import { searchWebForVoice } from "./webSearch.js";
+import { discloseNativeGrounding, searchWebForVoice } from "./webSearch.js";
 import {
   BargeInMode,
   rmsOfS16,
@@ -579,6 +579,10 @@ type SessionState = {
   turnAudioBytes: number;
   /** Monotonic id for biometric results; asynchronous replies may arrive late. */
   speakerTurnId: number;
+  /** Deduplicates grounding metadata repeated across Live response chunks. */
+  seenGroundingActivities: Set<string>;
+  /** Produces stable, unique activity ids even after the dedupe cache rotates. */
+  nextGroundingActivityId: number;
   // Push-to-talk / mute: when true the mic stream is not forwarded to Gemini.
   muted: boolean;
   // Optional non-speech sound-event detector (opt-in).
@@ -746,6 +750,8 @@ export class StartTalkManager {
       turnAudio: [],
       turnAudioBytes: 0,
       speakerTurnId: 0,
+      seenGroundingActivities: new Set(),
+      nextGroundingActivityId: 0,
       muted: false,
       voiceStyle: isInterpreter ? undefined : voiceStyle,
       lastLevelEmit: 0,
@@ -1694,6 +1700,11 @@ export class StartTalkManager {
         label: "Búsqueda web",
         status: "running",
         detail: query || "(sin consulta)",
+        webSearch: {
+          query,
+          sources: [],
+          visibility: "payload",
+        },
       },
     });
 
@@ -1725,6 +1736,52 @@ export class StartTalkManager {
         detail: failed
           ? outcome.error
           : `${outcome.sources.length} fuentes · ${outcome.provider}`,
+        ...(failed
+          ? {}
+          : {
+              webSearch: {
+                query: outcome.query,
+                provider: outcome.provider,
+                answer: outcome.answer,
+                sources: outcome.sources,
+                visibility: "payload" as const,
+              },
+            }),
+      },
+    });
+  }
+
+  /**
+   * Native Google grounding exposes queries and citations, but not the page
+   * excerpts read server-side. Surface exactly that metadata and say so rather
+   * than pretending the client received full documents.
+   */
+  private emitNativeGroundingActivity(
+    sessionId: string,
+    state: SessionState | undefined,
+    serverContent: NonNullable<LiveServerMessage["serverContent"]>,
+  ): void {
+    if (!state) return;
+    const metadata = serverContent.groundingMetadata;
+    const webSearch = discloseNativeGrounding(metadata);
+    if (!webSearch) return;
+    const fingerprint = JSON.stringify(webSearch);
+    if (state.seenGroundingActivities.has(fingerprint)) return;
+    state.seenGroundingActivities.add(fingerprint);
+    if (state.seenGroundingActivities.size > 100) {
+      state.seenGroundingActivities.delete(
+        state.seenGroundingActivities.values().next().value ?? "",
+      );
+    }
+    this.emit({
+      type: "toolActivity",
+      sessionId,
+      activity: {
+        id: `google-grounding-${state.connectionEpoch ?? 0}-${++state.nextGroundingActivityId}`,
+        label: "Búsqueda web",
+        status: "done",
+        detail: `${webSearch.sources.length} fuentes · Google`,
+        webSearch,
       },
     });
   }
@@ -2403,6 +2460,10 @@ export class StartTalkManager {
     }
   }
 
+  // This dispatcher intentionally centralizes the ordered Gemini Live event
+  // lifecycle. Individual handlers remain extracted, but splitting the
+  // ordering itself would make interruption/audio races harder to audit.
+  // eslint-disable-next-line complexity
   private handleServerMessage(
     sessionId: string,
     message: LiveServerMessage,
@@ -2555,6 +2616,8 @@ export class StartTalkManager {
     if (!serverContent) {
       return;
     }
+
+    this.emitNativeGroundingActivity(sessionId, state, serverContent);
 
     if (serverContent.interrupted) {
       // El usuario cortó a Lumina de forma deliberada: dejamos de tratar la

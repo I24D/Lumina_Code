@@ -24,12 +24,14 @@ import type {
 import {
   PointerEvent as ReactPointerEvent,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import styled, { css, keyframes } from "styled-components";
+import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { StartTalkControls } from "./StartTalkControls";
 import type {
   StartTalkModelOption,
@@ -38,6 +40,7 @@ import type {
   StartTalkToolActivity,
 } from "./types";
 import { useStartTalkAudio } from "./useStartTalkAudio";
+import { WebSearchActivityCard } from "./WebSearchActivityCard";
 
 const INTERPRETER_LANGUAGES: { code: string; label: string }[] = [
   { code: "en-US", label: "English" },
@@ -1140,7 +1143,7 @@ const DelegationApprovalButton = styled.button<{ $primary?: boolean }>`
 const ToolActivityPanel = styled.div<{ $roomy: boolean; $visible: boolean }>`
   display: ${({ $visible }) => ($visible ? "grid" : "none")};
   width: 100%;
-  max-height: ${({ $roomy }) => ($roomy ? "132px" : "74px")};
+  max-height: ${({ $roomy }) => ($roomy ? "320px" : "220px")};
   gap: ${({ $roomy }) => ($roomy ? "7px" : "5px")};
   overflow: auto;
   scrollbar-width: thin;
@@ -1530,6 +1533,7 @@ export function LiveConversationOverlay({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const ideMessenger = useContext(IdeMessengerContext);
   const autoStartRef = useRef(false);
   const previousConfigKeyRef = useRef<string | undefined>();
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -2437,18 +2441,27 @@ export function LiveConversationOverlay({
               $roomy={isRoomy}
               $visible={toolActivities.length > 0}
             >
-              {toolActivities.slice(-3).map((activity) => (
-                <ToolActivityRow $roomy={isRoomy} key={activity.id}>
-                  <ToolActivityIcon $status={activity.status}>
-                    <ToolActivityStatusIcon activity={activity} />
-                  </ToolActivityIcon>
-                  <ToolActivityText>
-                    {activity.detail
-                      ? `${activity.label}: ${activity.detail}`
-                      : activity.label}
-                  </ToolActivityText>
-                </ToolActivityRow>
-              ))}
+              {toolActivities.slice(-5).map((activity) =>
+                activity.webSearch ? (
+                  <WebSearchActivityCard
+                    key={activity.id}
+                    activity={activity}
+                    roomy={isRoomy}
+                    onOpenUrl={(url) => ideMessenger.post("openUrl", url)}
+                  />
+                ) : (
+                  <ToolActivityRow $roomy={isRoomy} key={activity.id}>
+                    <ToolActivityIcon $status={activity.status}>
+                      <ToolActivityStatusIcon activity={activity} />
+                    </ToolActivityIcon>
+                    <ToolActivityText>
+                      {activity.detail
+                        ? `${activity.label}: ${activity.detail}`
+                        : activity.label}
+                    </ToolActivityText>
+                  </ToolActivityRow>
+                ),
+              )}
             </ToolActivityPanel>
           </ConversationRegion>
         </Stage>

@@ -242,11 +242,30 @@ export type StartTalkToolActivityStatus =
   | "done"
   | "error";
 
+export interface StartTalkWebSearchSource {
+  title: string;
+  url: string;
+  /** Exact excerpt delivered to the voice model, when the provider exposes it. */
+  snippet?: string;
+}
+
+export interface StartTalkWebSearchDisclosure {
+  query: string;
+  provider?: string;
+  /** Provider synthesis delivered to the voice model. */
+  answer?: string;
+  sources: StartTalkWebSearchSource[];
+  /** Google Live exposes citations but not the retrieved page excerpts. */
+  visibility: "payload" | "metadata-only";
+}
+
 export interface StartTalkToolActivity {
   id: string;
   label: string;
   status: StartTalkToolActivityStatus;
   detail?: string;
+  /** Auditable web-search material shown in the Start Talk conversation. */
+  webSearch?: StartTalkWebSearchDisclosure;
 }
 
 export type StartTalkCoreEvent =

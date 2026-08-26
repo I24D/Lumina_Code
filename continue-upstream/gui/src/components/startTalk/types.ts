@@ -26,6 +26,13 @@ export type StartTalkToolActivity = {
   label: string;
   status: StartTalkToolActivityStatus;
   detail?: string;
+  webSearch?: {
+    query: string;
+    provider?: string;
+    answer?: string;
+    sources: Array<{ title: string; url: string; snippet?: string }>;
+    visibility: "payload" | "metadata-only";
+  };
 };
 
 /** A model-proposed task that cannot run until the user approves it. */
