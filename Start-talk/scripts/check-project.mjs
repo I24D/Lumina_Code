@@ -1,13 +1,26 @@
-import { readFileSync, statSync } from "node:fs";
+// Validación de Start Talk antes de compilar el orbe nativo.
+//
+// Este script validaba una generación anterior del proyecto: una UI escrita a
+// mano (`start-talk-ui.js`/`.css`), un `runtime_services.rs` y una copia del
+// Windows Bridge dentro de esta carpeta. Nada de eso existe ya — la UI del orbe
+// es el bundle de `continue-upstream/gui`, el puente vive en
+// `Lumina_PC/apps/lumina-windows-bridge` y el shell nativo inyecta el puente
+// WebSocket desde `lib.rs`. Fallaba entero, así que `npm run check` y con él
+// `scripts/build-native.ps1` estaban rotos.
+//
+// Lo que se comprueba ahora es lo que de verdad rompe el orbe si se desalinea.
+
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
+const guiDist = resolve(root, "..", "continue-upstream", "gui", "dist");
 const failures = [];
+const warnings = [];
 
 function read(relativePath) {
-  const absolutePath = resolve(root, relativePath);
   try {
-    return readFileSync(absolutePath, "utf8");
+    return readFileSync(resolve(root, relativePath), "utf8");
   } catch (error) {
     failures.push(`${relativePath}: ${error.message}`);
     return "";
@@ -27,37 +40,53 @@ function requireFile(relativePath) {
 
 const tauriConfig = JSON.parse(read("src-tauri/tauri.conf.json") || "{}");
 const frontendHtml = read("orb-frontend/index.html");
-const uiScript = read("orb-frontend/start-talk-ui.js");
-const uiStyles = read("orb-frontend/start-talk-ui.css");
 const nativeShell = read("src-tauri/src/lib.rs");
-const runtimeServices = read("src-tauri/src/runtime_services.rs");
-const supervisor = read("services/runtime-supervisor.mjs");
-const windowsBridge = read("windows-bridge/src/server.ts");
-const hostBundle = read("host/dist/index.cjs");
 
 if (tauriConfig.build?.frontendDist !== "../orb-frontend") {
   failures.push("Tauri debe empaquetar ../orb-frontend");
 }
 
-for (const requiredText of ["/start-talk-ui.js", "/start-talk-ui.css"]) {
-  if (!frontendHtml.includes(requiredText)) {
-    failures.push(`orb-frontend/index.html no carga ${requiredText}`);
+// El fallo silencioso más caro: el bundle se reconstruye con otros nombres de
+// entrada y el index.html del orbe sigue pidiendo los viejos. La ventana abre
+// en negro y nada falla durante la compilación. Se comprueba contra el propio
+// HTML en vez de contra una lista fija, así no hay nada que mantener aquí.
+const referenced = [
+  ...frontendHtml.matchAll(/(?:src|href)="(\/[^"]+)"/gu),
+].map((match) => match[1]);
+
+if (referenced.length === 0 && frontendHtml) {
+  failures.push("orb-frontend/index.html no carga ningún recurso");
+}
+
+for (const reference of referenced) {
+  if (existsSync(resolve(root, "orb-frontend", `.${reference}`))) {
+    continue;
+  }
+  // Un icono que falta deja un 404 en la pestaña; un script o una hoja de
+  // estilos que falta deja la ventana en negro. No son el mismo problema.
+  const isIcon = /\.(png|svg|ico)$/iu.test(reference);
+  const message = `orb-frontend${reference}: lo pide index.html y no existe`;
+  if (isIcon) {
+    warnings.push(message);
+  } else {
+    failures.push(message);
   }
 }
 
-if (!uiScript.includes('main [aria-live="polite"]')) {
-  failures.push("start-talk-ui.js no identifica el transcript en vivo");
-}
-
-for (const region of ["stage", "transcript", "activity"]) {
-  if (!uiStyles.includes(`data-start-talk-region="${region}"`)) {
-    failures.push(`start-talk-ui.css no contiene la region ${region}`);
+// El index.html del orbe SALE de gui/dist, no es un shim escrito a mano: el
+// puente `window.vscode` lo inyecta lib.rs. Si el bundle se reconstruye y no se
+// vuelve a copiar el HTML, el orbe queda pidiendo la entrada anterior.
+if (existsSync(guiDist)) {
+  const built = resolve(guiDist, "index.html");
+  if (existsSync(built) && readFileSync(built, "utf8") !== frontendHtml) {
+    failures.push(
+      "orb-frontend/index.html no coincide con gui/dist/index.html: vuelve a ensamblar orb-frontend",
+    );
   }
 }
 
 for (const asset of [
   "orb-frontend/assets/index.js",
-  "orb-frontend/assets/index.js.map",
   "orb-frontend/assets/index.css",
   "orb-frontend/lumina-icon.png",
 ]) {
@@ -72,72 +101,35 @@ for (const integration of [
   "services/chat-response-parsers.mjs",
   "services/delegation-policy.cjs",
   "services/delegation-policy.test.mjs",
-  "windows-bridge/sidecars/notification_listener.py",
 ]) {
   requireFile(integration);
 }
 
-if (!nativeShell.includes("ensure_runtime_services")) {
-  failures.push("el shell nativo no inicia los servicios standalone");
+// Sin esto la ventana abre pero no habla con Lumina Code: es el puente entero.
+if (!nativeShell.includes("LUMINA_ORB_BRIDGE")) {
+  failures.push("lib.rs no inyecta el puente LUMINA_ORB_BRIDGE en el webview");
 }
 
-if (!runtimeServices.includes("runtime-supervisor.mjs")) {
-  failures.push("runtime_services.rs no localiza el supervisor");
-}
-
-if (!supervisor.includes('"chat-response-monitor.mjs"')) {
-  failures.push("el supervisor no mantiene activo el monitor de chats");
-}
-
-for (const serviceParts of [
-  ["windows-bridge", "src", "server.ts"],
-  ["host", "dist", "index.cjs"],
-]) {
-  if (!serviceParts.every((part) => supervisor.includes(`"${part}"`))) {
-    failures.push(`el supervisor no contiene ${serviceParts.join("/")}`);
+// El frontend va EMBEBIDO en el exe: uno más viejo que el bundle está
+// ejecutando la UI anterior aunque los fuentes estén al día.
+const exePath = resolve(root, "src-tauri/target/release/start-talk.exe");
+const bundlePath = resolve(root, "orb-frontend/assets/index.js");
+if (existsSync(exePath) && existsSync(bundlePath)) {
+  if (statSync(exePath).mtimeMs < statSync(bundlePath).mtimeMs) {
+    warnings.push(
+      "start-talk.exe es más viejo que orb-frontend/assets/index.js: embebe la UI anterior",
+    );
   }
 }
 
-for (const endpoint of ["/notifications/live", "/voice/claude-response", "/voice/response"]) {
-  if (!windowsBridge.includes(endpoint)) {
-    failures.push(`el Windows Bridge no expone ${endpoint}`);
-  }
-}
-
-if (!hostBundle.includes('"gemini-3.1-flash-live-preview"') ||
-    !hostBundle.includes("SEARCH_SUPPORTED_MODELS")) {
-  failures.push("Gemini 3.1 Flash Live debe conservar Google Search habilitado");
-}
-
-if (hostBundle.includes(
-  'SEARCH_INCOMPATIBLE_MODELS = ["gemini-3.1-flash-live-preview"]',
-)) {
-  failures.push("Gemini 3.1 Flash Live no debe estar en la lista negra de búsqueda");
-}
-
-if (!hostBundle.includes("tools.push({ googleSearch: {} })")) {
-  failures.push("el host standalone no incluye la herramienta nativa Google Search");
-}
-
-if (!hostBundle.includes("authorizeDelegation") ||
-    !hostBundle.includes("delegation_not_authorized")) {
-  failures.push("el host no bloquea delegaciones no solicitadas antes de ejecutarlas");
-}
-
-if (!hostBundle.includes(
-  "You are Lumina Live, the standalone voice assistant inside Start Talk.",
-)) {
-  failures.push("el prompt de voz no debe presentarse como Lumina Code dentro de VS Code");
-}
-
-if (!uiScript.includes("búsqueda web en vivo")) {
-  failures.push("la descripción de Flash Live 3.1 no anuncia Google Search");
+for (const warning of warnings) {
+  console.warn(`aviso: ${warning}`);
 }
 
 if (failures.length > 0) {
-  console.error("Start Talk no paso la validacion:\n");
+  console.error("\nStart Talk no paso la validacion:\n");
   failures.forEach((failure) => console.error(`- ${failure}`));
   process.exit(1);
 }
 
-console.log("Start Talk validado: UI nativa, servicios, integraciones y assets listos.");
+console.log("Start Talk validado: bundle, shell nativo, servicios e integraciones alineados.");

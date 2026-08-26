@@ -81,9 +81,8 @@ foreach ($d in @("assets","fonts","logos")) {
   if (Test-Path "$orb\$d") { Remove-Item "$orb\$d" -Recurse -Force }
   Copy-Item "$dist\$d" "$orb\$d" -Recurse -Force
 }
-foreach ($f in @("lumina-icon.png","lumina-working.png")) {
-  Copy-Item "$dist\$f" "$orb\$f" -Force
-}
+Copy-Item "$dist\*.html" $orb -Force
+Copy-Item "$dist\*.png"  $orb -Force
 
 # 3. Recompilar el exe
 Set-Location "C:\Lumina Code\Start-talk\src-tauri"
@@ -95,9 +94,13 @@ Tres avisos que cuestan caro si se ignoran:
 - ⚠️ **Borrar los directorios destino ANTES de copiar.** Si no, PowerShell anida
   (`assets/assets/...`) y el exe termina embebiendo el bundle viejo sin que nada
   falle visiblemente.
-- ⚠️ **`orb-frontend/index.html` NO se sobrescribe.** Es un shim propio (~530
-  bytes) que falsea `window.vscode` sobre WebSocket. El `index.html` de
-  `gui/dist` es otra cosa; copiarlo rompe el orbe.
+- ⚠️ **`orb-frontend/index.html` SÍ hay que copiarlo.** Antes este documento
+  decía lo contrario — que era un shim propio que falseaba `window.vscode` —, y
+  era falso: se comprobó y el fichero es byte a byte el de `gui/dist`. El puente
+  `window.vscode` sobre WebSocket lo inyecta `src-tauri/src/lib.rs` como init
+  script, no el HTML. Si no se recopia, el orbe queda pidiendo la entrada del
+  bundle anterior y la ventana abre en negro sin que la compilación falle.
+  `npm run check` en `Start-talk` detecta justo ese desajuste.
 - ⚠️ **El exe suele estar bloqueado** porque el orbe esta corriendo y el
   supervisor lo respawnea si lo matas. Windows si permite *renombrar* un exe
   bloqueado, asi que la salida limpia es:
@@ -187,10 +190,17 @@ Invoke-RestMethod https://mcp.luminaopenia.com/health
 
 ```powershell
 Set-Location "C:\Lumina Code\continue-upstream\core"
-npx vitest run startTalk        # 76 tests
+npx vitest run startTalk        # 117 tests
 npx tsc -p ./ --noEmit
 
 Set-Location "C:\Lumina Code\continue-upstream\gui"
-npx vitest run src/components/startTalk   # 25 tests
+npx vitest run src/components/startTalk   # 38 tests
 npx tsc --noEmit -p tsconfig.json
+```
+
+Y antes de compilar el orbe, la validación del propio proyecto:
+
+```powershell
+Set-Location "C:\Lumina Code\Start-talk"
+npm run check
 ```

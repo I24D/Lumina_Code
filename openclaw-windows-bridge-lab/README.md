@@ -1,103 +1,44 @@
-# OpenClaw Windows Bridge Lab
+# OpenClaw Windows Bridge Lab — registro cerrado
 
-Laboratory folder for testing `openclaw-windows-node` against the existing
-`C:\I24D_WhatsApp\openclaw-main` checkout without changing OpenClaw source.
+Este laboratorio probó `openclaw-windows-node` como puente de capacidades
+nativas de Windows. **El experimento terminó y su código ya no está aquí**: lo
+que quedaba era una copia congelada del bridge (14/08/2026) sin `node_modules`
+ni `.venv`, incapaz de arrancar, y unos scripts que apuntaban a
+`C:\I24D_WhatsApp\`, una ruta que dejó de existir al mover el repo. Mantener dos
+copias del mismo `server.ts` solo servía para que alguien editara la que no era.
 
-## What Is Here
+El bridge vivo — el único — es `Lumina_PC/apps/lumina-windows-bridge`, y se
+arranca como documenta `Run-lumina-code.md`.
 
-- `windows-node-source`: clean clone of `openclaw/openclaw-windows-node`.
-- `lumina-windows-bridge`: canonical Lumina HTTP bridge moved from
-  `C:\I24D_WhatsApp\Lumina_PC\apps\lumina-windows-bridge`.
-- `tray-data`: isolated Tray profile used only for this lab.
-- `scripts/start-tray-lab.ps1`: launches the dev Tray with MCP on port `18795`.
-- `scripts/test-mcp-lab.ps1`: verifies the local MCP surface with `winnode.exe`.
-- `scripts/stop-tray-lab.ps1`: stops lab Tray processes.
-- `scripts/start-lumina-bridge-lab.ps1`: starts the Lumina HTTP bridge on port
-  `8765` with `LUMINA_REPO_ROOT=C:\I24D_WhatsApp\Lumina_PC`.
-- `scripts/test-lumina-bridge-lab.ps1`: checks `/health` and `/schema`.
-- `scripts/stop-lumina-bridge-lab.ps1`: stops the Lumina HTTP bridge.
-- `artifacts`: place for future screenshots, camera captures, or command output.
+> Nota histórica: la versión anterior de este documento decía que
+> `Lumina_PC/apps/lumina-windows-bridge` era un *junction* a esta carpeta. Eso
+> fue cierto en el layout viejo (`C:\I24D_WhatsApp`) y dejó de serlo con la
+> mudanza: al comprobarlo, ambas eran carpetas reales e independientes.
 
-The old path under `Lumina_PC\apps\lumina-windows-bridge` is now a junction to
-this lab folder, so existing Lumina references keep working without maintaining
-two physical bridge copies.
+## Lo que se decidió
 
-## Current Decisions
+- OpenClaw sigue siendo la UI/runtime principal.
+- El companion de Windows se usa como puente de capacidades nativas, no como
+  segunda UI de chat.
+- No absorber una UI de chat duplicada.
+- Probar MCP en local antes de emparejar por gateway.
 
-- Keep `openclaw-main` as the main UI/runtime.
-- Use the Windows companion only as a native capability bridge first.
-- Do not absorb a duplicate chat UI yet.
-- Use port `18795` because `127.0.0.1:8765` is already occupied by a Node process.
-- Start with local MCP proof before gateway node pairing.
+## Lo que quedó demostrado
 
-## Commands
+1. `winnode --list-tools` devuelve herramientas reales desde el Tray.
+2. `system.which` resuelve rutas de binarios locales por MCP.
+3. `tts.status` reporta el TTS de Windows listo.
+4. `tts.speak` funciona con la voz femenina `Microsoft Zira`.
+5. `system.notify` envía una notificación de Windows por MCP y por Gateway.
+6. `screen.snapshot` devuelve un PNG real por MCP y por Gateway.
+7. `camera.list` ve la `Integrated Webcam` por MCP y por Gateway.
+8. Gateway Node Mode quedó emparejado, aprobado y conectado como
+   `Windows Node (LUMINA)`.
 
-Start the Lumina HTTP bridge:
+## Lo que quedó pendiente a propósito
 
-```powershell
-cd C:\I24D_WhatsApp\openclaw-windows-bridge-lab
-.\scripts\start-lumina-bridge-lab.ps1
-.\scripts\test-lumina-bridge-lab.ps1
-```
-
-Build already completed once:
-
-```powershell
-cd C:\I24D_WhatsApp\openclaw-windows-bridge-lab\windows-node-source
-.\build.ps1 -Project WinNodeCli
-.\build.ps1 -Project WinUI -DevBuild
-```
-
-Launch isolated Tray:
-
-```powershell
-cd C:\I24D_WhatsApp\openclaw-windows-bridge-lab
-.\scripts\start-tray-lab.ps1 -NoBuild
-```
-
-Test local MCP:
-
-```powershell
-cd C:\I24D_WhatsApp\openclaw-windows-bridge-lab
-.\scripts\test-mcp-lab.ps1
-```
-
-Connect the lab Tray to the existing OpenClaw Gateway:
-
-```powershell
-cd C:\I24D_WhatsApp\openclaw-windows-bridge-lab
-.\scripts\connect-gateway-lab.ps1
-```
-
-Validate Gateway -> Windows Node:
-
-```powershell
-cd C:\I24D_WhatsApp\openclaw-windows-bridge-lab
-node .\scripts\test-gateway-node-lab.mjs
-```
-
-Stop lab Tray:
-
-```powershell
-cd C:\I24D_WhatsApp\openclaw-windows-bridge-lab
-.\scripts\stop-tray-lab.ps1
-```
-
-## Next Proofs
-
-Completed:
-
-1. `winnode --list-tools` returns real tools from the Tray.
-2. `system.which` returns local binary paths over MCP.
-3. `tts.status` reports Windows TTS ready.
-4. `tts.speak` works with the female Windows voice `Microsoft Zira`.
-5. `system.notify` sends a Windows notification over MCP and Gateway.
-6. `screen.snapshot` returns a real PNG over MCP and Gateway.
-7. `camera.list` sees `Integrated Webcam` over MCP and Gateway.
-8. Gateway Node Mode is paired, approved, and connected as `Windows Node (LUMINA)`.
-
-Still intentionally not done:
-
-1. `camera.snap` was not run because it would save a real webcam photo.
-2. `camera.snap`, `camera.clip`, `screen.record`, and `tts.speak` are available over local MCP, but are not currently advertised in the Gateway-approved command surface.
-3. The lab logs show an MCP token ACL warning. This is acceptable for local lab work, but should be fixed before using this as a production companion profile.
+1. `camera.snap` no se ejecutó: habría guardado una foto real de la webcam.
+2. `camera.snap`, `camera.clip`, `screen.record` y `tts.speak` existen por MCP
+   local pero no están anunciados en la superficie aprobada del Gateway.
+3. Los logs mostraban un aviso de ACL en el token MCP. Aceptable para trabajo de
+   laboratorio; hay que resolverlo antes de usar esto como perfil de producción.
