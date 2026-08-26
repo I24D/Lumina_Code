@@ -1,10 +1,10 @@
 import { render, RenderOptions } from "ink";
 import React from "react";
 
-import { enableSigintHandler, setTUIUnmount } from "../index.js";
 import { PermissionMode } from "../permissions/types.js";
 import { initializeServices } from "../services/index.js";
 import { ServiceContainerProvider } from "../services/ServiceContainerContext.js";
+import { enableSigintHandler, setTUIUnmount } from "../tuiLifecycle.js";
 import { isHeadlessMode, isTTYless } from "../util/cli.js";
 import { logger } from "../util/logger.js";
 

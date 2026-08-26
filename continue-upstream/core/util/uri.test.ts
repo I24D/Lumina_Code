@@ -75,11 +75,15 @@ describe("uri utils", () => {
     it("should get URI path basename", () => {
       expect(getUriPathBasename("file:///path/to/file.txt")).toBe("file.txt");
       expect(getUriPathBasename("file:///path/to/folder/")).toBe("folder");
+      expect(getUriPathBasename("directory\\with.dot\\filename")).toBe(
+        "filename",
+      );
     });
 
     it("should get URI file extension", () => {
       expect(getUriFileExtension("file:///path/to/file.TXT")).toBe("txt");
       expect(getUriFileExtension("file:///path/to/file")).toBe("");
+      expect(getUriFileExtension("directory\\with.dot\\filename")).toBe("");
     });
 
     it("should get file extension from basename", () => {

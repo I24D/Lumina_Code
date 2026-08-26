@@ -1,8 +1,11 @@
 import { Box, Text } from "ink";
 import React, { useEffect, useState } from "react";
 
-import { setExitMessageCallback, shouldShowExitMessage } from "../../index.js";
 import type { PermissionMode } from "../../permissions/types.js";
+import {
+  setExitMessageCallback,
+  shouldShowExitMessage,
+} from "../../tuiLifecycle.js";
 import type { NavigationScreen } from "../context/NavigationContext.js";
 import { UpdateNotification } from "../UpdateNotification.js";
 
@@ -43,6 +46,7 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
     setExitMessageCallback(() => {
       setRefreshTrigger((prev) => prev + 1);
     });
+    return () => setExitMessageCallback(null);
   }, []);
 
   const showingExitMessage = shouldShowExitMessage();

@@ -6,6 +6,19 @@ import { AppRoot } from "../AppRoot.js";
 
 export type TestMode = "local" | "remote";
 
+export interface DualModeRender {
+  stdin: { write(data: string): void };
+  lastFrame(): string | undefined;
+  unmount(): void;
+}
+
+const activeRenders = new Set<DualModeRender>();
+
+function cleanupRenders() {
+  for (const instance of activeRenders) instance.unmount();
+  activeRenders.clear();
+}
+
 // Dummy test to satisfy Vitest
 describe("TUIChat dual mode helper", () => {
   it("exports helper functions", () => {
@@ -34,6 +47,7 @@ export function testBothModes(
     });
 
     afterEach(() => {
+      cleanupRenders();
       context.cleanup();
     });
 
@@ -53,6 +67,7 @@ export function testBothModes(
     });
 
     afterEach(() => {
+      cleanupRenders();
       context.cleanup();
     });
 
@@ -65,15 +80,17 @@ export function testBothModes(
 /**
  * Helper to render TUIChat in the specified mode
  */
-export function renderInMode(mode: TestMode, props?: any) {
-  return render(
+export function renderInMode(mode: TestMode, props?: any): DualModeRender {
+  const instance = render(
     mode === "remote"
       ? React.createElement(AppRoot, {
           remoteUrl: "http://localhost:3000",
           ...props,
         })
       : React.createElement(AppRoot, props),
-  ) as ReturnType<typeof render>; // Explicit type to avoid TypeScript issues
+  ) as DualModeRender;
+  activeRenders.add(instance);
+  return instance;
 }
 
 /**
@@ -95,6 +112,7 @@ export function testSingleMode(
     });
 
     afterEach(() => {
+      cleanupRenders();
       context.cleanup();
     });
 

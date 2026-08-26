@@ -5,11 +5,10 @@ import express, { Request, Response } from "express";
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
 import { prependPrompt } from "src/util/promptProcessor.js";
 
+import { setAgentId } from "../agentRuntimeState.js";
 import { runtimeEventBus } from "../api/runtimeEvents.js";
 import { createServeRuntimeApiRouter } from "../api/serveRuntimeApi.js";
 import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js";
-import { processCommandFlags } from "../flags/flagProcessor.js";
-import { setAgentId } from "../index.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import {
   getService,
@@ -38,7 +37,6 @@ import { getGitDiffSnapshot } from "../util/git.js";
 import { logger } from "../util/logger.js";
 import { readStdinSync } from "../util/stdin.js";
 
-import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
 import {
   checkAgentComplete,
   removePartialAssistantMessage,
@@ -46,13 +44,10 @@ import {
   type ServerState,
 } from "./serve.helpers.js";
 import { announceServeReady } from "./serve.logging.js";
-
-interface ServeOptions extends ExtendedCommandOptions {
-  timeout?: string;
-  port?: string;
-  /** Storage identifier for remote sync */
-  id?: string;
-}
+import {
+  getServeInitializationOptions,
+  type ServeOptions,
+} from "./serve.options.js";
 
 /**
  * Decide whether to enqueue the initial prompt on server startup.
@@ -96,13 +91,7 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   // Environment install script will be deferred until after server startup to avoid blocking
 
   // Initialize services with tool permission overrides
-  const { permissionOverrides } = processCommandFlags(options);
-
-  await initializeServices({
-    options,
-    toolPermissionOverrides: permissionOverrides,
-    headless: true, // Skip onboarding in serve mode
-  });
+  await initializeServices(getServeInitializationOptions(options));
 
   // Get initialized services from the service container
   const [configState, modelState, permissionsState, agentFileState] =

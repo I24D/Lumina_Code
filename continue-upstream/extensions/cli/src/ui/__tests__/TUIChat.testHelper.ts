@@ -464,7 +464,7 @@ export function expectNormalMode(frame: string | undefined) {
  */
 export async function waitForCondition(
   conditionFn: () => boolean,
-  timeoutMs = 2000,
+  timeoutMs = 5000,
   intervalMs = 50,
 ): Promise<void> {
   const startTime = Date.now();
@@ -474,6 +474,7 @@ export async function waitForCondition(
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
+  throw new Error(`Condition was not met within ${timeoutMs}ms`);
 }
 
 // Make runTest available globally for test files

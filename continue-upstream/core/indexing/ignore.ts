@@ -165,6 +165,7 @@ export const ADDITIONAL_INDEXING_IGNORE_DIRS = [
   ".svn/",
   "node_modules/",
   "dist/",
+  "coverage/",
   "build/",
   "Build/",
   "target/",
@@ -199,9 +200,7 @@ export const DEFAULT_IGNORE_FILETYPES = [
   ...ADDITIONAL_INDEXING_IGNORE_FILETYPES,
 ];
 
-export const DEFAULT_IGNORE_DIRS = [
-  ...ADDITIONAL_INDEXING_IGNORE_DIRS,
-];
+export const DEFAULT_IGNORE_DIRS = [...ADDITIONAL_INDEXING_IGNORE_DIRS];
 
 export const DEFAULT_IGNORES = [
   ...DEFAULT_IGNORE_FILETYPES,

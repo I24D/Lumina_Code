@@ -58,7 +58,9 @@ describe("LuminaRuntimeClient", () => {
     });
     const events: unknown[] = [];
 
-    await client.subscribeEvents((event) => events.push(event));
+    await client.subscribeEvents((event) => {
+      events.push(event);
+    });
 
     expect(events).toEqual([
       expect.objectContaining({ type: "run.content", data: { content: "hi" } }),

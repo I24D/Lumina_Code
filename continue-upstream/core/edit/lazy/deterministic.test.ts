@@ -57,7 +57,9 @@ async function expectDiff(file: string) {
     "test-examples",
     file + ".diff",
   );
-  const testFileContents = fs.readFileSync(testFilePath, "utf-8");
+  const testFileContents = fs
+    .readFileSync(testFilePath, "utf-8")
+    .replace(/\r\n/g, "\n");
   const [oldFile, newFile, expectedDiff] = testFileContents
     .split("\n---\n")
     .map((s) => s.replace(/^\n+/, "").trimEnd());

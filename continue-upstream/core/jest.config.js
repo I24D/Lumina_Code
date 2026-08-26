@@ -7,7 +7,6 @@ export default {
       "ts-jest",
       {
         useESM: true,
-        isolatedModules: true,
         tsconfig: {
           experimentalDecorators: true,
           emitDecoratorMetadata: true,
@@ -38,6 +37,7 @@ export default {
   ],
   globalSetup: "<rootDir>/test/jest.global-setup.ts",
   setupFilesAfterEnv: ["<rootDir>/test/jest.setup-after-env.ts"],
+  modulePathIgnorePatterns: ["<rootDir>/dist/"],
   maxWorkers: 1, // equivalent to CLI --runInBand
   testMatch: ["**/*.test.ts"],
 };

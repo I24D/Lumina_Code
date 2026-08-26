@@ -48,6 +48,10 @@ class ResourceMonitoringService {
   private lastFdCheckTime = Date.now();
   private fdCheckIntervalMs = 5000; // Check file descriptors every 5 seconds
   private cacheFileCount: number | null = null;
+  private shutdownHandlersRegistered = false;
+  private readonly shutdownHandler = () => {
+    void this.cleanup();
+  };
 
   async initialize(): Promise<void> {
     // Start monitoring if verbose mode is enabled
@@ -56,13 +60,22 @@ class ResourceMonitoringService {
     }
 
     // Cleanup on exit
-    process.on("exit", () => this.cleanup());
-    process.on("SIGINT", () => this.cleanup());
-    process.on("SIGTERM", () => this.cleanup());
+    if (!this.shutdownHandlersRegistered) {
+      process.on("exit", this.shutdownHandler);
+      process.on("SIGINT", this.shutdownHandler);
+      process.on("SIGTERM", this.shutdownHandler);
+      this.shutdownHandlersRegistered = true;
+    }
   }
 
   async cleanup(): Promise<void> {
     this.stopMonitoring();
+    if (this.shutdownHandlersRegistered) {
+      process.off("exit", this.shutdownHandler);
+      process.off("SIGINT", this.shutdownHandler);
+      process.off("SIGTERM", this.shutdownHandler);
+      this.shutdownHandlersRegistered = false;
+    }
   }
 
   public startMonitoring(intervalMs = 1000): void {

@@ -40,6 +40,9 @@ export class MCPService
   private isShuttingDown = false;
   private isHeadless: boolean | undefined;
   private apiKeyCache: Map<string, string> = new Map();
+  private readonly shutdownHandler = () => {
+    void this.cleanup();
+  };
 
   getDependencies(): string[] {
     return [SERVICE_NAMES.CONFIG, SERVICE_NAMES.AUTH];
@@ -50,9 +53,9 @@ export class MCPService
     });
 
     // Register shutdown handler
-    process.on("exit", () => this.cleanup());
-    process.on("SIGINT", () => this.cleanup());
-    process.on("SIGTERM", () => this.cleanup());
+    process.on("exit", this.shutdownHandler);
+    process.on("SIGINT", this.shutdownHandler);
+    process.on("SIGTERM", this.shutdownHandler);
   }
 
   /**
@@ -391,6 +394,9 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.co
     if (this.isShuttingDown) return;
     this.isShuttingDown = true;
 
+    process.off("exit", this.shutdownHandler);
+    process.off("SIGINT", this.shutdownHandler);
+    process.off("SIGTERM", this.shutdownHandler);
     this.removeAllListeners();
     await this.shutdownConnections();
   }

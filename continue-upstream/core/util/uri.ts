@@ -85,7 +85,7 @@ export function findUriInDirs(
   Returns just the file or folder name of a URI
 */
 export function getUriPathBasename(uri: string): string {
-  const path = getCleanUriPath(uri);
+  const path = getCleanUriPath(uri).replace(/%5c/gi, "/").replace(/\\/g, "/");
   const basename = path.split("/").pop() || "";
   return decodeURIComponent(basename);
 }

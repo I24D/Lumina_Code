@@ -50,6 +50,14 @@ describe("ResourceMonitoringService", () => {
     expect(usage.timestamp).toBeGreaterThan(0);
   });
 
+  it("removes process shutdown handlers during cleanup", async () => {
+    expect(process.listenerCount("SIGTERM")).toBe(1);
+
+    await service.cleanup();
+
+    expect(process.listenerCount("SIGTERM")).toBe(0);
+  });
+
   it("should collect current resource usage", () => {
     const usage = service.getCurrentResourceUsage();
 

@@ -117,7 +117,7 @@ describe("shouldIgnore", () => {
     expect(keptResult).toBe(false);
   });
 
-  test("should respect default file and folder ignores top level", async () => {
+  test("should keep workspace secrets readable but ignore generated files", async () => {
     addToTestDir([
       [".env", "contents"],
       ["go.sum", "contents"],
@@ -125,7 +125,7 @@ describe("shouldIgnore", () => {
       [".idea/test.xml", "contents"],
     ]);
     let result = await shouldIgnore(TEST_DIR + "/.env", testIde, [TEST_DIR]);
-    expect(result).toBe(true);
+    expect(result).toBe(false);
 
     result = await shouldIgnore(TEST_DIR + "/go.sum", testIde, [TEST_DIR]);
     expect(result).toBe(true);
@@ -139,7 +139,7 @@ describe("shouldIgnore", () => {
     expect(result).toBe(true);
   });
 
-  test("should respect default file and folder ignores at nested level", async () => {
+  test("should apply readable-secret and generated-file policy when nested", async () => {
     addToTestDir([
       "nested/.idea/test.xml",
       ["nested/.env", "contents"],
@@ -157,7 +157,7 @@ describe("shouldIgnore", () => {
     expect(result).toBe(true);
 
     result = await shouldIgnore(TEST_DIR + "/nested/.env", testIde, [TEST_DIR]);
-    expect(result).toBe(true);
+    expect(result).toBe(false);
 
     result = await shouldIgnore(TEST_DIR + "/nested/go.sum", testIde, [
       TEST_DIR,

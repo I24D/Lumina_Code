@@ -61,6 +61,15 @@ describe("MCPService", () => {
   });
 
   describe("initialization", () => {
+    it("removes its process shutdown handlers during cleanup", async () => {
+      const listenersBeforeCleanup = process.listenerCount("SIGTERM");
+      expect(listenersBeforeCleanup).toBeGreaterThan(0);
+
+      await mcpService.cleanup();
+
+      expect(process.listenerCount("SIGTERM")).toBe(listenersBeforeCleanup - 1);
+    });
+
     it("should initialize with empty state", () => {
       const state = mcpService.getState();
       expect(mcpService.isReady()).toBe(false);

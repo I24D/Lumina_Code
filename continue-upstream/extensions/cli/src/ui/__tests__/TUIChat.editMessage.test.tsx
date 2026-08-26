@@ -74,7 +74,9 @@ describe("TUIChat - Message Edit Feature", () => {
 
     // Press Esc to exit
     stdin.write("\u001b");
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await waitForCondition(
+      () => !(lastFrame() ?? "").includes("No user messages to edit"),
+    );
 
     // Verify edit selector is closed
     frame = lastFrame();

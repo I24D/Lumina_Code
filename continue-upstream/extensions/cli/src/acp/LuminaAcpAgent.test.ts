@@ -60,7 +60,7 @@ class FakeRuntime implements AcpRuntimeClient {
 
 function createHarness(runtime: FakeRuntime) {
   const updates: unknown[] = [];
-  const permission = vi.fn(async () => ({
+  const permission = vi.fn(async (_params: unknown) => ({
     outcome: { outcome: "selected" as const, optionId: "allow_once" },
   }));
   const clientApp = client({ name: "test-client" })

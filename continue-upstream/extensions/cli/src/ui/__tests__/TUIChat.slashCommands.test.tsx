@@ -26,7 +26,7 @@ describe("TUIChat - Slash Commands Tests", () => {
     }
   });
 
-  testBothModes("filters slash commands when typing /log", async (mode) => {
+  testBothModes("filters slash commands when typing /exi", async (mode) => {
     const { lastFrame, stdin } = renderInMode(mode);
 
     // Type /exi to trigger slash command filtering

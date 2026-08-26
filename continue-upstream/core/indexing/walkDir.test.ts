@@ -196,13 +196,18 @@ describe("walkDir functions", () => {
     });
 
     it("should skip symlinks", async () => {
-      const filePath = path.join(TEST_DIR_PATH, "real.ts");
-      addToTestDir([["real.ts", "content"]]);
-      fs.symlinkSync(filePath, path.join(TEST_DIR_PATH, "symlink.ts"), "file");
+      const realDir = path.join(TEST_DIR_PATH, "real-dir");
+      addToTestDir([["real-dir/real.ts", "content"]]);
+      fs.symlinkSync(
+        realDir,
+        path.join(TEST_DIR_PATH, "symlink-dir"),
+        process.platform === "win32" ? "junction" : "dir",
+      );
 
       const files = await walkDirs(testIde);
 
-      expect(files).not.toContainEqual(expect.stringContaining("symlink.ts"));
+      expect(files).toContainEqual(expect.stringContaining("real-dir/real.ts"));
+      expect(files).not.toContainEqual(expect.stringContaining("symlink-dir"));
     });
   });
 
