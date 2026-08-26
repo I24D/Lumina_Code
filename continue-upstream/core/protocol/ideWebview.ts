@@ -42,6 +42,39 @@ export type LuminaRuntimeStatus = {
   checkedAt: string;
 };
 
+export type LuminaDoctorCheck = {
+  id: string;
+  label: string;
+  status: "pass" | "warning" | "fail";
+  detail: string;
+  remediation?: string;
+};
+
+export type LuminaDoctorReport = {
+  state: "healthy" | "warning" | "failed";
+  checks: LuminaDoctorCheck[];
+  counts: { passed: number; warnings: number; failed: number };
+  checkedAt: string;
+};
+
+export type LuminaBackupResult = {
+  canceled: boolean;
+  path?: string;
+  globalEntries?: number;
+  workspaceFiles?: number;
+  restored?: boolean;
+};
+
+export type LuminaUpdateStatus = {
+  status: "current" | "available" | "unpublished" | "error";
+  currentVersion: string;
+  latestVersion?: string;
+  releaseUrl?: string;
+  publishedAt?: string;
+  checkedAt: string;
+  message: string;
+};
+
 export type ToIdeFromWebviewProtocol = ToIdeFromWebviewOrCoreProtocol & {
   openUrl: [string, void];
   applyToFile: [ApplyToFilePayload, void];
@@ -55,6 +88,10 @@ export type ToIdeFromWebviewProtocol = ToIdeFromWebviewOrCoreProtocol & {
   "startTalk/launchOrb": [undefined, void];
   "lumina/runtimeStatus": [undefined, LuminaRuntimeStatus];
   "lumina/runtimeRestart": [undefined, LuminaRuntimeStatus];
+  "lumina/doctor": [undefined, LuminaDoctorReport];
+  "lumina/backup/create": [undefined, LuminaBackupResult];
+  "lumina/backup/restore": [undefined, LuminaBackupResult];
+  "lumina/update/check": [undefined, LuminaUpdateStatus];
   insertAtCursor: [{ text: string }, void];
   copyText: [{ text: string }, void];
   "jetbrains/isOSREnabled": [undefined, boolean];

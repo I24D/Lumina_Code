@@ -31,6 +31,12 @@ import {
   getLuminaRuntimeStatus,
   restartLuminaRuntime,
 } from "./backendLifecycle";
+import {
+  checkLuminaUpdate,
+  createLuminaBackup,
+  restoreLuminaBackup,
+  runLuminaDoctor,
+} from "./runtimeMaintenance";
 import { VsCodeExtension } from "./VsCodeExtension";
 
 type ToIdeOrWebviewFromCoreProtocol = ToIdeFromCoreProtocol &
@@ -125,6 +131,16 @@ export class VsCodeMessenger {
     );
     this.onWebview("lumina/runtimeRestart", () =>
       restartLuminaRuntime(this.context),
+    );
+    this.onWebview("lumina/doctor", () => runLuminaDoctor(this.context));
+    this.onWebview("lumina/backup/create", () =>
+      createLuminaBackup(this.context),
+    );
+    this.onWebview("lumina/backup/restore", () =>
+      restoreLuminaBackup(this.context),
+    );
+    this.onWebview("lumina/update/check", () =>
+      checkLuminaUpdate(this.context),
     );
 
     this.onWebview("acceptDiff", async ({ data: { filepath, streamId } }) => {

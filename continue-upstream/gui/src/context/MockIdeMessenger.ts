@@ -106,6 +106,33 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
     },
     checkedAt: "2026-07-17T00:00:00.000Z",
   },
+  "lumina/doctor": {
+    state: "healthy",
+    counts: { passed: 4, warnings: 0, failed: 0 },
+    checks: [
+      {
+        id: "gui",
+        label: "Bundle de la interfaz",
+        status: "pass",
+        detail: "Disponible y legible.",
+      },
+    ],
+    checkedAt: "2026-08-25T00:00:00.000Z",
+  },
+  "lumina/backup/create": {
+    canceled: false,
+    path: "C:\\backup\\Lumina-Code-backup.json",
+    globalEntries: 3,
+    workspaceFiles: 2,
+  },
+  "lumina/backup/restore": { canceled: true },
+  "lumina/update/check": {
+    status: "current",
+    currentVersion: "1.3.43",
+    latestVersion: "1.3.43",
+    checkedAt: "2026-08-25T00:00:00.000Z",
+    message: "La extensión coincide con la última release publicada.",
+  },
   fileExists: true,
   getCurrentFile: {
     isUntitled: false,

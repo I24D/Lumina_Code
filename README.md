@@ -171,6 +171,15 @@ consulta, por lo que una respuesta tardía no puede atribuir a la persona
 equivocada una intervención posterior. Cámara, pantalla y voz conservan
 permisos separados. Consulta [Voz y multimedia](docs/VOICE_AND_MULTIMEDIA.md).
 
+### Doctor, backup y actualizaciones
+
+**Ajustes → Runtime** incorpora Lumina Doctor con comprobaciones reales del
+bundle, módulos nativos, orbe, almacenamiento y workers. Desde la misma vista
+se crea o restaura un backup versionado de memoria, tareas y personalizaciones;
+Secret Storage y la auditoría siempre quedan fuera. La búsqueda de versiones
+consulta únicamente releases del repositorio oficial y nunca instala código de
+forma automática. Consulta [Operaciones](docs/OPERATIONS.md).
+
 ## Estado del proyecto / Project status
 
 | Área                                      | Estado público                                           |
@@ -189,6 +198,7 @@ permisos separados. Consulta [Voz y multimedia](docs/VOICE_AND_MULTIMEDIA.md).
 | WhatsApp y contratos de canales           | **Manuales por defecto; envíos con aprobación fija**     |
 | Dispositivo, workers y operaciones        | **Inventario local real; remoto cerrado por seguridad**  |
 | Voz, micrófono y multimedia               | **AEC real, turnos ordenados y varias voces detectadas** |
+| Doctor, backup y actualizaciones          | **Integrados, limitados y sin exportar secretos**        |
 | Licencia y atribuciones                   | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE)  |
 | Publicación en Visual Studio Marketplace  | Aún no disponible                                        |
 

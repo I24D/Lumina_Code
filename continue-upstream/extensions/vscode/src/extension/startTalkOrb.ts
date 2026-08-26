@@ -5,13 +5,14 @@ import * as path from "node:path";
 import { getStartTalkRetryDelayMs } from "core/startTalk/resiliencePolicy";
 import * as vscode from "vscode";
 
-import { OrbBridgeServer } from "./OrbBridgeServer";
-
 import {
   type ProcessLock,
   releaseProcessLock,
   tryAcquireProcessLock,
 } from "../util/processLock";
+
+import { OrbBridgeServer } from "./OrbBridgeServer";
+
 import type { VsCodeWebviewProtocol } from "../webviewProtocol";
 
 /**
@@ -38,7 +39,9 @@ let disposing = false;
 let disposeRegistered = false;
 
 /** Rutas candidatas del ejecutable del orbe (release primero, luego debug). */
-function resolveOrbExe(context: vscode.ExtensionContext): string | undefined {
+export function resolveStartTalkOrbExecutable(
+  context: vscode.ExtensionContext,
+): string | undefined {
   const envExe = process.env.LUMINA_ORB_EXE;
   if (envExe && fs.existsSync(envExe)) {
     return envExe;
@@ -134,7 +137,7 @@ async function spawnStartTalkOrb(
     return;
   }
 
-  const exe = resolveOrbExe(context);
+  const exe = resolveStartTalkOrbExecutable(context);
   if (!exe) {
     const message =
       "No se encontró el ejecutable del orbe. Compílalo con `npm run tauri build` en Lumina-Code/Start-talk.";

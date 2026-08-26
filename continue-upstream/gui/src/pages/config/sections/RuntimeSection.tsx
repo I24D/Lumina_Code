@@ -1,13 +1,20 @@
 import {
+  ArchiveBoxArrowDownIcon,
   ArrowPathIcon,
   ArrowTopRightOnSquareIcon,
   CheckCircleIcon,
+  CloudArrowDownIcon,
   ExclamationTriangleIcon,
   ComputerDesktopIcon,
   PowerIcon,
+  ShieldCheckIcon,
   SignalIcon,
 } from "@heroicons/react/24/outline";
-import type { LuminaRuntimeStatus } from "core/protocol/ideWebview";
+import type {
+  LuminaDoctorReport,
+  LuminaRuntimeStatus,
+  LuminaUpdateStatus,
+} from "core/protocol/ideWebview";
 import { useCallback, useContext, useEffect, useState } from "react";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
 import { ConfigHeader } from "../components/ConfigHeader";
@@ -26,6 +33,13 @@ export function RuntimeSection() {
   const [error, setError] = useState<string>();
   const [restartArmed, setRestartArmed] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [doctor, setDoctor] = useState<LuminaDoctorReport>();
+  const [doctorLoading, setDoctorLoading] = useState(false);
+  const [update, setUpdate] = useState<LuminaUpdateStatus>();
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string>();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -73,6 +87,79 @@ export function RuntimeSection() {
       setError(response.error);
     }
     setRestarting(false);
+  };
+
+  const runDoctor = async () => {
+    setDoctorLoading(true);
+    setMaintenanceMessage(undefined);
+    const response = await ideMessenger.request("lumina/doctor", undefined);
+    if (response.status === "success") {
+      setDoctor(response.content);
+    } else {
+      setMaintenanceMessage(response.error);
+    }
+    setDoctorLoading(false);
+  };
+
+  const createBackup = async () => {
+    setBackupLoading(true);
+    setMaintenanceMessage(undefined);
+    const response = await ideMessenger.request(
+      "lumina/backup/create",
+      undefined,
+    );
+    if (response.status === "success" && !response.content.canceled) {
+      setMaintenanceMessage(
+        `Backup seguro creado: ${response.content.globalEntries ?? 0} entradas y ${response.content.workspaceFiles ?? 0} archivos del proyecto.`,
+      );
+      void ideMessenger.request("security/audit/record", {
+        category: "system",
+        action: "backup_created",
+        actor: "user",
+        outcome: "allowed",
+        summary: "El usuario creó un backup seguro sin secretos ni auditoría.",
+      });
+    } else if (response.status === "error") {
+      setMaintenanceMessage(response.error);
+    }
+    setBackupLoading(false);
+  };
+
+  const restoreBackup = async () => {
+    setRestoreLoading(true);
+    setMaintenanceMessage(undefined);
+    const response = await ideMessenger.request(
+      "lumina/backup/restore",
+      undefined,
+    );
+    if (response.status === "success" && response.content.restored) {
+      setMaintenanceMessage("Backup restaurado; recargando VS Code…");
+      void ideMessenger.request("security/audit/record", {
+        category: "system",
+        action: "backup_restored",
+        actor: "user",
+        outcome: "allowed",
+        summary: "El usuario confirmó restaurar un backup local.",
+      });
+    } else if (response.status === "error") {
+      setMaintenanceMessage(response.error);
+    }
+    setRestoreLoading(false);
+  };
+
+  const checkUpdate = async () => {
+    setUpdateLoading(true);
+    setMaintenanceMessage(undefined);
+    const response = await ideMessenger.request(
+      "lumina/update/check",
+      undefined,
+    );
+    if (response.status === "success") {
+      setUpdate(response.content);
+    } else {
+      setMaintenanceMessage(response.error);
+    }
+    setUpdateLoading(false);
   };
 
   return (
@@ -193,6 +280,134 @@ export function RuntimeSection() {
           sin exponer claves ni contenido privado en esta pantalla.
         </p>
       </div>
+
+      <section className="bg-editor border-border mt-5 rounded-lg border border-solid p-4">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <strong className="flex items-center gap-2 text-sm">
+              <ShieldCheckIcon className="h-5 w-5 text-emerald-400" />
+              Lumina Doctor
+            </strong>
+            <p className="text-description mt-1 text-xs">
+              Comprueba UI, módulos nativos, Start Talk, almacenamiento y
+              workers sin mostrar credenciales.
+            </p>
+          </div>
+          <button
+            type="button"
+            data-testid="runtime-doctor"
+            disabled={doctorLoading}
+            onClick={() => void runDoctor()}
+          >
+            <ArrowPathIcon
+              className={`h-4 w-4 ${doctorLoading ? "animate-spin" : ""}`}
+            />
+            {doctorLoading ? "Revisando…" : "Ejecutar Doctor"}
+          </button>
+        </div>
+        {doctor ? (
+          <div className="grid gap-2" aria-label="Resultado de Lumina Doctor">
+            <div className="text-description text-xs">
+              {doctor.counts.passed} correctas · {doctor.counts.warnings} avisos
+              · {doctor.counts.failed} fallos
+            </div>
+            {doctor.checks.map((check) => (
+              <article
+                key={check.id}
+                className="border-border flex items-start gap-2 rounded-md border border-solid p-3"
+              >
+                {check.status === "pass" ? (
+                  <CheckCircleIcon className="h-4 w-4 shrink-0 text-emerald-400" />
+                ) : (
+                  <ExclamationTriangleIcon
+                    className={`h-4 w-4 shrink-0 ${check.status === "fail" ? "text-red-400" : "text-amber-400"}`}
+                  />
+                )}
+                <div className="min-w-0">
+                  <strong className="block text-xs">{check.label}</strong>
+                  <span className="text-description block text-xs">
+                    {check.detail}
+                  </span>
+                  {check.remediation ? (
+                    <span className="mt-1 block text-xs text-amber-300">
+                      {check.remediation}
+                    </span>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="bg-editor border-border mt-4 rounded-lg border border-solid p-4">
+        <strong className="flex items-center gap-2 text-sm">
+          <ArchiveBoxArrowDownIcon className="h-5 w-5 text-emerald-400" />
+          Backup y restauración
+        </strong>
+        <p className="text-description mt-1 text-xs">
+          Exporta estado, memoria, tareas, reglas, skills y plugins. Excluye
+          secretos y la auditoría; restaurar exige confirmación modal y recarga.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            data-testid="runtime-backup"
+            disabled={backupLoading}
+            onClick={() => void createBackup()}
+          >
+            <ArchiveBoxArrowDownIcon className="h-4 w-4" />
+            {backupLoading ? "Guardando…" : "Crear backup"}
+          </button>
+          <button
+            type="button"
+            disabled={restoreLoading}
+            onClick={() => void restoreBackup()}
+          >
+            <CloudArrowDownIcon className="h-4 w-4" />
+            {restoreLoading ? "Restaurando…" : "Restaurar backup"}
+          </button>
+        </div>
+      </section>
+
+      <section className="bg-editor border-border mt-4 rounded-lg border border-solid p-4">
+        <strong className="text-sm">Actualizaciones verificables</strong>
+        <p className="text-description mt-1 text-xs">
+          Consulta la última release del repositorio oficial. Lumina nunca
+          descarga ni instala código sin intervención del usuario.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            data-testid="runtime-update-check"
+            disabled={updateLoading}
+            onClick={() => void checkUpdate()}
+          >
+            <ArrowPathIcon
+              className={`h-4 w-4 ${updateLoading ? "animate-spin" : ""}`}
+            />
+            {updateLoading ? "Comprobando…" : "Buscar actualización"}
+          </button>
+          {update?.status === "available" && update.releaseUrl ? (
+            <button
+              type="button"
+              onClick={() => ideMessenger.post("openUrl", update.releaseUrl!)}
+            >
+              <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+              Revisar release {update.latestVersion}
+            </button>
+          ) : null}
+          {update ? (
+            <span className="text-description text-xs">{update.message}</span>
+          ) : null}
+        </div>
+      </section>
+
+      {maintenanceMessage ? (
+        <div className="lumina-settings-summary mt-4" role="status">
+          {maintenanceMessage}
+        </div>
+      ) : null}
     </div>
   );
 }
