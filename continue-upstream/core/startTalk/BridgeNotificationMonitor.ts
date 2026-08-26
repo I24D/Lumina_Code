@@ -6,14 +6,25 @@ import { enrichPhoneLinkNotification } from "./PhoneLinkNotificationPolicy.js";
 
 // AMSI-safe replacement for the PowerShell UserNotificationListener monitor.
 // It polls the Windows Bridge (Python WinRT listener at /notifications/live),
-// which opens no window and steals no focus, and reports only notifications that
-// ARRIVE after the monitor starts (the first poll is a silent baseline).
+// which opens no window and steals no focus, and reports notifications that
+// arrive after the monitor starts, plus a short catch-up window on the first
+// poll (see BASELINE_CATCH_UP_MS).
 
 const DEFAULT_POLL_INTERVAL_MS = 2_500;
 const REQUEST_TIMEOUT_MS = 8_000;
 const MAX_SEEN = 400;
 const MAX_NOTIFICATION_TEXT_LENGTH = 1_000;
 const ERROR_STATUS_AFTER = 3;
+/**
+ * En el primer sondeo el Centro de actividades ya contiene todo lo que llegó
+ * mientras Start Talk estaba cerrado. Leerlo entero sería recitar días de
+ * atrasos, pero descartarlo entero — que es lo que se hacía — deja sin
+ * mencionar NUNCA un mensaje recibido justo antes de abrir el orbe, que es
+ * precisamente el que interesa. Se recupera solo lo que sigue siendo reciente.
+ */
+const BASELINE_CATCH_UP_MS = 5 * 60_000;
+/** Tope de esa recuperación, para que abrir el orbe no dispare una parrafada. */
+const MAX_BASELINE_CATCH_UP = 5;
 
 function bridgeBaseUrl(explicit?: string): string {
   const configured =
@@ -159,9 +170,15 @@ export class BridgeNotificationMonitor {
       this.trimSeen(currentIds);
 
       if (this.baseline) {
-        // First successful poll: everything already present is pre-existing and
-        // must not be announced. Arrivals are detected from here on.
+        // First successful poll: lo viejo se da por visto y solo se recupera lo
+        // que acaba de llegar, de lo más antiguo a lo más nuevo.
         this.baseline = false;
+        for (const notification of this.selectBaselineCatchUp(fresh)) {
+          if (this.stopped) {
+            return;
+          }
+          this.options.onNotification(notification);
+        }
         return;
       }
       for (const notification of fresh) {
@@ -180,6 +197,25 @@ export class BridgeNotificationMonitor {
       clearTimeout(timeout);
       this.polling = false;
     }
+  }
+
+  /**
+   * Las notificaciones del Centro de actividades que todavía cuentan como
+   * "recién llegadas" al abrir la sesión, en orden cronológico.
+   */
+  private selectBaselineCatchUp(
+    notifications: StartTalkNotification[],
+  ): StartTalkNotification[] {
+    const cutoff = Date.now() - BASELINE_CATCH_UP_MS;
+    return notifications
+      .map((notification) => ({
+        notification,
+        at: Date.parse(notification.createdAt),
+      }))
+      .filter(({ at }) => Number.isFinite(at) && at >= cutoff)
+      .sort((a, b) => a.at - b.at)
+      .slice(-MAX_BASELINE_CATCH_UP)
+      .map(({ notification }) => notification);
   }
 
   private trimSeen(currentIds: Set<string>): void {

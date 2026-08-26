@@ -77,7 +77,13 @@ export interface VoiceActivityGateOptions {
   noiseRiseAlpha: number;
   /** Limite de subida por actualizacion para no aprender voz como ruido. */
   maxNoiseRiseRatio: number;
-  /** Margen extra tras el fin estimado de reproducción para seguir tratándolo como "hablando" (ms). */
+  /**
+   * Margen extra tras el fin de la reproducción durante el que la entrada se
+   * sigue tratando como posible eco (ms). Cubre lo que la cola del reproductor
+   * NO sabe: el búfer de salida del sistema y el viaje del sonido desde el
+   * altavoz hasta el micrófono, que con unos altavoces Bluetooth se va a varias
+   * décimas de segundo.
+   */
   playbackTailMs: number;
   /**
    * Qué puede cortar a Lumina mientras habla:
@@ -142,7 +148,7 @@ export const DEFAULT_GATE_OPTIONS: VoiceActivityGateOptions = {
   noiseFallAlpha: 0.08,
   noiseRiseAlpha: 0.04,
   maxNoiseRiseRatio: 1.35,
-  playbackTailMs: 250,
+  playbackTailMs: 700,
   bargeMode: "keyword",
   bargeOverEchoRatio: 2.6,
   stopWordMinMs: 240,
@@ -234,11 +240,20 @@ export class VoiceActivityGate {
   /**
    * Cuánto audio le queda REALMENTE por sonar a Lumina, según la cola de
    * reproducción de la GUI. Es autoritativo: si la reproducción se suspendió,
-   * alarga la ventana; si la cortaron, la cierra en el acto.
+   * alarga la ventana; al vaciarse, la deja vencer con su margen de cola.
    */
   setPlaybackRemaining(remainingMs: number): void {
-    this.playbackDeadline =
-      remainingMs > 0 ? this.now() + remainingMs : 0;
+    if (remainingMs > 0) {
+      this.playbackDeadline = this.now() + remainingMs;
+      return;
+    }
+    // Ojo: llevar el plazo a 0 al vaciarse la cola anulaba `playbackTailMs`
+    // justo cuando hace falta. Que la cola esté vacía significa que el ÚLTIMO
+    // fragmento acaba de salir hacia los altavoces, no que ya haya dejado de
+    // oírse: quedan el búfer de salida del sistema y el viaje por el aire. Se
+    // deja vencido AHORA para que el margen de cola corra desde este instante.
+    // Un corte deliberado sí abre el micro al momento, por `setAssistantSpeaking(false)`.
+    this.playbackDeadline = Math.min(this.playbackDeadline, this.now());
   }
 
   /** Fuerza (des)activar el estado "Lumina hablando". */

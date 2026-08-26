@@ -2,9 +2,53 @@ import type { StartTalkNotification } from "core/startTalk";
 
 const MAX_ANNOUNCEMENT_NOTIFICATIONS = 5;
 const MAX_REMEMBERED_NOTIFICATION_IDS = 400;
+/**
+ * El mismo tope que aplica el monitor al leer la notificación de Windows
+ * (`MAX_NOTIFICATION_TEXT_LENGTH`). Estaba en 500 y cortaba en silencio la
+ * mitad de un SMS largo ANTES de que el modelo lo viera, así que la lectura
+ * "completa" que pide el prompt era imposible de cumplir.
+ */
+const MAX_ANNOUNCED_FIELD_CHARS = 1_000;
 
 function cleanField(value: string | undefined): string {
-  return (value ?? "").replace(/\s+/g, " ").trim().slice(0, 500);
+  return (value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_ANNOUNCED_FIELD_CHARS);
+}
+
+/**
+ * Un mensaje de móvil y una notificación de escritorio no se leen igual, y
+ * mandarlos con los mismos campos hacía que el texto de un SMS viajara TRES
+ * veces (`sender`, `message` y `mobileMessage`), más el nombre de la app
+ * repetido en `title` y `mobileApp`. El prompt pide justo lo contrario —
+ * "omit repeated text" —, así que el modelo resumía o se saltaba parte de lo
+ * que tenía que leer entero. Cada origen manda ahora solo sus campos.
+ */
+function describeNotification(
+  notification: StartTalkNotification,
+): Record<string, unknown> {
+  if (notification.sourceKind === "phone_link") {
+    return {
+      notificationId: cleanField(notification.id),
+      source: "phone",
+      application:
+        cleanField(notification.mobileApp) || cleanField(notification.appName),
+      sender: cleanField(notification.sender),
+      message:
+        cleanField(notification.message) || cleanField(notification.body),
+      conversationKind: notification.conversationKind,
+      replyEligibility: notification.replyEligibility,
+    };
+  }
+
+  return {
+    notificationId: cleanField(notification.id),
+    source: "desktop",
+    application: cleanField(notification.appName),
+    title: cleanField(notification.title),
+    message: cleanField(notification.body),
+  };
 }
 
 export function rememberNotificationOnce(
@@ -35,18 +79,7 @@ export function buildNotificationAnnouncementPrompt(
 ): string {
   const safeNotifications = notifications
     .slice(0, MAX_ANNOUNCEMENT_NOTIFICATIONS)
-    .map((notification) => ({
-      notificationId: cleanField(notification.id),
-      application: cleanField(notification.appName),
-      title: cleanField(notification.title),
-      message: cleanField(notification.body),
-      sourceKind: notification.sourceKind,
-      mobileApp: cleanField(notification.mobileApp),
-      sender: cleanField(notification.sender),
-      mobileMessage: cleanField(notification.message),
-      conversationKind: notification.conversationKind,
-      replyEligibility: notification.replyEligibility,
-    }));
+    .map(describeNotification);
 
   const lines = [
     "This is a Lumina system notification event, not a user request.",

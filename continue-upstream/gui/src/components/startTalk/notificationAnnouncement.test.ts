@@ -62,6 +62,26 @@ describe("notification announcements", () => {
     expect(prompt).not.toContain("whether you should reply");
   });
 
+  it("sends the message text once, not three times", () => {
+    // Iba en `sender`, `message` y `mobileMessage` a la vez, y el propio prompt
+    // le pide omitir el texto repetido: por eso resumía en vez de leerlo entero.
+    const prompt = buildNotificationAnnouncementPrompt([phoneLinkNotification]);
+    const occurrences = prompt.split("Ke pasa").length - 1;
+
+    expect(occurrences).toBe(1);
+    expect(prompt).toContain('"sender":"Hugo Tennessee"');
+    expect(prompt).not.toContain("mobileMessage");
+  });
+
+  it("does not truncate a long message before the model sees it", () => {
+    const longMessage = "a".repeat(900);
+    const prompt = buildNotificationAnnouncementPrompt([
+      { ...phoneLinkNotification, message: longMessage },
+    ]);
+
+    expect(prompt).toContain(longMessage);
+  });
+
   it("builds a self-contained WhatsApp auto-reply task for the Lumina Code chat", () => {
     const task = buildNotificationAutoReplyTask([phoneLinkNotification]);
 

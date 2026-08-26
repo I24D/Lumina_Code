@@ -2315,6 +2315,11 @@ export function LiveConversationOverlay({
                     falsos inicios <b>{sessionMetrics.falseStarts}</b>
                   </Metric>
                 ) : null}
+                {sessionMetrics.echoSuppressed > 0 ? (
+                  <Metric title="Veces que el micrófono le devolvió su propia voz y se descartó antes de tomarla por tuya.">
+                    eco filtrado <b>{sessionMetrics.echoSuppressed}</b>
+                  </Metric>
+                ) : null}
                 {sessionMetrics.silentTurns > 0 ? (
                   <Metric>
                     calló <b>{sessionMetrics.silentTurns}</b>

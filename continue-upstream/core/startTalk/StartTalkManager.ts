@@ -395,6 +395,60 @@ const CROWDED_ENTER_NOTE =
 const CROWDED_EXIT_NOTE =
   "[Lumina system event, not a user request] The room is quiet again and you are back to a one-to-one conversation with your user. Never mention this notice.";
 
+/**
+ * Margen en el que su voz todavía puede estar sonando en la habitación después
+ * de que la cola de reproducción se vacíe (altavoces, latencia del micrófono).
+ */
+const ECHO_TAIL_MS = 1_500;
+/** Por debajo de esto no se descarta nada: "sí", "para", "espera" son del usuario. */
+const MIN_ECHO_CHARS = 12;
+/** Fracción de palabras que deben venir de lo que ella acaba de decir. */
+const ECHO_WORD_RATIO = 0.8;
+/** Cuánto de su última intervención se conserva para poder comparar. */
+const MAX_REMEMBERED_SPEECH_CHARS = 1_200;
+
+function normalizeForEcho(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+/**
+ * ¿Lo que Gemini transcribió como voz del usuario es en realidad lo que Lumina
+ * acababa de decir por los altavoces?
+ *
+ * Sin esta comprobación cualquier eco entraba al transcript como turno del
+ * usuario, y de ahí a `/api/memory/learn`: quedaba guardado para siempre como
+ * algo que él dijo y volvía inyectado en el system prompt de cada sesión
+ * posterior. Así es como aparecen "preguntas" que nadie hizo nunca.
+ */
+export function isAssistantEcho(
+  heardText: string,
+  assistantSpeech: string,
+): boolean {
+  const said = normalizeForEcho(assistantSpeech);
+  const heard = normalizeForEcho(heardText);
+  if (!said || heard.length < MIN_ECHO_CHARS) {
+    return false;
+  }
+  if (said.includes(heard)) {
+    return true;
+  }
+  // El eco se transcribe con errores, así que se admite por solape de palabras
+  // en vez de exigir la frase literal.
+  const words = heard.split(" ").filter((word) => word.length > 2);
+  if (words.length < 3) {
+    return false;
+  }
+  const saidWords = new Set(said.split(" "));
+  const shared = words.filter((word) => saidWords.has(word)).length;
+  return shared / words.length >= ECHO_WORD_RATIO;
+}
+
 /** Cada cuánto se refresca como mucho la miniatura que ve el usuario en la UI. */
 const VIDEO_PREVIEW_INTERVAL_MS = 2000;
 /**
@@ -513,6 +567,12 @@ type SessionState = {
   memoryUserId?: string;
   memoryBlock?: string;
   transcript: VoiceTranscriptEntry[];
+  /**
+   * Cola de lo último que Lumina dijo en voz alta. Es lo que se compara con la
+   * transcripción de entrada para reconocer su propio eco antes de darlo por
+   * dicho por el usuario (ver `isAssistantEcho`).
+   */
+  lastAssistantSpeech: string;
   // Session behaviour. In "interpreter" mode the model only translates and no
   // persona/memory/tools/grounding are used.
   mode: StartTalkMode;
@@ -623,6 +683,7 @@ export class StartTalkManager {
       languageCode: resolvedLanguageCode,
       memoryUserId: resolveVoiceUserId(),
       transcript: [],
+      lastAssistantSpeech: "",
       turnAudio: [],
       turnAudioBytes: 0,
       speakerTurnId: 0,
@@ -974,6 +1035,24 @@ export class StartTalkManager {
       status: "idle",
       model: state.model,
     });
+  }
+
+  /**
+   * True cuando la transcripción entrante llega mientras (o justo después de
+   * que) su voz sonaba Y repite lo que acababa de decir.
+   *
+   * Se exigen las dos cosas a propósito: solo con el tiempo se silenciarían
+   * interrupciones reales del usuario, y solo con el texto se silenciaría a un
+   * usuario que repite una frase suya minutos más tarde. Si la GUI no está
+   * informando de la reproducción (orbe cerrado), `audibleUntil` queda en el
+   * pasado y no se descarta nada.
+   */
+  private isOwnEcho(state: SessionState, text: string): boolean {
+    const audibleUntil = state.playbackReportedAt + state.playbackRemainingMs;
+    if (Date.now() > audibleUntil + ECHO_TAIL_MS) {
+      return false;
+    }
+    return isAssistantEcho(text, state.lastAssistantSpeech);
   }
 
   /**
@@ -2377,7 +2456,16 @@ export class StartTalkManager {
     const inputText =
       serverContent.interimInputTranscription?.text ??
       serverContent.inputTranscription?.text;
-    if (inputText) {
+    // Su propia voz, devuelta por el micrófono y transcrita como si la hubiera
+    // dicho el usuario. Ni se muestra como suya, ni cuenta como turno, ni se
+    // aprende: dejarla pasar es lo que siembra "preguntas" que nadie hizo.
+    const echoed = Boolean(
+      inputText && state && this.isOwnEcho(state, inputText),
+    );
+    if (echoed) {
+      state?.metrics.onEchoSuppressed();
+    }
+    if (inputText && !echoed) {
       // Sirve para distinguir un turno real de un falso positivo del gate.
       state?.metrics.onUserTranscript(inputText);
       this.emit({
@@ -2390,7 +2478,7 @@ export class StartTalkManager {
     }
     // Acumulamos SOLO la transcripción final (no la interina) para el
     // aprendizaje al cerrar la sesión (/api/memory/learn).
-    if (serverContent.inputTranscription?.text) {
+    if (serverContent.inputTranscription?.text && !echoed) {
       this.appendTranscript(
         state,
         "user",
@@ -2399,6 +2487,15 @@ export class StartTalkManager {
     }
 
     if (serverContent.outputTranscription?.text) {
+      if (state) {
+        // Cola de lo que acaba de decir, para reconocer su eco en los próximos
+        // segundos.
+        state.lastAssistantSpeech =
+          `${state.lastAssistantSpeech} ${serverContent.outputTranscription.text}`
+            .replace(/\s+/gu, " ")
+            .trim()
+            .slice(-MAX_REMEMBERED_SPEECH_CHARS);
+      }
       this.emit({
         type: "transcript",
         sessionId,

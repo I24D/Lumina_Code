@@ -58,6 +58,11 @@ export interface StartTalkSessionMetrics {
   reconnects: number;
   videoRestarts: number;
   searches: number;
+  /**
+   * Transcripciones que eran su propia voz volviendo por el micrófono y se
+   * descartaron antes de tratarlas como algo dicho por el usuario.
+   */
+  echoSuppressed: number;
   /** Mediana de latencia de respuesta; la media la distorsiona un solo pico. */
   medianResponseLatencyMs?: number;
   p90ResponseLatencyMs?: number;
@@ -113,6 +118,7 @@ export class TurnMetricsTracker {
     reconnects: 0,
     videoRestarts: 0,
     searches: 0,
+    echoSuppressed: 0,
   };
 
   constructor(now: () => number = () => Date.now()) {
@@ -167,6 +173,11 @@ export class TurnMetricsTracker {
 
   onSearch(): void {
     this.totals.searches += 1;
+  }
+
+  /** Se descartó una transcripción por ser el eco de su propia voz. */
+  onEchoSuppressed(): void {
+    this.totals.echoSuppressed += 1;
   }
 
   onReconnect(): void {

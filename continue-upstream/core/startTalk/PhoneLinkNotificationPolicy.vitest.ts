@@ -49,6 +49,62 @@ describe("enrichPhoneLinkNotification", () => {
     });
   });
 
+  it("reads an SMS toast that does not name the mobile app", () => {
+    // Phone Link manda los SMS como [remitente, mensaje]: sin este caso el
+    // remitente acababa en el hueco de la app y el mensaje en el del remitente.
+    expect(
+      enrichPhoneLinkNotification(
+        phoneLinkNotification(["Hugo Tennessee", "Ya voy saliendo"]),
+      ),
+    ).toMatchObject({
+      mobileApp: "SMS",
+      sender: "Hugo Tennessee",
+      message: "Ya voy saliendo",
+      conversationKind: "direct",
+      replyEligibility: "eligible",
+    });
+  });
+
+  it("classifies a carrier short code as unanswerable, not unknown", () => {
+    const notification = enrichPhoneLinkNotification(
+      phoneLinkNotification([
+        "1113114",
+        "Es Cricket. Tu cuenta ya no incluye el plan de HBO Max.",
+      ]),
+    );
+
+    expect(notification.sender).toBe("1113114");
+    expect(notification.message).toBe(
+      "Es Cricket. Tu cuenta ya no incluye el plan de HBO Max.",
+    );
+    expect(notification.replyEligibility).toBe("not_actionable");
+  });
+
+  it("runs the sensitive filter on text messages too", () => {
+    // Antes ningún SMS llegaba a clasificarse, asi que un aviso de pago pasaba
+    // como "no accionable" sin que el filtro de sensibles llegara a mirarlo.
+    expect(
+      enrichPhoneLinkNotification(
+        phoneLinkNotification([
+          "1113114",
+          "Realiza tu pago de $60.00 hoy antes de las 11:59 P.M.",
+        ]),
+      ).replyEligibility,
+    ).toBe("sensitive_blocked");
+  });
+
+  it("understands the Spanish name of the messages app", () => {
+    expect(
+      enrichPhoneLinkNotification(
+        phoneLinkNotification(["Mensajes", "Hugo Tennessee", "Ke pasa"]),
+      ),
+    ).toMatchObject({
+      mobileApp: "Mensajes",
+      sender: "Hugo Tennessee",
+      replyEligibility: "eligible",
+    });
+  });
+
   it("blocks ambiguous and sensitive notifications", () => {
     expect(
       enrichPhoneLinkNotification(

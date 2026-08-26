@@ -253,6 +253,37 @@ describe("VoiceActivityGate: interrupción mientras Lumina habla", () => {
     expect(onActivityStart).not.toHaveBeenCalled();
   });
 
+  it("el margen de cola sigue vigente cuando la cola se vacía", () => {
+    // `setPlaybackRemaining(0)` llevaba el plazo a cero, así que el margen de
+    // cola no llegaba a aplicarse nunca por la ruta normal: el micro se abría
+    // en el instante en que el último fragmento salía hacia los altavoces.
+    const clock = { t: 0 };
+    const { gate, onActivityStart } = makeGate(clock);
+
+    gate.setPlaybackRemaining(1_000);
+    feed(gate, clock, 1_000, 900); // su voz sonando
+    gate.setPlaybackRemaining(0); // la cola queda vacía
+
+    feed(gate, clock, 400, 900); // todavía se la oye por el altavoz
+    expect(onActivityStart).not.toHaveBeenCalled();
+
+    clock.t += 400; // pasado el margen, el micro vuelve a ser suyo
+    feed(gate, clock, 300, 900);
+    expect(onActivityStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("un corte deliberado abre el micro sin esperar al margen", () => {
+    const clock = { t: 0 };
+    const { gate, onActivityStart } = makeGate(clock);
+
+    gate.setPlaybackRemaining(20_000);
+    feed(gate, clock, 200, 900);
+    gate.setAssistantSpeaking(false); // la cortó de verdad
+
+    feed(gate, clock, 300, 900);
+    expect(onActivityStart).toHaveBeenCalledTimes(1);
+  });
+
   it("bargeMode 'off' la hace totalmente incortable", () => {
     const clock = { t: 0 };
     const { gate, onActivityStart, onAudio } = makeGate(clock, {
