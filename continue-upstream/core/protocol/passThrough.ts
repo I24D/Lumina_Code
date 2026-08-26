@@ -93,6 +93,7 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "startTalk/startCapture",
     "startTalk/setMuted",
     "startTalk/setNotificationAnnouncements",
+    "startTalk/authorizeReply",
     "startTalk/getTranscript",
     "startTalk/delegateToMain",
     "startTalk/mainResult",

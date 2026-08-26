@@ -1145,6 +1145,10 @@ export class Core {
       this.startTalkManager.setNotificationAnnouncements(msg.data);
     });
 
+    on("startTalk/authorizeReply", async (msg) => {
+      this.startTalkManager.authorizeReply(msg.data);
+    });
+
     on("startTalk/getTranscript", async (msg) => {
       return this.startTalkManager.getTranscript(msg.data);
     });

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { isAssistantEcho } from "./StartTalkManager.js";
+import {
+  consumeReplyAuthorization,
+  grantReplyAuthorization,
+  isAssistantEcho,
+} from "./StartTalkManager.js";
 
 const SAID =
   "Te llego un mensaje de Cricket: tu cuenta ya no incluye el plan de HBO Max.";
@@ -33,5 +37,66 @@ describe("isAssistantEcho", () => {
 
   it("no descarta nada si ella no había dicho nada", () => {
     expect(isAssistantEcho("cual es el numero de cuenta", "")).toBe(false);
+  });
+});
+
+describe("autorización de respuestas", () => {
+  const NOW = 1_000_000;
+
+  it("sin un sí del usuario no se puede responder", () => {
+    const ledger = new Map<string, number>();
+
+    expect(
+      consumeReplyAuthorization(ledger, "phone_link", "notif-1", NOW),
+    ).toBe(false);
+    expect(consumeReplyAuthorization(ledger, "whatsapp", "Hugo", NOW)).toBe(
+      false,
+    );
+  });
+
+  it("un sí autoriza UN envío y se gasta", () => {
+    const ledger = new Map<string, number>();
+    grantReplyAuthorization(ledger, "phone_link", ["notif-1"], NOW);
+
+    expect(
+      consumeReplyAuthorization(ledger, "phone_link", "notif-1", NOW + 1_000),
+    ).toBe(true);
+    // El segundo intento ya no tiene permiso: autorizar una respuesta no deja
+    // la puerta abierta para el siguiente mensaje que entre.
+    expect(
+      consumeReplyAuthorization(ledger, "phone_link", "notif-1", NOW + 2_000),
+    ).toBe(false);
+  });
+
+  it("autoriza solo aquello que el usuario oyó", () => {
+    const ledger = new Map<string, number>();
+    grantReplyAuthorization(ledger, "phone_link", ["notif-1"], NOW);
+
+    expect(
+      consumeReplyAuthorization(ledger, "phone_link", "notif-2", NOW),
+    ).toBe(false);
+  });
+
+  it("un sí viejo caduca", () => {
+    const ledger = new Map<string, number>();
+    grantReplyAuthorization(ledger, "whatsapp", ["Hugo Tennessee"], NOW);
+
+    expect(
+      consumeReplyAuthorization(
+        ledger,
+        "whatsapp",
+        "Hugo Tennessee",
+        NOW + 10 * 60_000,
+      ),
+    ).toBe(false);
+  });
+
+  it("el contacto no distingue mayúsculas ni espacios de sobra", () => {
+    const ledger = new Map<string, number>();
+    grantReplyAuthorization(ledger, "whatsapp", ["Hugo Tennessee"], NOW);
+
+    expect(
+      consumeReplyAuthorization(ledger, "whatsapp", "  hugo tennessee ", NOW),
+    ).toBe(true);
   });
 });

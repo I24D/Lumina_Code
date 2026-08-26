@@ -62,6 +62,16 @@ describe("notification announcements", () => {
     expect(prompt).not.toContain("whether you should reply");
   });
 
+  it("orders every notification read, with no judgement about which ones matter", () => {
+    // Decía "read each useful notification": eso deja que decida cuál se salta,
+    // y lo que se pide es que las lea todas.
+    const prompt = buildNotificationAnnouncementPrompt([phoneLinkNotification]);
+
+    expect(prompt).toContain("Read EVERY notification");
+    expect(prompt).toContain("without skipping any");
+    expect(prompt).not.toContain("useful notification");
+  });
+
   it("sends the message text once, not three times", () => {
     // Iba en `sender`, `message` y `mobileMessage` a la vez, y el propio prompt
     // le pide omitir el texto repetido: por eso resumía en vez de leerlo entero.

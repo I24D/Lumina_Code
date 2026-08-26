@@ -63,6 +63,7 @@ import type {
   StartTalkMuteRequest,
   StartTalkNotificationSettingsRequest,
   StartTalkPlaybackReport,
+  StartTalkReplyAuthorization,
   StartTalkSessionRequest,
   StartTalkTextInput,
   StartTalkToolResponseInput,
@@ -443,6 +444,7 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     StartTalkNotificationSettingsRequest,
     void,
   ];
+  "startTalk/authorizeReply": [StartTalkReplyAuthorization, void];
   "startTalk/getTranscript": [
     StartTalkSessionRequest,
     StartTalkTranscriptEntry[],

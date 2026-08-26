@@ -69,6 +69,13 @@ const TURN_STUCK_TIMEOUT_MS = 8_000;
 const NOTIFICATION_WATCHDOG_MAX_MS = 300_000;
 /** Margen sobre la duración estimada de la lectura antes de darla por perdida. */
 const ANNOUNCEMENT_WATCHDOG_GRACE_MS = 45_000;
+/**
+ * Cuántas notificaciones pueden esperar turno de lectura. Con todas las apps
+ * del móvil reenviando por Enlace Móvil, una ráfaga pasaba del tope viejo de 50
+ * y las más antiguas se perdían sin que nadie se enterara. Sigue habiendo tope
+ * — no se puede acumular sin límite —, pero ahora cabe una ráfaga real.
+ */
+const MAX_QUEUED_NOTIFICATIONS = 200;
 
 type ChatResponseAnnouncement = {
   requestId: string;
@@ -561,7 +568,7 @@ export function useStartTalkAudio({
     if (notificationBatchInFlightRef.current.length > 0) {
       notificationQueueRef.current = notificationBatchInFlightRef.current
         .concat(notificationQueueRef.current)
-        .slice(0, 50);
+        .slice(0, MAX_QUEUED_NOTIFICATIONS);
     }
     notificationBatchInFlightRef.current = [];
     notificationInFlightRef.current = false;
@@ -618,7 +625,7 @@ export function useStartTalkAudio({
       );
       notificationQueueRef.current = regularBatch
         .concat(notificationQueueRef.current)
-        .slice(0, 50);
+        .slice(0, MAX_QUEUED_NOTIFICATIONS);
       notificationBatchInFlightRef.current = bridgeBatch;
     } else {
       notificationBatchInFlightRef.current = batch;
@@ -1252,6 +1259,23 @@ export function useStartTalkAudio({
               pendingReplyRef.current = null;
             } else if (isAffirmativeReply(event.text)) {
               pendingReplyRef.current = null;
+              // Registrar el "sí" en core es lo que desbloquea las funciones de
+              // respuesta. Sin esto se rechazan, así que este es el único punto
+              // del que puede salir un mensaje enviado en nombre del usuario.
+              const sessionId = sessionIdRef.current;
+              if (sessionId) {
+                void ideMessenger
+                  .request("startTalk/authorizeReply", {
+                    sessionId,
+                    notificationIds: pending.notifications.map(
+                      (notification) => notification.id,
+                    ),
+                    contacts: pending.notifications
+                      .map((notification) => notification.sender ?? "")
+                      .filter(Boolean),
+                  })
+                  .catch(() => undefined);
+              }
               dispatchAutoReplyRef.current(pending.notifications);
             } else if (isNegativeReply(event.text)) {
               pendingReplyRef.current = null;
@@ -1310,7 +1334,7 @@ export function useStartTalkAudio({
         }
         notificationQueueRef.current = notificationQueueRef.current
           .concat(event.notification)
-          .slice(-50);
+          .slice(-MAX_QUEUED_NOTIFICATIONS);
         setPendingNotificationCount(notificationQueueRef.current.length);
         scheduleNotificationFlush();
         return;
@@ -1369,6 +1393,7 @@ export function useStartTalkAudio({
     [
       handleToolCall,
       finishCurrentNotificationBatch,
+      ideMessenger,
       playAudio,
       requeueCurrentChatResponse,
       requeueCurrentNotificationBatch,

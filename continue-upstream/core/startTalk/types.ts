@@ -120,6 +120,20 @@ export interface StartTalkNotificationSettingsRequest {
   enabled: boolean;
 }
 
+/**
+ * El usuario acaba de autorizar de viva voz que se responda a algo concreto.
+ * Sin uno de estos registrado, las funciones de respuesta se rechazan: la
+ * instrucción del prompt de "pide confirmación antes" es una indicación, no una
+ * garantía, y enviar un mensaje en nombre de alguien no se puede deshacer.
+ */
+export interface StartTalkReplyAuthorization {
+  sessionId: string;
+  /** Notificaciones de Enlace Móvil que el usuario autorizó responder. */
+  notificationIds?: string[];
+  /** Contactos de WhatsApp en el PC que el usuario autorizó responder. */
+  contacts?: string[];
+}
+
 export interface StartTalkCaptureRequest {
   sessionId: string;
   deviceName?: string;
