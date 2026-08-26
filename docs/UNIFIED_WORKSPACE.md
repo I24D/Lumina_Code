@@ -29,7 +29,7 @@ Continue/Lumina; no incorpora el runtime Lit ni el Gateway de Openclaw.
 | Automations                   | Trabajo Programado          | `ScheduledTaskService` persistente                                          |
 | Usage                         | Uso y métricas              | base de datos de devdata/tokens                                             |
 | Memory/context                | Conocimiento e Indexing     | memoria persistente, réplica Supabase opcional, reglas, skills e indexación |
-| Apps/plugins/channels         | Skills y Conexiones         | catálogo local declarativo, Skill Workshop, MCP, Start Talk y runtime       |
+| Apps/plugins/channels         | Skills y Conexiones         | catálogo local, MCP y canales manuales con borradores confiables            |
 | Security/approvals            | Privacidad y Trabajo        | políticas de capacidades, aprobaciones y auditoría local redactada          |
 | Talk                          | Configuración de Start Talk | core de voz y VS Code Secret Storage                                        |
 | Logs/debug/infrastructure     | Runtime y diagnóstico       | estado de componentes y registros del host                                  |
@@ -69,6 +69,13 @@ servicio de validación/escritura con la herramienta `create_skill` del agente.
 Los plugins locales son manifiestos declarativos que pueden aportar `SKILL.md`;
 su catálogo no ejecuta módulos JavaScript. Las capacidades ejecutables se
 mantienen en MCP para conservar los límites de permisos y aprobación.
+
+## Canales
+
+WhatsApp Desktop y Enlace móvil comparten una política durable, pero conservan
+herramientas separadas. El modo predeterminado es manual. El ingreso opcional
+solo redacta borradores para contactos confiables y no posee una ruta de envío;
+una entrega real exige aprobación incluso cuando Full Access está activo.
 
 ## Protección y pruebas
 

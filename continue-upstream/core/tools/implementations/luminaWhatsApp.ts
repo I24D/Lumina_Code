@@ -1,4 +1,6 @@
 import { ContextItem } from "../..";
+import { getChannelService } from "../../channels/ChannelService.js";
+import { resolvePolicy } from "../../privacy/permissions.js";
 import {
   callLuminaBridge,
   resolveLuminaBridgeUrl,
@@ -12,7 +14,9 @@ function str(value: unknown): string | undefined {
 }
 
 function num(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 // Maps each semantic WhatsApp action to its deterministic bridge endpoint plus
@@ -85,6 +89,15 @@ function resolveWhatsAppCall(args: Record<string, unknown>): {
 }
 
 export const luminaWhatsAppImpl: ToolImpl = async (args, extras) => {
+  getChannelService().assertEnabled("whatsapp_desktop");
+  const action = str(args.action) ?? "";
+  const isSend =
+    (action === "reply" || action === "publish_status") && args.dryRun !== true;
+  if (isSend && resolvePolicy("notificationReplies") === "block") {
+    throw new Error(
+      "Responder mensajes está bloqueado en Ajustes → Privacidad.",
+    );
+  }
   const { endpoint, body } = resolveWhatsAppCall(args);
   const workspaceDirs = await extras.ide.getWorkspaceDirs();
   const fallbackBridgeUrl = resolveLuminaBridgeUrl(workspaceDirs);
@@ -93,10 +106,14 @@ export const luminaWhatsAppImpl: ToolImpl = async (args, extras) => {
     body,
     bridgeUrl: str(args.bridgeUrl),
   };
-  const data = await callLuminaBridge(extras.fetch, callArgs, fallbackBridgeUrl);
+  const data = await callLuminaBridge(
+    extras.fetch,
+    callArgs,
+    fallbackBridgeUrl,
+  );
   const contextItem: ContextItem = {
     name: "WhatsApp Desktop",
-    description: `${str(args.action)} ${endpoint}`,
+    description: `${action} ${endpoint}`,
     content: JSON.stringify(data, null, 2),
     status: "WhatsApp call completed",
   };

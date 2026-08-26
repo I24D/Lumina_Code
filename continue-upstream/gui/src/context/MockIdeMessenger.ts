@@ -92,6 +92,33 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
   "privacy/getPermissions": { capabilities: [], permissions: {} },
   "privacy/setPermission": {},
   "privacy/resetPermissions": {},
+  "channels/get": {
+    version: 1,
+    updatedAt: "2026-08-25T00:00:00.000Z",
+    channels: [
+      {
+        id: "whatsapp_desktop",
+        label: "WhatsApp Desktop",
+        enabled: true,
+        mode: "manual",
+        trustedSenders: [],
+        requireExplicitApproval: true,
+      },
+      {
+        id: "phone_link",
+        label: "Enlace móvil",
+        enabled: true,
+        mode: "manual",
+        trustedSenders: [],
+        requireExplicitApproval: true,
+      },
+    ],
+  },
+  "channels/update": {
+    version: 1,
+    updatedAt: "2026-08-25T00:00:00.000Z",
+    channels: [],
+  },
   "sessions/search": { hits: [], recent: [] },
   "worktrees/list": [],
   "worktrees/claimSession": undefined,

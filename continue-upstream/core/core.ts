@@ -1,12 +1,7 @@
 import { fetchwithRequestOptions } from "@continuedev/fetch";
 import { evaluateSurfaceAuthorization } from "@continuedev/terminal-security";
 import { spawn } from "node:child_process";
-import {
-  appendFileSync,
-  existsSync,
-  readdirSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join as joinPath } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -23,6 +18,7 @@ import { addModel, deleteModel } from "./config/util";
 import { DevDataSqliteDb } from "./data/devdataSqlite";
 import { DataLogger } from "./data/log";
 import { GitHubWorkItemService } from "./integrations/GitHubWorkItemService.js";
+import { getChannelService } from "./channels/ChannelService.js";
 import { CodebaseIndexer } from "./indexing/CodebaseIndexer";
 import DocsService from "./indexing/docs/DocsService";
 import { countTokens } from "./llm/countTokens";
@@ -32,16 +28,13 @@ import Ollama from "./llm/llms/Ollama";
 import { EditAggregator } from "./nextEdit/context/aggregateEdits";
 import { createNewPromptFileV2 } from "./promptFiles/createNewPromptFile";
 import { callTool } from "./tools/callTool";
+import { BuiltInToolNames } from "./tools/builtIn";
 import { ChatDescriber } from "./util/chatDescriber";
 import { compactConversation } from "./util/conversationCompaction";
 import { GlobalContext } from "./util/GlobalContext";
 import { resolveWorkspaceEnvValue } from "./util/workspaceEnv.js";
 import historyManager from "./util/history";
-import {
-  editConfigFile,
-  getContinueGlobalPath,
-  migrateV1DevDataFiles,
-} from "./util/paths";
+import { editConfigFile, migrateV1DevDataFiles } from "./util/paths";
 
 import {
   isProcessBackgrounded,
@@ -161,6 +154,7 @@ export class Core {
   private scheduledTaskService: ScheduledTaskService;
   private workboardService: WorkboardService;
   private securityAudit = new SecurityAuditService();
+  private channelService = getChannelService();
   private memorySyncStatus: MemorySyncStatus = {
     configured: false,
     provider: "local",
@@ -216,11 +210,9 @@ export class Core {
       this.scheduledTaskService = new ScheduledTaskService();
       this.workboardService = new WorkboardService();
 
-      // Autonomous WhatsApp assistant: watches incoming WhatsApp notifications
-      // (Desktop + Enlace móvil), drafts a reply with the chat model and sends it
-      // for DIRECT chats only — never groups. Owner is always informed (audit).
-      this.whatsappAutoResponder = this.createWhatsAppAutoResponder();
-      this.whatsappAutoResponder?.start();
+      // Optional trusted-contact suggestion monitor. It only drafts; sending is
+      // always a normal tool call with non-bypassable user approval.
+      this.refreshWhatsAppSuggestionMonitor();
 
       this.docsService = DocsService.createSingleton(
         this.configHandler,
@@ -1260,6 +1252,29 @@ export class Core {
       removed: this.securityAudit.clear(),
     }));
 
+    on("channels/get", async () => this.channelService.get());
+    on("channels/update", async (msg) => {
+      const snapshot = this.channelService.update(msg.data.id, msg.data.patch);
+      this.securityAudit.record({
+        category: "channels",
+        action: "channel_policy_changed",
+        actor: "user",
+        outcome: "changed",
+        summary: `Cambió la política de ${msg.data.id}.`,
+        details: {
+          channel: msg.data.id,
+          enabled:
+            snapshot.channels.find((item) => item.id === msg.data.id)
+              ?.enabled ?? false,
+          mode:
+            snapshot.channels.find((item) => item.id === msg.data.id)?.mode ??
+            "manual",
+        },
+      });
+      this.refreshWhatsAppSuggestionMonitor();
+      return snapshot;
+    });
+
     on("goals/get", async (msg) => getGoal(msg.data.sessionId));
 
     on("goals/list", async () => listGoals());
@@ -1579,6 +1594,16 @@ export class Core {
           return { policy: basePolicy };
         }
 
+        const action =
+          typeof parsedArgs.action === "string" ? parsedArgs.action.trim() : "";
+        const requiresExplicitApproval =
+          processedArgs?.dryRun !== true &&
+          parsedArgs.dryRun !== true &&
+          ((toolName === BuiltInToolNames.LuminaWhatsApp &&
+            (action === "reply" || action === "publish_status")) ||
+            (toolName === BuiltInToolNames.LuminaPhoneLink &&
+              action === "reply"));
+
         // Extract display value for specific tools
         let displayValue: string | undefined;
         if (toolName === "runTerminalCommand" && parsedArgs.command) {
@@ -1591,9 +1616,13 @@ export class Core {
             parsedArgs,
             processedArgs,
           );
-          return { policy: evaluatedPolicy, displayValue };
+          return {
+            policy: evaluatedPolicy,
+            displayValue,
+            requiresExplicitApproval,
+          };
         }
-        return { policy: basePolicy, displayValue };
+        return { policy: basePolicy, displayValue, requiresExplicitApproval };
       },
     );
 
@@ -1872,24 +1901,27 @@ export class Core {
   }
 
   private createWhatsAppAutoResponder(): WhatsAppAutoResponder | undefined {
-    // Windows-only and opt-in. Use "dry" to draft without sending, or an
-    // explicit truthy value after reviewing the integration and permissions.
-    if (process.platform !== "win32") {
-      return undefined;
-    }
-    const flag = (process.env.LUMINA_WHATSAPP_AUTOREPLY ?? "").trim();
-    if (!/^(1|true|on|yes|dry|dry-?run)$/iu.test(flag)) {
+    if (
+      process.platform !== "win32" ||
+      !this.channelService.hasSuggestionsEnabled()
+    ) {
       return undefined;
     }
     return new WhatsAppAutoResponder({
-      // Claude Code itself drafts every reply (headless CLI), not the locally
-      // configured chat model — this is the owner's own assistant answering.
       generateReply: (prompt) =>
         this.composeWhatsAppReplyWithClaudeCode(prompt),
-      dryRun: /^(dry|dry-?run)$/iu.test(flag) || undefined,
+      authorizeCandidate: (candidate) =>
+        this.channelService.authorizeIngress(candidate.source, candidate.sender)
+          .allowed,
       onAudit: (entry) => this.handleAutoReplyAudit(entry),
       logger: (message) => console.warn(message),
     });
+  }
+
+  private refreshWhatsAppSuggestionMonitor(): void {
+    this.whatsappAutoResponder?.stop();
+    this.whatsappAutoResponder = this.createWhatsAppAutoResponder();
+    this.whatsappAutoResponder?.start();
   }
 
   /** Locates the Claude Code CLI (claude.cmd) so the responder can invoke it. */
@@ -2009,19 +2041,26 @@ export class Core {
 
   private handleAutoReplyAudit(entry: AutoReplyAuditEntry): void {
     const summary = this.describeAutoReply(entry);
-    // 1) Durable audit trail.
-    try {
-      appendFileSync(
-        joinPath(getContinueGlobalPath(), "whatsapp-autoreply.jsonl"),
-        `${JSON.stringify(entry)}\n`,
-        "utf8",
-      );
-    } catch {
-      // Never let logging break the responder.
-    }
-    // 2) Visible in the IDE.
+    // Durable but privacy-bounded: message bodies and drafts never enter the
+    // audit file. The visible toast carries the transient local detail.
+    this.securityAudit.record({
+      category: "channels",
+      action: "reply_suggestion",
+      actor: "agent",
+      outcome:
+        entry.outcome === "suggested"
+          ? "succeeded"
+          : entry.outcome === "blocked"
+            ? "blocked"
+            : entry.outcome === "failed"
+              ? "failed"
+              : "rejected",
+      summary: `Canal ${entry.source}: ${entry.outcome} para ${entry.sender || "contacto"}.`,
+      details: { channel: entry.source, outcome: entry.outcome },
+    });
+    // Visible in the IDE.
     void this.ide.showToast("info", summary);
-    // 3) Read aloud when the Start Talk orb is listening (best-effort; the item
+    // Read aloud when the Start Talk orb is listening (best-effort; the item
     //    expires harmlessly if the voice is off).
     void this.postVoiceLine(summary);
   }
@@ -2029,8 +2068,8 @@ export class Core {
   private describeAutoReply(entry: AutoReplyAuditEntry): string {
     const sender = entry.sender || "un contacto";
     switch (entry.outcome) {
-      case "sent":
-        return `WhatsApp: le respondí a ${sender} — "${entry.reply ?? ""}".`;
+      case "suggested":
+        return `WhatsApp: borrador para ${sender} — "${entry.reply ?? ""}". No se envió.`;
       case "deferred":
         return `WhatsApp: ${sender} te escribió "${entry.incoming}". Preferí que respondas tú.`;
       case "blocked":

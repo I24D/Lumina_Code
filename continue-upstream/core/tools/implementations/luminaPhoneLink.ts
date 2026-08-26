@@ -1,4 +1,6 @@
 import { ContextItem } from "../..";
+import { getChannelService } from "../../channels/ChannelService.js";
+import { resolvePolicy } from "../../privacy/permissions.js";
 import {
   callLuminaBridge,
   resolveLuminaBridgeUrl,
@@ -24,7 +26,9 @@ function normalizeName(value: string | undefined): string {
 }
 
 /** Maps a raw /notifications/live record into the shape the classifier expects. */
-function toStartTalkNotification(raw: Record<string, unknown>): StartTalkNotification {
+function toStartTalkNotification(
+  raw: Record<string, unknown>,
+): StartTalkNotification {
   return {
     id: str(raw.notificationId) ?? str(raw.id) ?? "",
     appName: str(raw.appName) ?? "",
@@ -51,7 +55,9 @@ async function readPhoneLinkCards(
     { endpoint: "/notifications/live", body: {}, bridgeUrl },
     fallbackBridgeUrl,
   );
-  const list = Array.isArray((data as { notifications?: unknown }).notifications)
+  const list = Array.isArray(
+    (data as { notifications?: unknown }).notifications,
+  )
     ? ((data as { notifications: unknown[] }).notifications as unknown[])
     : [];
   return list
@@ -88,7 +94,11 @@ async function handleRead(
       name: "Enlace móvil",
       description: "read",
       content: JSON.stringify(
-        { ok: true, count: cards.length, cards: cards.slice(0, limit).map(publicCard) },
+        {
+          ok: true,
+          count: cards.length,
+          cards: cards.slice(0, limit).map(publicCard),
+        },
         null,
         2,
       ),
@@ -197,7 +207,17 @@ async function handleReply(
 }
 
 export const luminaPhoneLinkImpl: ToolImpl = async (args, extras) => {
+  getChannelService().assertEnabled("phone_link");
   const action = str(args.action) ?? "";
+  if (
+    action === "reply" &&
+    args.dryRun !== true &&
+    resolvePolicy("notificationReplies") === "block"
+  ) {
+    throw new Error(
+      "Responder mensajes está bloqueado en Ajustes → Privacidad.",
+    );
+  }
   const workspaceDirs = await extras.ide.getWorkspaceDirs();
   const fallbackBridgeUrl = resolveLuminaBridgeUrl(workspaceDirs);
   const bridgeUrl = str(args.bridgeUrl);

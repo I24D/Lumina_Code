@@ -116,6 +116,11 @@ import type {
   SecurityAuditQuery,
   SecurityAuditSnapshot,
 } from "../privacy/SecurityAuditService.js";
+import type {
+  LuminaChannelId,
+  LuminaChannelPatch,
+  LuminaChannelSnapshot,
+} from "../channels/ChannelService.js";
 import { ContinueErrorReason } from "../util/errors";
 
 export enum OnboardingModes {
@@ -481,6 +486,11 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   ];
   "security/audit/record": [SecurityAuditInput, void];
   "security/audit/clear": [undefined, { removed: number }];
+  "channels/get": [undefined, LuminaChannelSnapshot];
+  "channels/update": [
+    { id: LuminaChannelId; patch: LuminaChannelPatch },
+    LuminaChannelSnapshot,
+  ];
   // Metas de sesión: el agente sigue trabajando hasta cumplirlas.
   "goals/get": [{ sessionId: string }, SessionGoal | undefined];
   "goals/list": [undefined, SessionGoal[]];
@@ -572,7 +582,12 @@ export type ToCoreFromIdeOrWebviewProtocol = {
       parsedArgs: Record<string, unknown>;
       processedArgs?: Record<string, unknown>;
     },
-    { policy: ToolPolicy; displayValue?: string },
+    {
+      policy: ToolPolicy;
+      displayValue?: string;
+      /** Full Access cannot bypass this decision. */
+      requiresExplicitApproval?: boolean;
+    },
   ];
   "tools/preprocessArgs": [
     { toolName: string; args: Record<string, unknown> },

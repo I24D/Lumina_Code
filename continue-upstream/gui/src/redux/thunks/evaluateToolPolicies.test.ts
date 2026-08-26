@@ -22,13 +22,17 @@ function getToolCallState(command: string): ToolCallState {
   } as ToolCallState;
 }
 
-function getIdeMessenger(policy: string): IIdeMessenger {
+function getIdeMessenger(
+  policy: string,
+  requiresExplicitApproval = false,
+): IIdeMessenger {
   return {
     request: vi.fn().mockResolvedValue({
       status: "success",
       content: {
         policy,
         displayValue: "Remove-Item index.html",
+        requiresExplicitApproval,
       },
     }),
   } as unknown as IIdeMessenger;
@@ -71,5 +75,32 @@ describe("evaluateToolPolicies", () => {
 
     expect(policies[0].policy).toBe("disabled");
     expect(dispatch).toHaveBeenCalled();
+  });
+
+  it("never lets Full access bypass explicit channel consent", async () => {
+    const policies = await evaluateToolPolicies(
+      vi.fn() as any,
+      getIdeMessenger("allowedWithPermission", true),
+      [
+        {
+          function: { name: "lumina_whatsapp" },
+          defaultToolPolicy: "allowedWithPermission",
+        } as any,
+      ],
+      [
+        {
+          ...getToolCallState("send"),
+          toolCall: {
+            id: "message-1",
+            type: "function",
+            function: { name: "lumina_whatsapp", arguments: "{}" },
+          },
+        } as ToolCallState,
+      ],
+      { lumina_whatsapp: "allowedWithPermission" },
+      true,
+    );
+
+    expect(policies[0].policy).toBe("allowedWithPermission");
   });
 });

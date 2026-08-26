@@ -145,6 +145,14 @@ rota automáticamente. Los secretos gestionados por VS Code permanecen cifrados
 y los contratos de estado nunca devuelven sus valores a la GUI. Consulta
 [Seguridad y auditoría](docs/SECURITY_AND_AUDIT.md).
 
+### WhatsApp y canales con consentimiento explícito
+
+La vista **Conexiones** permite activar o desactivar WhatsApp Desktop y Enlace
+móvil, mantenerlos en modo manual o habilitar únicamente borradores para una
+lista explícita de contactos confiables. El monitor no envía mensajes y **Full
+Access no puede saltarse la aprobación** de `reply` o `publish_status`. Consulta
+[Contratos de canales](docs/CHANNELS.md).
+
 ## Estado del proyecto / Project status
 
 | Área                                      | Estado público                                          |
@@ -160,6 +168,7 @@ y los contratos de estado nunca devuelven sus valores a la GUI. Consulta
 | Memoria local y réplica Supabase opcional | **Funcionales, con RLS y fallback local**               |
 | Skill Workshop y plugins locales          | **Funcionales, validados y cubiertos por pruebas**      |
 | Permisos, secretos y auditoría            | **Persistentes, redactados y cubiertos por pruebas**    |
+| WhatsApp y contratos de canales           | **Manuales por defecto; envíos con aprobación fija**    |
 | Licencia y atribuciones                   | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE) |
 | Publicación en Visual Studio Marketplace  | Aún no disponible                                       |
 

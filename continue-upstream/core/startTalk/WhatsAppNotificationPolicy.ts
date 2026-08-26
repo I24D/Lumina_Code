@@ -1,13 +1,12 @@
 import { enrichPhoneLinkNotification } from "./PhoneLinkNotificationPolicy.js";
 import type { StartTalkNotification } from "./types.js";
 
-// Classifies an incoming Windows notification as a WhatsApp message that the
-// autonomous assistant may answer. Two origins are supported:
+// Classifies an incoming Windows notification as a WhatsApp message for which
+// the trusted-contact monitor may suggest a draft. Two origins are supported:
 //   - "whatsapp_desktop": the native WhatsApp app on this PC.
 //   - "phone_link":       WhatsApp mirrored from the phone via Enlace móvil.
 // Only DIRECT (1:1) chats are ever eligible. Groups, aggregated toasts and
-// anything that looks sensitive (codes, money, passwords) are refused by design
-// so the assistant never sends a reply where it could do harm.
+// anything that looks sensitive (codes, money, passwords) are refused by design.
 
 export type WhatsAppSource = "whatsapp_desktop" | "phone_link";
 

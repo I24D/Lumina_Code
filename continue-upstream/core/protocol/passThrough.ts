@@ -110,6 +110,8 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "security/audit/list",
     "security/audit/record",
     "security/audit/clear",
+    "channels/get",
+    "channels/update",
     "goals/get",
     "goals/list",
     "goals/set",

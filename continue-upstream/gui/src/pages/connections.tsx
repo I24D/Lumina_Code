@@ -6,7 +6,13 @@ import {
   LinkIcon,
   MicrophoneIcon,
   PuzzlePieceIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
+import type {
+  LuminaChannelId,
+  LuminaChannelPatch,
+  LuminaChannelSnapshot,
+} from "core/channels/ChannelService";
 import type { LuminaRuntimeStatus } from "core/protocol/ideWebview";
 import type { StartTalkConfigStatus } from "core/startTalk/env";
 import { useContext, useEffect, useMemo, useState } from "react";
@@ -31,16 +37,32 @@ export default function ConnectionsPage() {
   const config = useAppSelector((state) => state.config.config);
   const [runtime, setRuntime] = useState<LuminaRuntimeStatus>();
   const [talk, setTalk] = useState<StartTalkConfigStatus>();
+  const [channels, setChannels] = useState<LuminaChannelSnapshot>();
+  const [trustedDrafts, setTrustedDrafts] = useState<
+    Partial<Record<LuminaChannelId, string>>
+  >({});
 
   useEffect(() => {
     let disposed = false;
     void Promise.all([
       ideMessenger.request("lumina/runtimeStatus", undefined),
       ideMessenger.request("startTalk/getConfigStatus", undefined),
-    ]).then(([runtimeResult, talkResult]) => {
+      ideMessenger.request("channels/get", undefined),
+    ]).then(([runtimeResult, talkResult, channelResult]) => {
       if (disposed) return;
       if (runtimeResult.status === "success") setRuntime(runtimeResult.content);
       if (talkResult.status === "success") setTalk(talkResult.content);
+      if (channelResult.status === "success") {
+        setChannels(channelResult.content);
+        setTrustedDrafts(
+          Object.fromEntries(
+            channelResult.content.channels.map((channel) => [
+              channel.id,
+              channel.trustedSenders.join(", "),
+            ]),
+          ),
+        );
+      }
     });
     return () => {
       disposed = true;
@@ -131,6 +153,14 @@ export default function ConnectionsPage() {
 
   const connected = cards.filter((card) => card.state === "connected").length;
 
+  const updateChannel = (id: LuminaChannelId, patch: LuminaChannelPatch) => {
+    void ideMessenger
+      .request("channels/update", { id, patch })
+      .then((result) => {
+        if (result.status === "success") setChannels(result.content);
+      });
+  };
+
   return (
     <div className="lumina-overview-page thin-scrollbar">
       <header className="lumina-overview-page__hero">
@@ -183,6 +213,106 @@ export default function ConnectionsPage() {
             </article>
           );
         })}
+      </section>
+
+      <section className="mx-auto mt-6 w-full max-w-6xl px-4 pb-8">
+        <div className="mb-3 flex items-start gap-2">
+          <ShieldCheckIcon className="mt-0.5 h-5 w-5 text-emerald-400" />
+          <div>
+            <h2 className="m-0 text-base font-semibold">
+              Contratos de canales
+            </h2>
+            <p className="text-description mb-0 mt-1 text-xs">
+              Manual permite leer o enviar desde una herramienta aprobada.
+              Sugerencias solo redacta borradores para contactos confiables;
+              nunca los envía. Full Access no puede omitir la confirmación.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {(channels?.channels ?? []).map((channel) => (
+            <article
+              key={channel.id}
+              data-testid={`channel-${channel.id}`}
+              className="bg-editor border-border rounded-lg border border-solid p-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="m-0 text-sm font-semibold">{channel.label}</h3>
+                  <div className="mt-0.5 text-[10px] text-emerald-400">
+                    Confirmación explícita obligatoria
+                  </div>
+                </div>
+                <label className="flex cursor-pointer items-center gap-2 text-xs">
+                  <input
+                    data-testid={`channel-enabled-${channel.id}`}
+                    type="checkbox"
+                    checked={channel.enabled}
+                    onChange={(event) =>
+                      updateChannel(channel.id, {
+                        enabled: event.target.checked,
+                      })
+                    }
+                  />
+                  {channel.enabled ? "Activo" : "Desactivado"}
+                </label>
+              </div>
+
+              <label className="mt-3 flex flex-col gap-1 text-xs">
+                Ingreso de notificaciones
+                <select
+                  data-testid={`channel-mode-${channel.id}`}
+                  className="border-border bg-vsc-background rounded border border-solid px-2 py-1.5 text-inherit"
+                  value={channel.mode}
+                  disabled={!channel.enabled}
+                  onChange={(event) =>
+                    updateChannel(channel.id, {
+                      mode: event.target.value as "manual" | "suggest",
+                    })
+                  }
+                >
+                  <option value="manual">Solo manual</option>
+                  <option value="suggest">Sugerir borradores</option>
+                </select>
+              </label>
+
+              <label className="mt-3 flex flex-col gap-1 text-xs">
+                Contactos confiables (separados por coma)
+                <div className="flex gap-2">
+                  <input
+                    data-testid={`channel-trusted-${channel.id}`}
+                    className="border-border bg-vsc-background min-w-0 flex-1 rounded border border-solid px-2 py-1.5 text-inherit"
+                    value={trustedDrafts[channel.id] ?? ""}
+                    disabled={!channel.enabled}
+                    onChange={(event) =>
+                      setTrustedDrafts((current) => ({
+                        ...current,
+                        [channel.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Ana, Equipo soporte"
+                  />
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded border-0 bg-[color:var(--vscode-button-background)] px-3 text-xs text-[color:var(--vscode-button-foreground)] disabled:opacity-50"
+                    disabled={!channel.enabled}
+                    onClick={() =>
+                      updateChannel(channel.id, {
+                        trustedSenders: (trustedDrafts[channel.id] ?? "")
+                          .split(",")
+                          .map((sender) => sender.trim())
+                          .filter(Boolean),
+                      })
+                    }
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </label>
+            </article>
+          ))}
+        </div>
       </section>
     </div>
   );

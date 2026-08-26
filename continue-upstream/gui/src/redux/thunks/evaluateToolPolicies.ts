@@ -66,6 +66,8 @@ async function evaluateToolPolicy(
 
   const dynamicPolicy = result.content.policy;
   const displayValue = result.content.displayValue;
+  const requiresExplicitApproval =
+    result.content.requiresExplicitApproval === true;
 
   // Ensure dynamic policy cannot be more lenient than base policy
   // Policy hierarchy (most restrictive to least): disabled > allowedWithPermission > allowedWithoutPermission
@@ -74,6 +76,17 @@ async function evaluateToolPolicy(
   }
   if (dynamicPolicy === "disabled") {
     return { policy: "disabled", displayValue, toolCallState };
+  }
+
+  // External messages and similarly irreversible channel actions always need
+  // a fresh click. Full Access is a convenience for coding tools, not consent
+  // to speak as the user.
+  if (requiresExplicitApproval) {
+    return {
+      policy: "allowedWithPermission",
+      displayValue,
+      toolCallState,
+    };
   }
 
   if (fullAccess) {
