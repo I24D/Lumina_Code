@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { encodeWav } from "./voiceBiometrics";
+import { encodeWav, normalizeSpeakerIdentification } from "./voiceBiometrics";
 
 describe("encodeWav", () => {
   it("prepends a valid 44-byte PCM WAV header", () => {
@@ -26,5 +26,30 @@ describe("encodeWav", () => {
     const wav = encodeWav(Buffer.alloc(64), 24000);
     expect(wav.readUInt32LE(24)).toBe(24000);
     expect(wav.readUInt32LE(28)).toBe(24000 * 2);
+  });
+});
+
+describe("normalizeSpeakerIdentification", () => {
+  it("rejects a positive match without a stable identity", () => {
+    expect(
+      normalizeSpeakerIdentification({ ok: true, matched: true, name: "Ada" }),
+    ).toEqual({ matched: false });
+  });
+
+  it("trims labels and bounds an invalid score", () => {
+    expect(
+      normalizeSpeakerIdentification({
+        ok: true,
+        matched: true,
+        identityId: "  ada-id  ",
+        name: "  Ada  ",
+        score: 7,
+      }),
+    ).toEqual({
+      matched: true,
+      identityId: "ada-id",
+      name: "Ada",
+      score: 1,
+    });
   });
 });

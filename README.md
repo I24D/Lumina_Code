@@ -162,25 +162,35 @@ duplicados. La ejecución remota permanece cerrada hasta disponer de
 emparejamiento y revocación seguros. Consulta
 [Dispositivo y workers](docs/DEVICES_AND_WORKERS.md).
 
+### Voz y multimedia robustas
+
+Start Talk selecciona micrófonos por su identificador real, comprueba la
+cancelación de eco aplicada, adapta el gate al ruido y detecta ambientes con
+voces solapadas. La biometría opcional queda vinculada al turno que originó la
+consulta, por lo que una respuesta tardía no puede atribuir a la persona
+equivocada una intervención posterior. Cámara, pantalla y voz conservan
+permisos separados. Consulta [Voz y multimedia](docs/VOICE_AND_MULTIMEDIA.md).
+
 ## Estado del proyecto / Project status
 
-| Área                                      | Estado público                                          |
-| ----------------------------------------- | ------------------------------------------------------- |
-| Extensión de VS Code para Windows x64     | **Estable y funcional desde el código fuente**          |
-| Development Host                          | **Verificado con launcher automatizado**                |
-| Generación e instalación manual del VSIX  | **Disponible y documentada**                            |
-| Start Talk y puente nativo de voz         | **Funcional; requiere Gemini API**                      |
-| Chat, edición y agente de código          | **Funcional; requiere configurar un modelo**            |
-| Metas, GitHub, cambios, panel y scheduler | **Funcionales y cubiertos por pruebas automatizadas**   |
-| Sesiones, forks y worktrees Git           | **Funcionales y cubiertos por pruebas automatizadas**   |
-| Workboard, tareas, actividad y dashboard  | **Persistentes y cubiertos por pruebas automatizadas**  |
-| Memoria local y réplica Supabase opcional | **Funcionales, con RLS y fallback local**               |
-| Skill Workshop y plugins locales          | **Funcionales, validados y cubiertos por pruebas**      |
-| Permisos, secretos y auditoría            | **Persistentes, redactados y cubiertos por pruebas**    |
-| WhatsApp y contratos de canales           | **Manuales por defecto; envíos con aprobación fija**    |
-| Dispositivo, workers y operaciones        | **Inventario local real; remoto cerrado por seguridad** |
-| Licencia y atribuciones                   | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE) |
-| Publicación en Visual Studio Marketplace  | Aún no disponible                                       |
+| Área                                      | Estado público                                           |
+| ----------------------------------------- | -------------------------------------------------------- |
+| Extensión de VS Code para Windows x64     | **Estable y funcional desde el código fuente**           |
+| Development Host                          | **Verificado con launcher automatizado**                 |
+| Generación e instalación manual del VSIX  | **Disponible y documentada**                             |
+| Start Talk y puente nativo de voz         | **Funcional; requiere Gemini API**                       |
+| Chat, edición y agente de código          | **Funcional; requiere configurar un modelo**             |
+| Metas, GitHub, cambios, panel y scheduler | **Funcionales y cubiertos por pruebas automatizadas**    |
+| Sesiones, forks y worktrees Git           | **Funcionales y cubiertos por pruebas automatizadas**    |
+| Workboard, tareas, actividad y dashboard  | **Persistentes y cubiertos por pruebas automatizadas**   |
+| Memoria local y réplica Supabase opcional | **Funcionales, con RLS y fallback local**                |
+| Skill Workshop y plugins locales          | **Funcionales, validados y cubiertos por pruebas**       |
+| Permisos, secretos y auditoría            | **Persistentes, redactados y cubiertos por pruebas**     |
+| WhatsApp y contratos de canales           | **Manuales por defecto; envíos con aprobación fija**     |
+| Dispositivo, workers y operaciones        | **Inventario local real; remoto cerrado por seguridad**  |
+| Voz, micrófono y multimedia               | **AEC real, turnos ordenados y varias voces detectadas** |
+| Licencia y atribuciones                   | Publicadas en [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE)  |
+| Publicación en Visual Studio Marketplace  | Aún no disponible                                        |
 
 El repositorio ya no depende de copias manuales de los módulos nativos usados por la extensión: los scripts preparan y validan SQLite, LanceDB y las dependencias empaquetadas necesarias. La distribución actual es una build comunitaria desde el código fuente; no es un VSIX firmado ni una publicación de Marketplace.
 

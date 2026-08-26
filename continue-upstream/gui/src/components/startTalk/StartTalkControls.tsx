@@ -12,6 +12,7 @@ import type {
   StartTalkSoundCategory,
 } from "core/startTalk";
 import styled from "styled-components";
+import type { MicrophoneDevice } from "./micCapture";
 
 export interface StartTalkLanguage {
   code: string;
@@ -31,7 +32,7 @@ export interface StartTalkControlsProps {
   onBidirectionalChange: (value: boolean) => void;
   voiceStyle: string;
   onVoiceStyleChange: (value: string) => void;
-  devices: string[];
+  devices: MicrophoneDevice[];
   selectedDevice: string;
   onDeviceChange: (device: string) => void;
   onRefreshDevices: () => void;
@@ -582,8 +583,8 @@ export function StartTalkControls(props: StartTalkControlsProps) {
               <option value="">Micrófono predeterminado</option>
             ) : (
               devices.map((device) => (
-                <option key={device} value={device}>
-                  {device}
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label}
                 </option>
               ))
             )}

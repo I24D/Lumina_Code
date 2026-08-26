@@ -202,11 +202,7 @@ import type {
 export type { StartTalkSessionMetrics, StartTalkTurnMetrics };
 
 /** Fase del stream de vídeo, para que la UI no mienta sobre lo que Lumina ve. */
-export type StartTalkVideoPhase =
-  | "starting"
-  | "live"
-  | "stopped"
-  | "error";
+export type StartTalkVideoPhase = "starting" | "live" | "stopped" | "error";
 
 /**
  * Cuánta voz le queda a Lumina por sonar en la cola de reproducción del
@@ -298,6 +294,8 @@ export type StartTalkCoreEvent =
       // Voice biometrics identified (or failed to identify) the current speaker.
       type: "speaker";
       sessionId: string;
+      /** Monotonic user-turn id. Lets clients discard late biometric results. */
+      turnId: number;
       /** Canonical identity id when matched. */
       identityId?: string;
       /** Human-readable speaker name when matched. */

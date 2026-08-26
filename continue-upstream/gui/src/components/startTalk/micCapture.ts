@@ -95,10 +95,13 @@ export interface MicCaptureSettings {
   sampleRate?: number;
 }
 
+export interface MicrophoneDevice {
+  deviceId: string;
+  label: string;
+}
+
 /** Micrófonos disponibles. Las etiquetas exigen permiso ya concedido. */
-export async function listMicrophones(): Promise<
-  Array<{ deviceId: string; label: string }>
-> {
+export async function listMicrophones(): Promise<MicrophoneDevice[]> {
   if (!navigator.mediaDevices?.enumerateDevices) {
     return [];
   }
@@ -213,7 +216,9 @@ export class MicCapture {
 
   /** True mientras el micrófono esté abierto y la pista viva. */
   isActive(): boolean {
-    return Boolean(this.stream?.getAudioTracks().some((t) => t.readyState === "live"));
+    return Boolean(
+      this.stream?.getAudioTracks().some((t) => t.readyState === "live"),
+    );
   }
 
   /** Reanuda el contexto si el sistema lo suspendió. */

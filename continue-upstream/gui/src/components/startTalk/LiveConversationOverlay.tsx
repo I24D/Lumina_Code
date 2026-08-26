@@ -1564,7 +1564,9 @@ export function LiveConversationOverlay({
   );
   const [phoneAssistantWakeWord, setPhoneAssistantWakeWord] =
     useState(readInitialWakeWord);
-  const [audioDevices, setAudioDevices] = useState<string[]>([]);
+  const [audioDevices, setAudioDevices] = useState<
+    Array<{ deviceId: string; label: string }>
+  >([]);
   const [selectedDevice, setSelectedDevice] = useState("");
   const [exportState, setExportState] = useState<"idle" | "done" | "empty">(
     "idle",
@@ -1699,7 +1701,14 @@ export function LiveConversationOverlay({
     if (!isOpen) return;
     let cancelled = false;
     void listAudioDevices().then((devices) => {
-      if (!cancelled) setAudioDevices(devices);
+      if (!cancelled) {
+        setAudioDevices(devices);
+        setSelectedDevice((current) =>
+          devices.some((device) => device.deviceId === current)
+            ? current
+            : (devices[0]?.deviceId ?? ""),
+        );
+      }
     });
     return () => {
       cancelled = true;
@@ -1708,14 +1717,26 @@ export function LiveConversationOverlay({
 
   const handleDeviceChange = useCallback(
     (device: string) => {
+      const previous = selectedDevice;
       setSelectedDevice(device);
-      void switchAudioDevice(device);
+      void switchAudioDevice(device).then((changed) => {
+        if (!changed) {
+          setSelectedDevice(previous);
+        }
+      });
     },
-    [switchAudioDevice],
+    [selectedDevice, switchAudioDevice],
   );
 
   const handleRefreshDevices = useCallback(() => {
-    void listAudioDevices().then(setAudioDevices);
+    void listAudioDevices().then((devices) => {
+      setAudioDevices(devices);
+      setSelectedDevice((current) =>
+        devices.some((device) => device.deviceId === current)
+          ? current
+          : (devices[0]?.deviceId ?? ""),
+      );
+    });
   }, [listAudioDevices]);
 
   const handleExportTranscript = useCallback(async () => {
@@ -2267,7 +2288,8 @@ export function LiveConversationOverlay({
                     : "Este micrófono no aceptó cancelación de eco. Puede oírse a sí misma por los altavoces."
                 }
               >
-                eco <b>{micSettings.echoCancellation ? "cancelado" : "sin AEC"}</b>
+                eco{" "}
+                <b>{micSettings.echoCancellation ? "cancelado" : "sin AEC"}</b>
               </Metric>
             ) : null}
             {sessionMetrics && sessionMetrics.turns > 0 ? (
@@ -2359,7 +2381,13 @@ export function LiveConversationOverlay({
                   Conversación en vivo
                 </ConversationTitle>
               </ConversationHeading>
-              <ConversationHint>Solo tú y Lumina</ConversationHint>
+              <ConversationHint>
+                {isCrowded
+                  ? "Varias voces detectadas"
+                  : speaker?.matched && speaker.name
+                    ? `Habla ${speaker.name}`
+                    : "Solo tú y Lumina"}
+              </ConversationHint>
             </ConversationHeader>
 
             <TranscriptPanel
@@ -2368,8 +2396,14 @@ export function LiveConversationOverlay({
               aria-label="Conversación de Start Talk"
               aria-live="polite"
             >
-              {speaker?.name && !speaker.name.trim().startsWith("<") ? (
-                <SpeakerLabel>{speaker.name}</SpeakerLabel>
+              {speaker ? (
+                <SpeakerLabel>
+                  {speaker.matched &&
+                  speaker.name &&
+                  !speaker.name.trim().startsWith("<")
+                    ? speaker.name
+                    : "Voz no reconocida"}
+                </SpeakerLabel>
               ) : null}
               {userTranscript ? (
                 <TranscriptMessage $roomy={isRoomy} $source="user">

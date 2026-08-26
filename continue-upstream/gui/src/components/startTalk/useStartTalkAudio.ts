@@ -41,8 +41,10 @@ import {
   MicCapture,
   listMicrophones,
   type MicCaptureSettings,
+  type MicrophoneDevice,
 } from "./micCapture";
 import { PcmPlayer } from "./pcmPlayer";
+import { resolveSpeakerUpdate, type SpeakerInfo } from "./speakerState";
 import { buildChatResponseSpeechPrompt } from "./voiceDelegation";
 
 // How long, after Start Talk asks "¿quieres que le responda?", a spoken
@@ -95,12 +97,6 @@ function mergeTranscriptChunk(current: string, next: string) {
     /[.!?]$/.test(current.trimEnd()) && /^[A-Za-z0-9]/.test(next);
 
   return `${current}${shouldSeparate ? " " : ""}${next}`;
-}
-
-export interface SpeakerInfo {
-  identityId?: string;
-  name?: string;
-  score?: number;
 }
 
 /** Lo que la UI sabe del stream de vídeo, siempre según lo que reporta core. */
@@ -264,6 +260,7 @@ export function useStartTalkAudio({
   );
   const [micLevel, setMicLevel] = useState(0);
   const [speaker, setSpeaker] = useState<SpeakerInfo | null>(null);
+  const latestSpeakerTurnIdRef = useRef(0);
   const [lastSoundEvent, setLastSoundEvent] =
     useState<StartTalkSoundCategory | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -1239,6 +1236,9 @@ export function useStartTalkAudio({
 
       if (event.type === "transcript") {
         if (event.source === "user") {
+          // Never carry the previous person's identity into a new utterance
+          // while the asynchronous biometric result is still pending.
+          setSpeaker(null);
           lastUserActivityAtRef.current = Date.now();
           serverTurnCompleteRef.current = false;
           setUserTranscript(event.text);
@@ -1333,13 +1333,15 @@ export function useStartTalkAudio({
       }
 
       if (event.type === "speaker") {
-        if (event.matched) {
-          setSpeaker({
-            identityId: event.identityId,
-            name: event.name,
-            score: event.score,
-          });
+        const update = resolveSpeakerUpdate(
+          latestSpeakerTurnIdRef.current,
+          event,
+        );
+        if (!update) {
+          return;
         }
+        latestSpeakerTurnIdRef.current = update.latestTurnId;
+        setSpeaker(update.speaker);
         return;
       }
 
@@ -1485,25 +1487,45 @@ export function useStartTalkAudio({
    * con FFmpeg; ahora el micrófono lo abre el WebView para poder cancelar el
    * eco, así que es él quien conoce los dispositivos.
    */
-  const listAudioDevices = useCallback(async (): Promise<string[]> => {
+  const listAudioDevices = useCallback(async (): Promise<
+    MicrophoneDevice[]
+  > => {
     try {
       const mics = await listMicrophones();
       micDevicesRef.current = mics;
-      return mics.map((mic) => mic.label);
+      return mics;
     } catch {
       return [];
     }
   }, []);
 
-  const switchAudioDevice = useCallback(async (deviceLabel: string) => {
+  const switchAudioDevice = useCallback(async (deviceId: string) => {
     const target = micDevicesRef.current.find(
-      (mic) => mic.label === deviceLabel,
+      (mic) => mic.deviceId === deviceId,
     );
     if (!target || !micCaptureRef.current) {
-      return;
+      return false;
     }
-    selectedMicIdRef.current = target.deviceId;
-    await startMicCaptureRef.current(target.deviceId);
+    const previousDeviceId = selectedMicIdRef.current;
+    try {
+      await startMicCaptureRef.current(target.deviceId);
+      setErrorMessage(undefined);
+      return true;
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cambiar el micrófono.",
+      );
+      // MicCapture.start closes the previous stream first. Restore it when the
+      // requested device disappeared or rejected the exact-device constraint.
+      if (previousDeviceId && previousDeviceId !== target.deviceId) {
+        await startMicCaptureRef
+          .current(previousDeviceId)
+          .catch(() => undefined);
+      }
+      return false;
+    }
   }, []);
 
   /**
@@ -1583,6 +1605,7 @@ export function useStartTalkAudio({
     setUserTranscript("");
     setAssistantTranscript("");
     setSpeaker(null);
+    latestSpeakerTurnIdRef.current = 0;
     setLastSoundEvent(null);
     setMicLevel(0);
     setIsMuted(false);

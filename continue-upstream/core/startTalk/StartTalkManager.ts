@@ -269,7 +269,8 @@ const LUMINA_FUNCTIONS: FunctionDeclaration[] = [
         },
         application: {
           type: "string",
-          description: "Optional app/source filter, e.g. WhatsApp, Outlook, Teams.",
+          description:
+            "Optional app/source filter, e.g. WhatsApp, Outlook, Teams.",
         },
         all: {
           type: "boolean",
@@ -469,6 +470,8 @@ type SessionState = {
   // is enabled, so we can identify the speaker when the turn ends.
   turnAudio: Buffer[];
   turnAudioBytes: number;
+  /** Monotonic id for biometric results; asynchronous replies may arrive late. */
+  speakerTurnId: number;
   // Push-to-talk / mute: when true the mic stream is not forwarded to Gemini.
   muted: boolean;
   // Optional non-speech sound-event detector (opt-in).
@@ -622,6 +625,7 @@ export class StartTalkManager {
       transcript: [],
       turnAudio: [],
       turnAudioBytes: 0,
+      speakerTurnId: 0,
       muted: false,
       voiceStyle: isInterpreter ? undefined : voiceStyle,
       lastLevelEmit: 0,
@@ -827,6 +831,7 @@ export class StartTalkManager {
       {
         onActivityStart: () => {
           // A new user turn begins: reset the biometric audio buffer.
+          state.speakerTurnId += 1;
           state.turnAudio = [];
           state.turnAudioBytes = 0;
           state.metrics.onActivityStart();
@@ -852,7 +857,7 @@ export class StartTalkManager {
           state.metrics.onActivityEnd();
           this.safeRealtimeInput(state, { activityEnd: {} });
           if (captureBiometrics) {
-            this.identifyTurnSpeaker(sessionId, state);
+            this.identifyTurnSpeaker(sessionId, state, state.speakerTurnId);
           }
         },
         onEnvironmentChange: (crowded) => {
@@ -888,10 +893,7 @@ export class StartTalkManager {
    * reabre mientras ella todavía suena, capta su propia voz por los altavoces
    * y la corta a media respuesta.
    */
-  reportPlayback({
-    sessionId,
-    remainingMs,
-  }: StartTalkPlaybackReport): void {
+  reportPlayback({ sessionId, remainingMs }: StartTalkPlaybackReport): void {
     const state = this.sessions.get(sessionId);
     if (!state) {
       return;
@@ -1009,7 +1011,11 @@ export class StartTalkManager {
    * and emits a "speaker" event. Best-effort and fire-and-forget: the buffered
    * turn audio is consumed and any failure degrades to no event.
    */
-  private identifyTurnSpeaker(sessionId: string, state: SessionState): void {
+  private identifyTurnSpeaker(
+    sessionId: string,
+    state: SessionState,
+    turnId: number,
+  ): void {
     const chunks = state.turnAudio;
     state.turnAudio = [];
     state.turnAudioBytes = 0;
@@ -1023,16 +1029,17 @@ export class StartTalkManager {
     }
     void identifySpeaker(pcm, 16000)
       .then((result) => {
-        if (!this.sessions.has(sessionId) || !result.matched) {
+        if (this.sessions.get(sessionId) !== state) {
           return;
         }
         this.emit({
           type: "speaker",
           sessionId,
-          identityId: result.identityId,
-          name: result.name,
-          score: result.score,
-          matched: true,
+          turnId,
+          identityId: result.matched ? result.identityId : undefined,
+          name: result.matched ? result.name : undefined,
+          score: result.matched ? result.score : undefined,
+          matched: result.matched,
         });
       })
       .catch(() => {
@@ -1778,7 +1785,9 @@ export class StartTalkManager {
         return {
           ok: false,
           error:
-            typeof data.error === "string" ? data.error : `HTTP ${response.status}`,
+            typeof data.error === "string"
+              ? data.error
+              : `HTTP ${response.status}`,
         };
       }
       return { ...data, ok: data.ok === true };
@@ -1815,7 +1824,9 @@ export class StartTalkManager {
             response: {
               error: !contact
                 ? "contact_required"
-                : (replyValidation.ok ? "reply_blocked" : replyValidation.error),
+                : replyValidation.ok
+                  ? "reply_blocked"
+                  : replyValidation.error,
               sent: false,
             },
           },
@@ -1828,7 +1839,9 @@ export class StartTalkManager {
           id,
           label: "WhatsApp reply",
           status: "error",
-          detail: !contact ? "Missing contact" : "Reply blocked by safety policy",
+          detail: !contact
+            ? "Missing contact"
+            : "Reply blocked by safety policy",
         },
       });
       return;
@@ -1880,7 +1893,9 @@ export class StartTalkManager {
         status: sent ? "done" : "error",
         detail: sent
           ? `Replied to ${contact}`
-          : (typeof result.error === "string" ? result.error : "Reply failed"),
+          : typeof result.error === "string"
+            ? result.error
+            : "Reply failed",
       },
     });
   }
@@ -1902,7 +1917,10 @@ export class StartTalkManager {
           {
             id,
             name: DISMISS_NOTIFICATION_FUNCTION_NAME,
-            response: { error: "specify match, application, or all", dismissed: 0 },
+            response: {
+              error: "specify match, application, or all",
+              dismissed: 0,
+            },
           },
         ],
       });
@@ -1964,7 +1982,9 @@ export class StartTalkManager {
           ? clearedAll
             ? "Cleared all notifications"
             : `Dismissed ${dismissedCount}`
-          : (typeof result.error === "string" ? result.error : "Dismiss failed"),
+          : typeof result.error === "string"
+            ? result.error
+            : "Dismiss failed",
       },
     });
   }
@@ -2232,7 +2252,8 @@ export class StartTalkManager {
             ],
           });
           state?.metrics.onStayedSilent();
-          const reason = (call.args as { reason?: unknown } | undefined)?.reason;
+          const reason = (call.args as { reason?: unknown } | undefined)
+            ?.reason;
           this.emit({
             type: "stayedSilent",
             sessionId,

@@ -23,6 +23,37 @@ export interface SpeakerIdentification {
   score?: number;
 }
 
+type SpeakerIdentificationPayload = {
+  ok?: boolean;
+  matched?: boolean;
+  identityId?: unknown;
+  name?: unknown;
+  score?: unknown;
+};
+
+/** Validates the untrusted response returned by the optional biometrics API. */
+export function normalizeSpeakerIdentification(
+  data: SpeakerIdentificationPayload,
+): SpeakerIdentification {
+  if (!data?.ok || !data.matched) {
+    return { matched: false };
+  }
+  const identityId =
+    typeof data.identityId === "string"
+      ? data.identityId.trim().slice(0, 160)
+      : undefined;
+  const name =
+    typeof data.name === "string" ? data.name.trim().slice(0, 120) : undefined;
+  const score =
+    typeof data.score === "number" && Number.isFinite(data.score)
+      ? Math.max(0, Math.min(1, data.score))
+      : undefined;
+  if (!identityId) {
+    return { matched: false };
+  }
+  return { matched: true, identityId, name, score };
+}
+
 /** Voice biometrics is opt-in (requires the backend Python bridge). */
 export function biometricsEnabled(): boolean {
   const flag = String(process.env.START_TALK_BIOMETRICS ?? "").toLowerCase();
@@ -96,22 +127,9 @@ export async function identifySpeaker(
     if (!response.ok) {
       return { matched: false };
     }
-    const data = (await response.json()) as {
-      ok?: boolean;
-      matched?: boolean;
-      identityId?: string;
-      name?: string;
-      score?: number;
-    };
-    if (!data?.ok || !data.matched) {
-      return { matched: false };
-    }
-    return {
-      matched: true,
-      identityId: data.identityId,
-      name: data.name,
-      score: typeof data.score === "number" ? data.score : undefined,
-    };
+    return normalizeSpeakerIdentification(
+      (await response.json()) as SpeakerIdentificationPayload,
+    );
   } catch {
     return { matched: false };
   } finally {
