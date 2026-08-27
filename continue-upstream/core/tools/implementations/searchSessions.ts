@@ -51,15 +51,23 @@ export const searchSessionsImpl: ToolImpl = async (args, extras) => {
       : undefined;
 
   // Opt-in, and deliberately forgiving: a session's workspaceDirectory is
-  // whatever the GUI recorded, which need not match the IDE's URI form. If the
-  // two cannot be reconciled the filter is dropped rather than silently
-  // returning nothing, because "searched everything" is a recoverable answer
-  // and "found nothing" is not.
+  // whatever the GUI recorded, which need not match the IDE's URI form. A
+  // session forked into a Git worktree records the worktree path while the IDE
+  // still reports the folder that is open, so the two disagree for work the
+  // user thinks of as the same project. When the filter finds nothing the
+  // search is retried across everything, because "searched everything" is a
+  // recoverable answer and "found nothing" is not — it sends the agent off to
+  // solve again something it already solved.
   let workspaceDirectory: string | undefined;
   if (args.currentWorkspaceOnly === true) {
     const dirs = await extras.ide.getWorkspaceDirs();
     workspaceDirectory = dirs[0];
   }
+
+  /** Note appended when the workspace filter had to be dropped to find anything. */
+  const WIDENED_NOTE =
+    "\n\nNothing matched inside the current workspace, so every saved session " +
+    "was searched. These may come from a different project or from a worktree.";
 
   if (sessionId && aroundMessageIndex !== undefined) {
     const messages = await index.scroll(sessionId, aroundMessageIndex);
@@ -101,7 +109,12 @@ export const searchSessionsImpl: ToolImpl = async (args, extras) => {
       // A failed refresh only means results may be stale; the existing index
       // is still worth searching.
     }
-    const hits = await index.search({ query, limit, workspaceDirectory });
+    let hits = await index.search({ query, limit, workspaceDirectory });
+    let widened = false;
+    if (hits.length === 0 && workspaceDirectory !== undefined) {
+      hits = await index.search({ query, limit });
+      widened = hits.length > 0;
+    }
     if (hits.length === 0) {
       return [
         {
@@ -127,7 +140,8 @@ export const searchSessionsImpl: ToolImpl = async (args, extras) => {
         description: query,
         content:
           `${rendered}\n\nTo read one in context, call this tool again with its ` +
-          "sessionId and aroundMessageIndex.",
+          "sessionId and aroundMessageIndex." +
+          (widened ? WIDENED_NOTE : ""),
       },
     ];
   }
@@ -137,7 +151,12 @@ export const searchSessionsImpl: ToolImpl = async (args, extras) => {
   } catch {
     // Browse reads the session list directly, so a stale index costs nothing.
   }
-  const sessions = await index.browse(limit ?? 20, workspaceDirectory);
+  let sessions = await index.browse(limit ?? 20, workspaceDirectory);
+  let browseWidened = false;
+  if (sessions.length === 0 && workspaceDirectory !== undefined) {
+    sessions = await index.browse(limit ?? 20);
+    browseWidened = sessions.length > 0;
+  }
   if (sessions.length === 0) {
     return [
       {
@@ -151,13 +170,14 @@ export const searchSessionsImpl: ToolImpl = async (args, extras) => {
     {
       name: `${sessions.length} recent session${sessions.length === 1 ? "" : "s"}`,
       description: "",
-      content: sessions
-        .map(
-          (session) =>
-            `- "${session.title || "untitled"}" — ${formatDate(session.dateCreated)}, ` +
-            `${session.messageCount} messages, sessionId: ${session.sessionId}`,
-        )
-        .join("\n"),
+      content:
+        sessions
+          .map(
+            (session) =>
+              `- "${session.title || "untitled"}" — ${formatDate(session.dateCreated)}, ` +
+              `${session.messageCount} messages, sessionId: ${session.sessionId}`,
+          )
+          .join("\n") + (browseWidened ? WIDENED_NOTE : ""),
     },
   ];
 };
