@@ -44,6 +44,15 @@ export default defineConfig(() => ({
     globals: true,
     environment: "jsdom",
     setupFiles: "./src/util/test/setupTests.ts",
+    /**
+     * Vitest defaults to 5s and this suite does not fit in it: a full run
+     * spends ~18 minutes, most of it in collect and in standing up jsdom, and
+     * a test that renders a settings page and drives it through user-event was
+     * timing out on the render rather than on anything it asserts. 30s covers
+     * that on a loaded machine while still failing a genuine hang.
+     */
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     onConsoleLog(log, type) {
       if (type === "stderr") {
         if (
