@@ -1,6 +1,7 @@
 import type { IDE, Skill } from "../index.js";
 import { getGlobalFolderWithName } from "../util/paths.js";
 import { localPathToUri } from "../util/pathToUri.js";
+import { slugifyName } from "../util/text.js";
 import { joinPathsToUri } from "../util/uri.js";
 import {
   hasBlockingFinding,
@@ -26,13 +27,7 @@ export interface SkillSaveResult {
 }
 
 export function skillSlug(name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-")
-    .replace(/^-+|-+$/gu, "")
-    .slice(0, 60);
-  return slug || "skill";
+  return slugifyName(name.trim(), "skill");
 }
 
 export function renderSkillMarkdown(draft: SkillDraft): string {

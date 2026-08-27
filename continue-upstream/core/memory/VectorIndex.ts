@@ -1,3 +1,4 @@
+import { foldDiacritics } from "../util/text.js";
 import { VectorSearchResult } from "./types.js";
 
 export type VectorIndexItem<T> = {
@@ -7,9 +8,12 @@ export type VectorIndexItem<T> = {
   item: T;
 };
 
+// Accents are folded before splitting. Without that step every accented letter
+// acts as a separator, so "número" indexed as "num"/"ero" and a search for
+// "numero" — the same word without the accent — matched nothing.
 function tokenize(text: string): Set<string> {
   return new Set(
-    text
+    foldDiacritics(text)
       .toLowerCase()
       .split(/[^a-z0-9_]+/u)
       .filter((part) => part.length > 2),

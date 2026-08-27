@@ -1,19 +1,16 @@
+import { slugifyName } from "../util/text.js";
 import { ReflectionInsight, SkillCandidate } from "./types.js";
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-")
-    .replace(/^-|-$/gu, "")
-    .slice(0, 48);
-}
 
 export class ConsolidationService {
   consolidate(insights: ReflectionInsight[]): SkillCandidate[] {
     return insights
       .filter((insight) => insight.severity !== "info")
       .map((insight) => {
-        const name = slugify(insight.title) || "lumina-learned-recovery";
+        const name = slugifyName(
+          insight.title,
+          "lumina-learned-recovery",
+          48,
+        );
         return {
           name,
           description: insight.summary,

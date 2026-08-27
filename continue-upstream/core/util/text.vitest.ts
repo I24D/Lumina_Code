@@ -2,10 +2,47 @@ import { describe, expect, it } from "vitest";
 import {
   capitalizeFirstLetter,
   escapeForSVG,
+  foldDiacritics,
   kebabOfStr,
   kebabOfThemeStr,
   replaceEscapedCharacters,
+  slugifyName,
 } from "./text";
+
+describe("foldDiacritics", () => {
+  it("folds Spanish accents onto their base letter", () => {
+    expect(foldDiacritics("número")).toBe("numero");
+    expect(foldDiacritics("Añadir módulo")).toBe("Anadir modulo");
+    expect(foldDiacritics("SESIÓN")).toBe("SESION");
+  });
+
+  it("leaves unaccented text untouched", () => {
+    expect(foldDiacritics("workboard")).toBe("workboard");
+    expect(foldDiacritics("")).toBe("");
+  });
+});
+
+describe("slugifyName", () => {
+  it("keeps an accented name readable instead of shredding it", () => {
+    // Antes daba "a-adir-m-dulo": cada letra acentuada actuaba de separador,
+    // así que el nombre dejaba de ser tecleable en read_skill.
+    expect(slugifyName("Añadir módulo", "skill")).toBe("anadir-modulo");
+    expect(slugifyName("Revisión de código", "skill")).toBe(
+      "revision-de-codigo",
+    );
+  });
+
+  it("trims hyphens left by the length cap, not before it", () => {
+    expect(slugifyName("desplegar entorno", "skill", 10)).toBe("desplegar");
+  });
+
+  it("falls back when nothing sluggable survives", () => {
+    expect(slugifyName("¿¡!?", "skill")).toBe("skill");
+    expect(slugifyName("   ", "lumina-learned-recovery")).toBe(
+      "lumina-learned-recovery",
+    );
+  });
+});
 
 describe("capitalizeFirstLetter", () => {
   it("should capitalize the first letter of a string", () => {
