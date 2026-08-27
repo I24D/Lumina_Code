@@ -53,7 +53,9 @@ Ese comando es importante porque crea el `OrbBridgeServer` (WebSocket en
 Si se ejecuta el `.exe` a mano, la ventana nativa abre pero no responde: no
 tiene puente con Lumina Code.
 
-Requisito: `GEMINI_API_KEY` en el `.env` de la raiz (ya esta configurada).
+Requisito: la clave del proveedor de voz en el `.env` de la raiz.
+`OPENAI_API_KEY` para la configuracion por defecto (`gpt-realtime-2.1`, voz
+`marin`), o `GEMINI_API_KEY` si prefieres Gemini Live.
 
 ## Que hay que reconstruir segun lo que toques
 
@@ -195,11 +197,11 @@ Invoke-RestMethod https://mcp.luminaopenia.com/health
 
 ```powershell
 Set-Location "C:\Lumina Code\continue-upstream\core"
-npx vitest run startTalk        # 117 tests
+npx vitest run startTalk        # 149 tests
 npx tsc -p ./ --noEmit
 
 Set-Location "C:\Lumina Code\continue-upstream\gui"
-npx vitest run src/components/startTalk   # 38 tests
+npx vitest run src/components/startTalk   # 45 tests
 npx tsc --noEmit -p tsconfig.json
 ```
 

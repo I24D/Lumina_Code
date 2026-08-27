@@ -265,7 +265,8 @@ Lumina Code permite configurar otros proveedores, pero la configuración de refe
 | ------------------------------------------ | ------------ | -------------------------------------- | ------------------------------------ |
 | Chat principal, edición y agente de código | Ollama Cloud | `kimi-k3:cloud`                        | API key de Ollama                    |
 | Modelo alternativo de chat y agente        | Ollama Cloud | `glm-5.2:cloud`                        | La misma API key de Ollama           |
-| Voz en tiempo real mediante Start Talk     | Gemini Live  | `gemini-2.5-flash-native-audio-latest` | `GEMINI_API_KEY` de Google AI Studio |
+| Voz en tiempo real mediante Start Talk     | OpenAI Realtime | `gpt-realtime-2.1` (voz `marin`)     | `OPENAI_API_KEY`                     |
+| Alternativa de voz en tiempo real          | Gemini Live  | `gemini-3.1-flash-live-preview` (voz `Leda`) | `GEMINI_API_KEY` de Google AI Studio |
 
 #### Chat y agente: Kimi K3 con GLM-5.2 disponible
 
@@ -279,29 +280,41 @@ Lumina Code permite configurar otros proveedores, pero la configuración de refe
 
 Las fichas oficiales y su disponibilidad se encuentran en [Ollama Library: Kimi K3](https://ollama.com/library/kimi-k3) y [Ollama Library: GLM 5.2](https://ollama.com/library/glm-5.2). Ollama Cloud evita necesitar una GPU local capaz de ejecutar estos modelos, pero requiere una cuenta y está sujeto a los límites y precios de Ollama.
 
-#### Start Talk: Gemini Live
+#### Start Talk: OpenAI Realtime (o Gemini Live)
 
-Crea una clave para Gemini API en [Google AI Studio](https://aistudio.google.com/api-keys) y guárdala en un archivo `.env` privado. Para el flujo de desarrollo documentado, puede colocarse en la raíz del clon:
+Start Talk viene configurado con la Realtime API de OpenAI y su modelo de voz
+más reciente, `gpt-realtime-2.1`, con la voz **Marin** (femenina y joven). Crea
+una clave en [OpenAI](https://platform.openai.com/api-keys) y guárdala en un
+archivo `.env` privado. Para el flujo de desarrollo documentado, puede colocarse
+en la raíz del clon:
 
 ```dotenv
 # C:\ruta\a\Lumina_Code\.env
-GEMINI_API_KEY=<TU_API_KEY_DE_GEMINI>
+OPENAI_API_KEY=<TU_API_KEY_DE_OPENAI>
 
-# Opcional: coincide con el modelo de voz seleccionado actualmente por defecto.
-START_TALK_GEMINI_MODEL=gemini-2.5-flash-native-audio-latest
+# Opcionales: coinciden con los valores por defecto.
+START_TALK_OPENAI_MODEL=gpt-realtime-2.1
+START_TALK_OPENAI_VOICE=marin
 ```
 
-Start Talk busca `GEMINI_API_KEY` en el entorno y en archivos `.env` ascendiendo desde el workspace. También puedes indicar otro archivo mediante la opción de VS Code `lumina.startTalk.envFile`; la extensión importa esa configuración a Secret Storage para reutilizarla en distintos proyectos. Reinicia o recarga el Extension Development Host después de cambiar estas variables.
+Para usar Gemini Live en su lugar, crea la clave en
+[Google AI Studio](https://aistudio.google.com/api-keys) y pon `GEMINI_API_KEY`
+(con `START_TALK_GEMINI_MODEL` y `START_TALK_GEMINI_VOICE` si quieres fijar
+modelo y voz; la voz femenina joven de Gemini es `Leda`). Con las dos claves
+puestas, `START_TALK_PROVIDER` decide cuál manda.
 
-También puedes configurar la voz desde **Configuración → Start Talk**. La clave
-nueva se entrega al host para guardarla en Secret Storage y nunca se devuelve al
-webview. Un `GEMINI_API_KEY` presente en el `.env` del workspace conserva
-prioridad sobre esa configuración global.
+Start Talk busca esas variables en el entorno y en archivos `.env` ascendiendo desde el workspace. También puedes indicar otro archivo mediante la opción de VS Code `lumina.startTalk.envFile`; la extensión importa esa configuración a Secret Storage para reutilizarla en distintos proyectos. Reinicia o recarga el Extension Development Host después de cambiar estas variables.
+
+También puedes configurar proveedor, modelo y voz desde **Configuración → Start
+Talk**. La clave nueva se entrega al host para guardarla en Secret Storage y
+nunca se devuelve al webview; cada proveedor tiene su propio secreto, así que
+cambiar de uno a otro no borra la clave del anterior. Una clave presente en el
+`.env` del workspace conserva prioridad sobre esa configuración global.
 
 > [!CAUTION]
-> Las claves de Ollama y Gemini son credenciales diferentes y no son intercambiables. No pegues valores reales en este README, commits, issues, capturas o archivos versionados. El `.env` raíz está ignorado por Git; verifica siempre `git status` antes de publicar cambios.
+> Las claves de Ollama, OpenAI y Gemini son credenciales diferentes y no son intercambiables. No pegues valores reales en este README, commits, issues, capturas o archivos versionados. El `.env` raíz está ignorado por Git; verifica siempre `git status` antes de publicar cambios.
 
-**English:** For the known-working reference setup, use Ollama Cloud with `kimi-k3:cloud` as the primary coding agent and keep `glm-5.2:cloud` configured as the alternative. Start Talk uses a separate Gemini API key for its real-time voice model. Keep both credentials private and never commit them.
+**English:** For the known-working reference setup, use Ollama Cloud with `kimi-k3:cloud` as the primary coding agent and keep `glm-5.2:cloud` configured as the alternative. Start Talk uses a separate voice credential — an OpenAI key for `gpt-realtime-2.1` by default, or a Gemini key for Gemini Live. Keep every credential private and never commit them.
 
 #### Lectura de respuestas de los chats
 

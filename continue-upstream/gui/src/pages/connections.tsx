@@ -31,6 +31,13 @@ type ConnectionCard = {
   path: string;
 };
 
+/** Cada proveedor tiene su propia voz guardada; solo aplica la del activo. */
+function activeVoiceName(talk: StartTalkConfigStatus): string | undefined {
+  return talk.provider === "openai-realtime"
+    ? talk.openAiVoiceName
+    : talk.voiceName;
+}
+
 export default function ConnectionsPage() {
   const navigate = useNavigate();
   const ideMessenger = useContext(IdeMessengerContext);
@@ -127,8 +134,10 @@ export default function ConnectionsPage() {
         description:
           "Conversación de voz nativa y delegación autorizada al agente.",
         detail: talk?.configured
-          ? `Configurado · ${talk.voiceName || "voz predeterminada"}`
-          : "Gemini API pendiente",
+          ? `${talk.provider === "openai-realtime" ? "OpenAI Realtime" : "Gemini Live"} · ${activeVoiceName(talk) || "voz predeterminada"}`
+          : talk?.provider === "gemini-live"
+            ? "Gemini API pendiente"
+            : "OpenAI API pendiente",
         state: talk?.configured ? "connected" : "attention",
         icon: MicrophoneIcon,
         action: "Configurar voz",

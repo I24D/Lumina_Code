@@ -28,17 +28,25 @@ type MockResponseHandlers = Partial<{
 const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
   "startTalk/getConfigStatus": {
     configured: true,
+    provider: "openai-realtime",
     source: "secureStorage",
-    model: "gemini-2.5-flash-native-audio-latest",
+    geminiConfigured: true,
+    openAiConfigured: true,
+    model: "gpt-realtime-2.1",
     thinkingLevel: "medium",
     voiceName: "Leda",
+    openAiVoiceName: "marin",
   },
   "startTalk/configure": {
     configured: true,
+    provider: "openai-realtime",
     source: "secureStorage",
-    model: "gemini-2.5-flash-native-audio-latest",
+    geminiConfigured: true,
+    openAiConfigured: true,
+    model: "gpt-realtime-2.1",
     thinkingLevel: "medium",
     voiceName: "Leda",
+    openAiVoiceName: "marin",
   },
   "lumina/runtimeStatus": {
     state: "connected",

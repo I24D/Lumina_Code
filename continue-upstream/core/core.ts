@@ -107,12 +107,15 @@ import {
 } from "./protocol/core";
 import type { IMessenger, Message } from "./protocol/messenger";
 import {
-  resolveStartTalkGeminiEnv,
-  selectStartTalkGeminiEnv,
+  hasVoiceCredentials,
+  resolveStartTalkProvider,
+  resolveStartTalkVoiceEnv,
+  selectStartTalkVoiceEnv,
   type StartTalkConfigStatus,
   type StartTalkConfigUpdate,
-  type StartTalkGeminiConfigStore,
+  type StartTalkVoiceConfigStore,
 } from "./startTalk/env.js";
+import { resolveVoiceForProvider } from "./startTalk/voices.js";
 import { clearGoal, getGoal, listGoals, setGoal } from "./goals/goalStore.js";
 import {
   applyVerdict,
@@ -195,7 +198,7 @@ export class Core {
   constructor(
     private readonly messenger: IMessenger<ToCoreProtocol, FromCoreProtocol>,
     private readonly ide: IDE,
-    private readonly startTalkConfigStore?: StartTalkGeminiConfigStore,
+    private readonly startTalkConfigStore?: StartTalkVoiceConfigStore,
   ) {
     try {
       // Ensure .continue directory is created
@@ -1098,9 +1101,10 @@ export class Core {
     );
 
     on("startTalk/connect", async (msg) => {
-      const { apiKey, model, thinkingLevel, voiceName } =
-        await this.getStartTalkGeminiConfig(msg.data.preferredModel);
+      const { provider, apiKey, model, thinkingLevel, voiceName } =
+        await this.getStartTalkVoiceConfig(msg.data.preferredModel);
       return this.startTalkManager.connect({
+        provider,
         apiKey,
         model,
         thinkingLevel: msg.data.thinkingLevel ?? thinkingLevel,
@@ -1785,51 +1789,78 @@ export class Core {
     }
   }
 
-  private async getStartTalkGeminiConfig(preferredModel?: string) {
+  /**
+   * Configuración de voz efectiva, ya resuelta a UN proveedor.
+   *
+   * El proveedor sale, por este orden, del modelo elegido en el orbe, de la
+   * preferencia guardada y, si no hay ninguna, de la clave que exista. Devolver
+   * ya la clave y la voz del proveedor activo es lo que evita el fallo mudo de
+   * mandar una credencial de Google a OpenAI (o la voz `Leda` a la Realtime
+   * API), que solo se manifiesta como una sesión que no conecta.
+   */
+  private async getStartTalkVoiceConfig(preferredModel?: string) {
     const workspaceDirs = await this.ide.getWorkspaceDirs();
-    const workspaceConfig = resolveStartTalkGeminiEnv(workspaceDirs);
+    const workspaceConfig = resolveStartTalkVoiceEnv(workspaceDirs);
 
-    if (workspaceConfig.apiKey) {
+    if (hasVoiceCredentials(workspaceConfig)) {
       await this.startTalkConfigStore?.save(workspaceConfig);
     }
 
-    const globalConfig = workspaceConfig.apiKey
-      ? undefined
-      : await this.startTalkConfigStore?.load();
-    const { apiKey, model, thinkingLevel, voiceName } =
-      selectStartTalkGeminiEnv(workspaceConfig, globalConfig);
+    const storedConfig = await this.startTalkConfigStore?.load();
+    const selected = selectStartTalkVoiceEnv(workspaceConfig, storedConfig);
+    const provider = resolveStartTalkProvider(selected, preferredModel);
+    const apiKey =
+      provider === "openai-realtime" ? selected.openAiApiKey : selected.apiKey;
 
     if (!apiKey) {
       throw new Error(
-        "Start Talk needs GEMINI_API_KEY in a workspace .env, the global Start Talk env file, or VS Code Secret Storage.",
+        provider === "openai-realtime"
+          ? "Start Talk needs OPENAI_API_KEY in a workspace .env, the global Start Talk env file, or VS Code Secret Storage."
+          : "Start Talk needs GEMINI_API_KEY in a workspace .env, the global Start Talk env file, or VS Code Secret Storage.",
       );
     }
 
     return {
+      provider,
       apiKey,
-      model: preferredModel ?? model,
-      thinkingLevel,
-      voiceName,
+      model: preferredModel ?? selected.model,
+      thinkingLevel: selected.thinkingLevel,
+      voiceName: resolveVoiceForProvider(
+        provider,
+        provider === "openai-realtime"
+          ? selected.openAiVoiceName
+          : selected.voiceName,
+      ),
     };
   }
 
   private async getStartTalkConfigStatus(): Promise<StartTalkConfigStatus> {
     const workspaceDirs = await this.ide.getWorkspaceDirs();
-    const workspaceConfig = resolveStartTalkGeminiEnv(workspaceDirs);
+    const workspaceConfig = resolveStartTalkVoiceEnv(workspaceDirs);
     const storedConfig = await this.startTalkConfigStore?.load();
-    const selected = selectStartTalkGeminiEnv(workspaceConfig, storedConfig);
-    const source = workspaceConfig.apiKey
+    const selected = selectStartTalkVoiceEnv(workspaceConfig, storedConfig);
+    const provider = resolveStartTalkProvider(selected);
+    const activeKey =
+      provider === "openai-realtime" ? "openAiApiKey" : "apiKey";
+    const source = workspaceConfig[activeKey]
       ? "workspace"
-      : storedConfig?.apiKey
+      : storedConfig?.[activeKey]
         ? "secureStorage"
         : "missing";
 
     return {
-      configured: Boolean(selected.apiKey),
+      configured: Boolean(selected[activeKey]),
+      provider,
       source,
+      geminiConfigured: Boolean(selected.apiKey),
+      openAiConfigured: Boolean(selected.openAiApiKey),
       model: selected.model,
       thinkingLevel: selected.thinkingLevel,
-      voiceName: selected.voiceName,
+      voiceName: resolveVoiceForProvider("gemini-live", selected.voiceName),
+      openAiVoiceName: resolveVoiceForProvider(
+        "openai-realtime",
+        selected.openAiVoiceName,
+      ),
     };
   }
 
@@ -1842,15 +1873,32 @@ export class Core {
 
     const existing = await this.startTalkConfigStore.load();
     const workspaceDirs = await this.ide.getWorkspaceDirs();
-    const workspaceConfig = resolveStartTalkGeminiEnv(workspaceDirs);
+    const workspaceConfig = resolveStartTalkVoiceEnv(workspaceDirs);
+
     const apiKey =
       update.apiKey?.trim() || workspaceConfig.apiKey || existing?.apiKey;
-    if (!apiKey) {
+    const openAiApiKey =
+      update.openAiApiKey?.trim() ||
+      workspaceConfig.openAiApiKey ||
+      existing?.openAiApiKey;
+    const provider =
+      update.provider ?? existing?.provider ?? workspaceConfig.provider;
+
+    // Guardar un proveedor sin su clave dejaría Start Talk configurado "a
+    // medias": la UI diría que está listo y la sesión fallaría al conectar.
+    if (provider === "openai-realtime" && !openAiApiKey) {
+      throw new Error(
+        "An OpenAI API key is required to use the OpenAI Realtime voice.",
+      );
+    }
+    if (provider !== "openai-realtime" && !apiKey) {
       throw new Error("A Gemini API key is required to configure Start Talk.");
     }
 
     await this.startTalkConfigStore.save({
+      provider,
       apiKey,
+      openAiApiKey,
       model: update.model?.trim() || workspaceConfig.model || existing?.model,
       thinkingLevel:
         update.thinkingLevel ??
@@ -1860,6 +1908,10 @@ export class Core {
         update.voiceName?.trim() ||
         workspaceConfig.voiceName ||
         existing?.voiceName,
+      openAiVoiceName:
+        update.openAiVoiceName?.trim() ||
+        workspaceConfig.openAiVoiceName ||
+        existing?.openAiVoiceName,
     });
   }
 

@@ -4,6 +4,34 @@ Start Talk usa la misma GUI y el mismo core de Lumina Code. El orbe Tauri no
 mantiene una implementación paralela: transporta los mensajes del webview al
 host de la extensión mediante el puente autenticado local.
 
+## Proveedores de voz
+
+Hay dos backends de tiempo real y comparten todo lo demás (puerta de voz,
+vídeo, funciones, métricas, reconexión). Se eligen en **Ajustes → Start Talk**:
+
+| Proveedor | Modelo por defecto | Voz por defecto | Clave |
+| --- | --- | --- | --- |
+| OpenAI Realtime | `gpt-realtime-2.1` | `marin` (mujer joven) | `OPENAI_API_KEY` |
+| Gemini Live | `gemini-3.1-flash-live-preview` | `Leda` (mujer joven) | `GEMINI_API_KEY` |
+
+El proveedor se deduce del modelo elegido, así que una voz o una clave no
+pueden acabar en la API del otro. En el orbe, el modelo **Automático** usa el
+proveedor configurado en Ajustes y muestra cuál acabó conectando.
+
+Variables de entorno reconocidas, además de las claves:
+`START_TALK_PROVIDER`, `START_TALK_OPENAI_MODEL`, `START_TALK_OPENAI_VOICE`,
+`START_TALK_OPENAI_TRANSCRIBE_MODEL`, `START_TALK_GEMINI_MODEL`,
+`START_TALK_GEMINI_VOICE` y `START_TALK_GEMINI_THINKING_LEVEL`.
+
+Diferencias reales entre los dos, no cosméticas:
+
+- el grounding nativo de Búsqueda de Google solo existe en Gemini; en OpenAI la
+  búsqueda entra por la función `search_web`, que se envía siempre;
+- la reanudación con handle y la rotación de conexión son del límite de sesión
+  de la Live API, así que en OpenAI están apagadas en vez de simuladas;
+- el modo intérprete usa el modelo `live-translate` dedicado en Gemini y el
+  mismo modelo de tiempo real con el prompt de intérprete en OpenAI.
+
 ## Audio
 
 - El micrófono se abre dentro de WebView2 para usar la cancelación de eco,
@@ -70,5 +98,6 @@ una conversación larga no aumente la memoria sin límite.
 2. Confirma que la pantalla de métricas diga `eco cancelado`.
 3. Si el orbe no conecta, ábrelo desde el comando de la extensión; ejecutar el
    `.exe` directamente omite el puente autenticado.
-4. Comprueba `GEMINI_API_KEY` y el modelo Live siguiendo el README.
+4. Comprueba que la clave del proveedor activo (`OPENAI_API_KEY` o
+   `GEMINI_API_KEY`) esté puesta y que el modelo sea de ese mismo proveedor.
 5. Mantén la biometría apagada si no has instalado su backend opcional.

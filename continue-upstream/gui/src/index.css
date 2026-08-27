@@ -1477,6 +1477,67 @@ body {
   gap: 10px;
 }
 
+.lumina-settings-form__legend {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.lumina-settings-form__providers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lumina-settings-form__providers button {
+  display: flex;
+  min-width: 0;
+  cursor: pointer;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 9px 11px;
+  border: 1px solid var(--lumina-border);
+  border-radius: var(--lumina-radius-md);
+  background: var(--vscode-input-background, var(--lumina-surface-raised));
+  color: var(--vscode-foreground);
+  font: inherit;
+  text-align: left;
+}
+
+.lumina-settings-form__providers button[data-active="true"] {
+  border-color: color-mix(
+    in srgb,
+    var(--lumina-accent) 62%,
+    var(--lumina-border)
+  );
+  background: var(--lumina-accent-soft);
+}
+
+.lumina-settings-form__providers strong {
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.lumina-settings-form__providers small {
+  color: var(--lumina-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.lumina-settings-form__providers em {
+  color: var(--lumina-muted);
+  font-size: 9px;
+  font-style: normal;
+  opacity: 0.85;
+}
+
+.lumina-settings-form__providers button[data-active="true"] em {
+  color: var(--lumina-accent);
+  opacity: 1;
+}
+
 .lumina-settings-form__submit {
   display: flex;
   align-items: center;
@@ -1772,7 +1833,8 @@ body {
   }
 
   .lumina-runtime-grid,
-  .lumina-settings-form__row {
+  .lumina-settings-form__row,
+  .lumina-settings-form__providers {
     grid-template-columns: minmax(0, 1fr);
   }
 

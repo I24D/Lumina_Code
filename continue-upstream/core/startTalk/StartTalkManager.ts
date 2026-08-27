@@ -6,10 +6,21 @@ import {
   ThinkingLevel,
   type FunctionDeclaration,
   type LiveServerMessage,
-  type Session,
   type Tool,
 } from "@google/genai";
 import { v4 as uuidv4 } from "uuid";
+
+import { connectOpenAIRealtime } from "./OpenAIRealtimeSession.js";
+import {
+  resolveVoiceProvider,
+  type LiveSessionCallbacks,
+  type LiveSessionHandle,
+} from "./VoiceProvider.js";
+import {
+  providerForModel,
+  resolveModelForProvider,
+  resolveVoiceForProvider,
+} from "./voices.js";
 
 import {
   FfmpegVideoCapture,
@@ -76,15 +87,17 @@ import type {
   StartTalkVideoStartRequest,
 } from "./types.js";
 
-const DEFAULT_LIVE_MODEL = "gemini-3.1-flash-live-preview";
 // Purpose-built low-latency model for real-time interpreting; used only in
-// interpreter mode. Override with START_TALK_TRANSLATE_MODEL if needed.
+// interpreter mode on Gemini. Override with START_TALK_TRANSLATE_MODEL.
 const DEFAULT_TRANSLATE_MODEL = "gemini-3.5-live-translate-preview";
-const DEFAULT_LUMINA_VOICE_NAME = "Leda";
 const DEFAULT_THINKING_LEVEL: StartTalkThinkingLevel = "low";
 /** Auxiliary context must never delay the real-time voice connection for seconds. */
 const STARTUP_CONTEXT_BUDGET_MS = 750;
-const PROVIDER: StartTalkProvider = "gemini-live";
+
+/** Nombre del proveedor para los mensajes de estado que ve el usuario. */
+function providerLabel(provider: StartTalkProvider): string {
+  return provider === "openai-realtime" ? "OpenAI Realtime" : "Gemini Live";
+}
 const LUMINA_VOICE_SYSTEM_INSTRUCTION = [
   "You are Lumina Code inside VS Code.",
   "Your spoken voice must always sound feminine, sweet, delicate, warm, youthful, and calm.",
@@ -327,8 +340,17 @@ function buildInterpreterInstruction(
 // Verificado en vivo: 3.1-flash-live-preview falla; 2.5-native-audio funciona.
 const SEARCH_INCOMPATIBLE_MODELS = ["gemini-3.1-flash-live-preview"];
 
+/**
+ * El grounding nativo (`googleSearch`) es una herramienta de la Live API de
+ * Google: en OpenAI no existe, así que allí la búsqueda siempre entra por la
+ * función `search_web`. Sin esta comprobación, un modelo de OpenAI se quedaría
+ * sin ninguna de las dos formas de buscar y afirmaría no tener internet.
+ */
 function modelSupportsSearch(model: string): boolean {
-  return !SEARCH_INCOMPATIBLE_MODELS.some((m) => model.includes(m));
+  return (
+    providerForModel(model) === "gemini-live" &&
+    !SEARCH_INCOMPATIBLE_MODELS.some((m) => model.includes(m))
+  );
 }
 
 /** Non-speech sound-event detection is opt-in (START_TALK_SOUND_EVENTS=true). */
@@ -574,6 +596,9 @@ function toGeminiThinkingLevel(level: StartTalkThinkingLevel): ThinkingLevel {
 }
 
 type SessionState = {
+  /** Backend de voz de esta sesión; decide con qué API se conecta. */
+  provider: StartTalkProvider;
+  /** Clave del proveedor activo. */
   apiKey: string;
   // Raw PCM of the in-progress user turn, buffered only when voice biometrics
   // is enabled, so we can identify the speaker when the turn ends.
@@ -652,7 +677,7 @@ type SessionState = {
   replyAuthorizations: Map<string, number>;
   windowsContext?: WindowsSystemContext;
   resumptionHandle?: string;
-  session?: Session;
+  session?: LiveSessionHandle;
   thinkingLevel: StartTalkThinkingLevel;
   video?: FfmpegVideoCapture;
   videoSource?: StartTalkVideoSource;
@@ -685,6 +710,7 @@ export class StartTalkManager {
   constructor(private readonly emit: (event: StartTalkCoreEvent) => void) {}
 
   async connect({
+    provider,
     apiKey,
     model,
     thinkingLevel,
@@ -698,6 +724,8 @@ export class StartTalkManager {
     voiceStyle,
     announceNotifications,
   }: {
+    /** Backend de voz. Si se omite, se deduce del modelo. */
+    provider?: StartTalkProvider;
     apiKey: string;
     model?: string;
     thinkingLevel?: StartTalkThinkingLevel;
@@ -712,6 +740,7 @@ export class StartTalkManager {
     announceNotifications?: boolean;
   }): Promise<StartTalkConnectResponse> {
     const sessionId = uuidv4();
+    const activeProvider = provider ?? resolveVoiceProvider(model);
     // Interpreter mode is pure translation: no persona, memory, tools or
     // grounding, and — when a single direction is requested — the output voice
     // is pinned to the target language so it always speaks it.
@@ -722,13 +751,20 @@ export class StartTalkManager {
         ? translation.target
         : languageCode;
     const state: SessionState = {
+      provider: activeProvider,
       apiKey,
       // Search grounding: requiere billing en Google AI. Va ON por defecto pero
       // solo se envía si el modelo lo soporta (ver modelSupportsSearch), así
       // que en modelos incompatibles simplemente no se manda y la sesión
       // conecta igual. Con billing + modelo de audio nativo, funciona.
       enableSearch: isInterpreter ? false : (enableSearch ?? true),
-      enableSessionResumption: enableSessionResumption ?? true,
+      // La reanudación con handle es de la Live API. La Realtime API no cierra
+      // la sesión a los 15 minutos ni entrega handles, así que allí se apaga en
+      // vez de fingir que existe.
+      enableSessionResumption:
+        activeProvider === "openai-realtime"
+          ? false
+          : (enableSessionResumption ?? true),
       enableTools: isInterpreter ? false : (enableTools ?? true),
       announceNotifications: isInterpreter
         ? false
@@ -763,15 +799,20 @@ export class StartTalkManager {
       videoRefreshInFlight: false,
       mode: isInterpreter ? "interpreter" : "assistant",
       translation: isInterpreter ? translation : undefined,
-      // Interpreter mode uses the dedicated live-translate model; the assistant
-      // uses the picked (or default) native/live voice model.
-      model: isInterpreter
-        ? process.env.START_TALK_TRANSLATE_MODEL?.trim() ||
-          DEFAULT_TRANSLATE_MODEL
-        : model || DEFAULT_LIVE_MODEL,
+      // En Gemini el modo intérprete usa el modelo live-translate dedicado. En
+      // OpenAI no hay equivalente en una sesión de voz normal, así que se
+      // interpreta con el mismo modelo de tiempo real y el prompt de intérprete.
+      model:
+        isInterpreter && activeProvider === "gemini-live"
+          ? process.env.START_TALK_TRANSLATE_MODEL?.trim() ||
+            DEFAULT_TRANSLATE_MODEL
+          : resolveModelForProvider(activeProvider, model),
       reconnectAttempts: 0,
       thinkingLevel: thinkingLevel || DEFAULT_THINKING_LEVEL,
-      voiceName: voiceName || DEFAULT_LUMINA_VOICE_NAME,
+      // Una voz del otro proveedor la rechaza la API y deja la sesión en bucle
+      // de reconexión, así que se ajusta aquí a una válida (siempre femenina
+      // joven, que es la persona de Lumina).
+      voiceName: resolveVoiceForProvider(activeProvider, voiceName),
     };
 
     this.sessions.set(sessionId, state);
@@ -815,7 +856,7 @@ export class StartTalkManager {
           return {
             sessionId,
             model: state.model,
-            provider: PROVIDER,
+            provider: state.provider,
           };
         } catch {
           // cae al throw de abajo con el error original
@@ -828,7 +869,7 @@ export class StartTalkManager {
     return {
       sessionId,
       model: state.model,
-      provider: PROVIDER,
+      provider: state.provider,
     };
   }
 
@@ -2251,11 +2292,12 @@ export class StartTalkManager {
       type: "status",
       sessionId,
       status: "connecting",
-      message: state.isReconnecting ? "Reconnecting Gemini Live..." : undefined,
+      message: state.isReconnecting
+        ? `Reconnecting ${providerLabel(state.provider)}...`
+        : undefined,
       model: state.model,
     });
 
-    const ai = new GoogleGenAI({ apiKey: state.apiKey });
     const liveTools = buildLiveTools(
       state.enableTools,
       state.enableSearch,
@@ -2267,7 +2309,105 @@ export class StartTalkManager {
     const epoch = (state.connectionEpoch ?? 0) + 1;
     state.connectionEpoch = epoch;
     const previousSession = state.session;
-    const nextSession = await ai.live.connect({
+    const callbacks = this.buildLiveCallbacks(sessionId, state, epoch);
+
+    const nextSession =
+      state.provider === "openai-realtime"
+        ? await connectOpenAIRealtime({
+            apiKey: state.apiKey,
+            model: state.model,
+            config: {
+              instructions: this.buildSystemInstruction(state),
+              voice: state.voiceName,
+              thinkingLevel: state.thinkingLevel,
+              tools: liveTools,
+              languageCode: state.languageCode,
+            },
+            callbacks,
+          })
+        : await this.openGeminiLiveSession(state, liveTools, callbacks);
+
+    if (
+      this.sessions.get(sessionId) !== state ||
+      epoch !== state.connectionEpoch
+    ) {
+      nextSession.close();
+      return;
+    }
+
+    state.session = nextSession;
+    // La rotación existe por el límite de sesión de la Live API; la Realtime
+    // API no lo tiene y rotar allí solo tiraría el contexto de la conversación.
+    if (state.provider === "gemini-live") {
+      this.scheduleConnectionRotation(sessionId, state, epoch);
+    }
+    if (previousSession && previousSession !== nextSession) {
+      try {
+        previousSession.close();
+      } catch {
+        // The previous connection may already be closing after goAway.
+      }
+    }
+  }
+
+  /**
+   * Callbacks de conexión compartidos por los dos proveedores. El `epoch`
+   * descarta los avisos de una conexión ya reemplazada: durante el reconnect
+   * proactivo la sesión vieja sigue viva y su cierre puede llegar tarde.
+   */
+  private buildLiveCallbacks(
+    sessionId: string,
+    state: SessionState,
+    epoch: number,
+  ): LiveSessionCallbacks {
+    return {
+      onopen: () => {
+        state.lastConnectionError = undefined;
+        this.emit({
+          type: "status",
+          sessionId,
+          status: state.isCapturing ? "listening" : "connected",
+          model: state.model,
+        });
+      },
+      onmessage: (message) => {
+        if (epoch !== state.connectionEpoch) {
+          return;
+        }
+        this.handleServerMessage(sessionId, message);
+      },
+      onerror: (error) => {
+        if (epoch !== state.connectionEpoch || !this.sessions.has(sessionId)) {
+          return;
+        }
+        state.lastConnectionError =
+          error.message ||
+          `${providerLabel(state.provider)} connection failed.`;
+
+        this.emit({
+          type: "status",
+          sessionId,
+          status: "connecting",
+          message: `${providerLabel(state.provider)} is reconnecting...`,
+          model: state.model,
+        });
+      },
+      onclose: (event) => {
+        if (epoch !== state.connectionEpoch) {
+          return;
+        }
+        this.handleLiveClose(sessionId, event.code, event.reason);
+      },
+    };
+  }
+
+  private async openGeminiLiveSession(
+    state: SessionState,
+    liveTools: Tool[],
+    callbacks: LiveSessionCallbacks,
+  ): Promise<LiveSessionHandle> {
+    const ai = new GoogleGenAI({ apiKey: state.apiKey });
+    return ai.live.connect({
       model: state.model,
       config: {
         responseModalities: [Modality.AUDIO],
@@ -2322,66 +2462,13 @@ export class StartTalkManager {
         },
       },
       callbacks: {
-        onopen: () => {
-          state.lastConnectionError = undefined;
-          this.emit({
-            type: "status",
-            sessionId,
-            status: state.isCapturing ? "listening" : "connected",
-            model: state.model,
-          });
-        },
-        onmessage: (message) => {
-          if (epoch !== state.connectionEpoch) {
-            return;
-          }
-          this.handleServerMessage(sessionId, message);
-        },
-        onerror: (event) => {
-          if (
-            epoch !== state.connectionEpoch ||
-            !this.sessions.has(sessionId)
-          ) {
-            return;
-          }
-          state.lastConnectionError =
-            event.message || "Gemini Live connection failed.";
-
-          this.emit({
-            type: "status",
-            sessionId,
-            status: "connecting",
-            message: "Gemini Live is reconnecting...",
-            model: state.model,
-          });
-        },
-        onclose: (event) => {
-          // Ignora el cierre de una sesión ya reemplazada (reconnect por goAway).
-          if (epoch !== state.connectionEpoch) {
-            return;
-          }
-          this.handleLiveClose(sessionId, event.code, event.reason);
-        },
+        onopen: callbacks.onopen,
+        onmessage: callbacks.onmessage,
+        onerror: (event) => callbacks.onerror({ message: event.message }),
+        onclose: (event) =>
+          callbacks.onclose({ code: event.code, reason: event.reason }),
       },
     });
-
-    if (
-      this.sessions.get(sessionId) !== state ||
-      epoch !== state.connectionEpoch
-    ) {
-      nextSession.close();
-      return;
-    }
-
-    state.session = nextSession;
-    this.scheduleConnectionRotation(sessionId, state, epoch);
-    if (previousSession && previousSession !== nextSession) {
-      try {
-        previousSession.close();
-      } catch {
-        // The previous connection may already be closing after goAway.
-      }
-    }
   }
 
   private handleLiveClose(
@@ -2404,7 +2491,9 @@ export class StartTalkManager {
     }
 
     state.lastConnectionError =
-      reason || state.lastConnectionError || `Gemini Live closed (${code}).`;
+      reason ||
+      state.lastConnectionError ||
+      `${providerLabel(state.provider)} closed (${code}).`;
 
     // El servidor cierra con quota/billing cuando se pide Google Search sin un
     // plan de pago. En vez de reintentar la misma config (bucle infinito de
@@ -2431,7 +2520,7 @@ export class StartTalkManager {
       type: "status",
       sessionId,
       status: "connecting",
-      message: "Gemini Live is reconnecting...",
+      message: `${providerLabel(state.provider)} is reconnecting...`,
       model: state.model,
     });
 
@@ -2462,7 +2551,7 @@ export class StartTalkManager {
       state.lastConnectionError =
         error instanceof Error
           ? error.message
-          : "Gemini Live reconnect failed.";
+          : `${providerLabel(state.provider)} reconnect failed.`;
       this.scheduleReconnect(sessionId, state);
     }
   }
@@ -2967,7 +3056,7 @@ export class StartTalkManager {
    */
   private safeRealtimeInput(
     state: SessionState,
-    input: Parameters<Session["sendRealtimeInput"]>[0],
+    input: Parameters<LiveSessionHandle["sendRealtimeInput"]>[0],
   ): void {
     const session = state.session;
     if (!session) {
@@ -2982,7 +3071,7 @@ export class StartTalkManager {
 
   private safeClientContent(
     state: SessionState,
-    content: Parameters<Session["sendClientContent"]>[0],
+    content: Parameters<LiveSessionHandle["sendClientContent"]>[0],
   ): void {
     const session = state.session;
     if (!session) {

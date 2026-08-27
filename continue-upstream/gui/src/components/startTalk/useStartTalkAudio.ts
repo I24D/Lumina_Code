@@ -19,6 +19,7 @@ import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useWebviewListener } from "../../hooks/useWebviewListener";
 import { useAppSelector } from "../../redux/hooks";
 import {
+  StartTalkActiveSession,
   StartTalkDelegationApproval,
   StartTalkModelOption,
   StartTalkStatus,
@@ -234,6 +235,11 @@ export function useStartTalkAudio({
   // initial configuration/device failure must remain visible to the user.
   const recoverActiveSessionRef = useRef(false);
   const [status, setStatus] = useState<StartTalkStatus>("idle");
+  // Modelo y proveedor que core resolvió de verdad. Con "Automático" el orbe no
+  // sabe cuál va a ser hasta conectar, y decir un modelo distinto del que suena
+  // sería mentir sobre lo que el usuario está oyendo.
+  const [activeSession, setActiveSession] =
+    useState<StartTalkActiveSession | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [toolActivities, setToolActivities] = useState<StartTalkToolActivity[]>(
     [],
@@ -462,6 +468,7 @@ export function useStartTalkAudio({
     settleDelegationApproval(false);
     sessionIdRef.current = null;
     setStatus("idle");
+    setActiveSession(null);
     setIsCrowded(false);
     setMicSettings(null);
     setLastTurnMetrics(null);
@@ -1648,7 +1655,9 @@ export function useStartTalkAudio({
     const activeTranslation = translationRef.current;
     try {
       const response = await ideMessenger.request("startTalk/connect", {
-        preferredModel: model.model,
+        // Sin modelo explícito manda el proveedor configurado en Ajustes; así
+        // el orbe no fuerza OpenAI a quien solo tiene la clave de Google.
+        preferredModel: model.model || undefined,
         thinkingLevel,
         mode: activeTranslation ? "interpreter" : undefined,
         translation: activeTranslation ?? undefined,
@@ -1661,6 +1670,10 @@ export function useStartTalkAudio({
       }
 
       sessionIdRef.current = response.content.sessionId;
+      setActiveSession({
+        model: response.content.model,
+        provider: response.content.provider,
+      });
       const captureResponse = await ideMessenger.request(
         "startTalk/startCapture",
         {
@@ -1683,6 +1696,7 @@ export function useStartTalkAudio({
     } catch (error) {
       const sessionId = sessionIdRef.current;
       sessionIdRef.current = null;
+      setActiveSession(null);
 
       if (sessionId) {
         await ideMessenger.request("startTalk/stop", { sessionId });
@@ -1789,6 +1803,7 @@ export function useStartTalkAudio({
   }, [clearSessionRecoveryTimer, stopListening]);
 
   return {
+    activeSession,
     approveDelegation: () => settleDelegationApproval(true),
     assistantTranscript,
     errorMessage,

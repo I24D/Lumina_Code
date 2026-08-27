@@ -1,4 +1,8 @@
-export type StartTalkProvider = "gemini-live";
+/**
+ * Backends de voz en tiempo real. `openai-realtime` usa la Realtime API de
+ * OpenAI; `gemini-live`, la Live API de Google. Ver `VoiceProvider.ts`.
+ */
+export type StartTalkProvider = "gemini-live" | "openai-realtime";
 
 export type StartTalkThinkingLevel = "minimal" | "low" | "medium" | "high";
 

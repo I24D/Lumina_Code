@@ -9,18 +9,52 @@ import type {
   StartTalkConfigStatus,
   StartTalkConfigUpdate,
 } from "core/startTalk/env";
-import type { StartTalkThinkingLevel } from "core/startTalk/types";
+import type {
+  StartTalkProvider,
+  StartTalkThinkingLevel,
+} from "core/startTalk/types";
+import {
+  defaultModelForProvider,
+  defaultVoiceForProvider,
+  modelsForProvider,
+  resolveModelForProvider,
+  voicesForProvider,
+} from "core/startTalk/voices";
 import { useCallback, useContext, useEffect, useState } from "react";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
 import { ConfigHeader } from "../components/ConfigHeader";
 
-const MODELS = [
-  ["gemini-2.5-flash-native-audio-latest", "Native Audio 2.5"],
-  ["gemini-3.1-flash-live-preview", "Gemini 3.1 Live"],
-  ["gemini-3.5-live-translate-preview", "Gemini Live Translate"],
+const PROVIDERS: Array<{
+  id: StartTalkProvider;
+  label: string;
+  hint: string;
+  keyLabel: string;
+  keyPlaceholder: string;
+  keyHelp: string;
+}> = [
+  {
+    id: "openai-realtime",
+    label: "OpenAI Realtime",
+    hint: "El modelo de voz más reciente de OpenAI, con voz de mujer joven",
+    keyLabel: "OpenAI API key",
+    keyPlaceholder: "sk-…",
+    keyHelp:
+      "Se usa solo para la voz en tiempo real. Se guarda en Secret Storage.",
+  },
+  {
+    id: "gemini-live",
+    label: "Gemini Live",
+    hint: "Audio nativo de Google con grounding de Búsqueda",
+    keyLabel: "Gemini API key",
+    keyPlaceholder: "AIza…",
+    keyHelp:
+      "Se usa solo para la voz en tiempo real. Se guarda en Secret Storage.",
+  },
 ];
 
-const VOICES = ["Leda", "Aoede", "Charon", "Fenrir", "Kore", "Puck"];
+function providerInfo(provider: StartTalkProvider) {
+  return PROVIDERS.find((entry) => entry.id === provider) ?? PROVIDERS[0];
+}
 
 function sourceLabel(source?: StartTalkConfigStatus["source"]) {
   if (source === "workspace") return "Archivo .env del proyecto";
@@ -31,15 +65,38 @@ function sourceLabel(source?: StartTalkConfigStatus["source"]) {
 export function StartTalkSection() {
   const ideMessenger = useContext(IdeMessengerContext);
   const [status, setStatus] = useState<StartTalkConfigStatus>();
+  const [provider, setProvider] =
+    useState<StartTalkProvider>("openai-realtime");
   const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState(MODELS[0][0]);
-  const [voiceName, setVoiceName] = useState("Leda");
+  const [model, setModel] = useState(
+    defaultModelForProvider("openai-realtime"),
+  );
+  const [voiceName, setVoiceName] = useState(
+    defaultVoiceForProvider("openai-realtime"),
+  );
   const [thinkingLevel, setThinkingLevel] =
     useState<StartTalkThinkingLevel>("medium");
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
+
+  const applyStatus = useCallback((next: StartTalkConfigStatus) => {
+    setStatus(next);
+    setProvider(next.provider);
+    // El modelo guardado puede ser del otro proveedor (se comparte un solo
+    // campo); en ese caso vale el del proveedor activo, no una combinación
+    // imposible que la API rechazaría al conectar.
+    setModel(resolveModelForProvider(next.provider, next.model));
+    setVoiceName(
+      (next.provider === "openai-realtime"
+        ? next.openAiVoiceName
+        : next.voiceName) ?? defaultVoiceForProvider(next.provider),
+    );
+    if (next.thinkingLevel) {
+      setThinkingLevel(next.thinkingLevel);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     const response = await ideMessenger.request(
@@ -50,45 +107,65 @@ export function StartTalkSection() {
       setError(response.error);
       return;
     }
-    setStatus(response.content);
-    if (response.content.model) setModel(response.content.model);
-    if (response.content.voiceName) setVoiceName(response.content.voiceName);
-    if (response.content.thinkingLevel) {
-      setThinkingLevel(response.content.thinkingLevel);
-    }
+    applyStatus(response.content);
     setError(undefined);
-  }, [ideMessenger]);
+  }, [applyStatus, ideMessenger]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
+  /** Cambiar de proveedor arrastra modelo y voz: no son intercambiables. */
+  const selectProvider = (next: StartTalkProvider) => {
+    if (next === provider) {
+      return;
+    }
+    setProvider(next);
+    setModel(defaultModelForProvider(next));
+    setVoiceName(
+      (next === "openai-realtime"
+        ? status?.openAiVoiceName
+        : status?.voiceName) ?? defaultVoiceForProvider(next),
+    );
+    setApiKey("");
+    setMessage(undefined);
+    setError(undefined);
+  };
+
   const save = async () => {
     setSaving(true);
     setError(undefined);
     setMessage(undefined);
+    const secret = apiKey.trim() || undefined;
     const update: StartTalkConfigUpdate = {
-      apiKey: apiKey.trim() || undefined,
+      provider,
       model,
-      voiceName,
       thinkingLevel,
+      ...(provider === "openai-realtime"
+        ? { openAiApiKey: secret, openAiVoiceName: voiceName }
+        : { apiKey: secret, voiceName }),
     };
     const response = await ideMessenger.request("startTalk/configure", update);
     if (response.status === "error") {
       setError(response.error);
     } else {
-      setStatus(response.content);
+      applyStatus(response.content);
       setApiKey("");
       setMessage("Configuración guardada de forma segura.");
     }
     setSaving(false);
   };
 
+  const active = providerInfo(provider);
+  const voices = voicesForProvider(provider);
+  const femaleVoices = voices.filter((voice) => voice.youngFemale);
+  const otherVoices = voices.filter((voice) => !voice.youngFemale);
+
   return (
     <div className="lumina-config-section">
       <ConfigHeader
         title="Start Talk"
-        subtext="Configura la conversación de voz Gemini Live sin guardar secretos en la GUI ni en el repositorio."
+        subtext="Elige el proveedor de voz en tiempo real y su voz, sin guardar secretos en la GUI ni en el repositorio."
       />
 
       <div className="lumina-settings-summary">
@@ -100,7 +177,9 @@ export function StartTalkSection() {
         </div>
         <div>
           <strong>
-            {status?.configured ? "Listo para conversar" : "Falta la API key"}
+            {status?.configured
+              ? `Listo para conversar · ${providerInfo(status.provider).label}`
+              : `Falta la ${providerInfo(status?.provider ?? provider).keyLabel}`}
           </strong>
           <span>{sourceLabel(status?.source)}</span>
         </div>
@@ -115,19 +194,56 @@ export function StartTalkSection() {
       </div>
 
       <div className="lumina-settings-form">
+        <div>
+          <span className="lumina-settings-form__legend">Proveedor de voz</span>
+          <div
+            className="lumina-settings-form__providers"
+            role="radiogroup"
+            aria-label="Proveedor de voz"
+          >
+            {PROVIDERS.map((entry) => {
+              const ready =
+                entry.id === "openai-realtime"
+                  ? status?.openAiConfigured
+                  : status?.geminiConfigured;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={entry.id === provider}
+                  data-active={entry.id === provider}
+                  onClick={() => selectProvider(entry.id)}
+                >
+                  <strong>{entry.label}</strong>
+                  <small>{entry.hint}</small>
+                  <em>{ready ? "Clave guardada" : "Sin clave"}</em>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <label>
-          <span>Gemini API key</span>
+          <span>{active.keyLabel}</span>
           <small>
-            Déjala vacía para conservar la clave actual. Una clave nueva se
-            guarda en Secret Storage.
+            Déjala vacía para conservar la clave actual. {active.keyHelp}
           </small>
           <div className="lumina-secret-input">
             <input
-              aria-label="Gemini API key"
+              aria-label={active.keyLabel}
               type={showKey ? "text" : "password"}
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
-              placeholder={status?.configured ? "••••••••••••••••" : "AIza…"}
+              placeholder={
+                (
+                  provider === "openai-realtime"
+                    ? status?.openAiConfigured
+                    : status?.geminiConfigured
+                )
+                  ? "••••••••••••••••"
+                  : active.keyPlaceholder
+              }
               autoComplete="off"
             />
             <button
@@ -147,9 +263,9 @@ export function StartTalkSection() {
               value={model}
               onChange={(event) => setModel(event.target.value)}
             >
-              {MODELS.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
+              {modelsForProvider(provider).map((option) => (
+                <option key={option.model} value={option.model}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -160,11 +276,20 @@ export function StartTalkSection() {
               value={voiceName}
               onChange={(event) => setVoiceName(event.target.value)}
             >
-              {VOICES.map((voice) => (
-                <option key={voice} value={voice}>
-                  {voice}
-                </option>
-              ))}
+              <optgroup label="Mujer joven">
+                {femaleVoices.map((voice) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.label} · {voice.description}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Otras voces">
+                {otherVoices.map((voice) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.label} · {voice.description}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </label>
           <label>
@@ -188,8 +313,9 @@ export function StartTalkSection() {
 
         <div className="lumina-settings-form__submit">
           <p>
-            Si existe `GEMINI_API_KEY` en el `.env` del workspace, esa
-            configuración tiene prioridad sobre Secret Storage.
+            Si el `.env` del workspace trae `OPENAI_API_KEY` o `GEMINI_API_KEY`,
+            esa configuración tiene prioridad sobre Secret Storage. Puedes dejar
+            las dos claves guardadas y cambiar de proveedor cuando quieras.
           </p>
           <button type="button" onClick={() => void save()} disabled={saving}>
             {saving ? "Guardando…" : "Guardar configuración"}

@@ -21,6 +21,7 @@ import type {
   StartTalkTranslationConfig,
   StartTalkVideoSourceInfo,
 } from "core/startTalk";
+import { START_TALK_MODELS } from "core/startTalk/voices";
 import {
   PointerEvent as ReactPointerEvent,
   useCallback,
@@ -110,26 +111,28 @@ const miniSize: PanelSize = {
 
 // El orden importa: el primero es el que se usa por defecto.
 //
-// 3.1 va primero desde que se midió que 2.5 TRUNCA las lecturas largas de forma
-// intermitente: con el mismo texto de 3.135 caracteres, 2.5 leyó el 84% y el
-// 98% en dos pasadas, mientras 3.1 leyó el 100% en ambas. 2.5 además entrega el
+// El primero es "Automático" a propósito: el modelo decide el proveedor, así
+// que fijar aquí uno concreto obligaría a tener la clave de ESE proveedor
+// aunque en Ajustes estuviera configurado el otro. Sin modelo explícito, core
+// usa el proveedor configurado y devuelve cuál acabó siendo.
+//
+// Del resto, los de Gemini van en el orden medido: 2.5 TRUNCA las lecturas
+// largas de forma intermitente (con el mismo texto de 3.135 caracteres leyó el
+// 84% y el 98% en dos pasadas, mientras 3.1 leyó el 100% en ambas) y entrega el
 // audio a 3,6x tiempo real en ~4.400 fragmentos (3.1: 2,7-3,0x en ~550), lo que
-// carga mucho más el puente. Perder el grounding nativo de Google ya no es un
+// carga mucho más el puente. Perder el grounding nativo de Google no es un
 // problema: sin él se le pasa la función `search_web` (ver webSearch.ts).
 const liveModelOptions: StartTalkModelOption[] = [
   {
-    description: "Lecturas largas completas + búsqueda web propia",
-    label: "Flash Live (3.1)",
-    model: "gemini-3.1-flash-live-preview",
+    description: "Usa el proveedor configurado en Ajustes",
+    label: "Automático",
+    model: "",
   },
-  {
-    // `-latest` auto-sigue la última release 2.5 native-audio. Es el único nivel
-    // con grounding nativo de Google Search (ver modelSupportsSearch), pero
-    // trunca lecturas largas.
-    description: "Voz natural con grounding de Google (corta textos largos)",
-    label: "Native Audio (2.5)",
-    model: "gemini-2.5-flash-native-audio-latest",
-  },
+  ...START_TALK_MODELS.map((option) => ({
+    description: option.description,
+    label: option.label,
+    model: option.model,
+  })),
 ];
 
 const thinkingOptions: Array<{
@@ -1479,6 +1482,7 @@ export function LiveConversationOverlay({
     "screen" | "camera" | null
   >(null);
   const {
+    activeSession,
     approveDelegation,
     assistantTranscript,
     errorMessage,
@@ -1521,6 +1525,18 @@ export function LiveConversationOverlay({
     phoneAssistantBridge,
     phoneAssistantWakeWord,
   });
+
+  // Con "Automático" el nombre del modelo solo se sabe al conectar, así que se
+  // muestra el que core devolvió en vez de una etiqueta genérica.
+  const liveModelLabel = useMemo(() => {
+    if (liveModel.model) {
+      return liveModel.label;
+    }
+    const connected = START_TALK_MODELS.find(
+      (option) => option.model === activeSession?.model,
+    );
+    return connected ? `${connected.label} · auto` : liveModel.label;
+  }, [activeSession?.model, liveModel]);
 
   const size = useMemo(() => getSizeForMode(mode), [mode]);
   const visualMode: PanelMode = orbFullscreen ? "expanded" : mode;
@@ -2110,7 +2126,7 @@ export function LiveConversationOverlay({
                 )
               }
             >
-              <SettingMenuValue>{liveModel.label}</SettingMenuValue>
+              <SettingMenuValue>{liveModelLabel}</SettingMenuValue>
               <SettingMenuChevron $open={openSettingMenu === "model"} />
             </SettingMenuButton>
             {openSettingMenu === "model" ? (
