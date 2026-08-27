@@ -92,8 +92,10 @@ const router = createMemoryRouter([
         element: <Navigate replace to={ROUTES.SCHEDULE} />,
       },
       {
+        // The workboard is a section of the Work panel; /changes is the diff
+        // walkthrough and has never had a board on it.
         path: "/workboard",
-        element: <Navigate replace to={ROUTES.CHANGES} />,
+        element: <Navigate replace to={ROUTES.WORK} />,
       },
       {
         path: "/settings/general",
