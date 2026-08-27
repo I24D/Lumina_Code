@@ -38,9 +38,9 @@ describe("buildLiveTools", () => {
   it("NUNCA manda googleSearch al modelo incompatible", () => {
     // Mandarlo provoca un cierre 1011 garantizado y reconexion en bucle.
     for (const enableTools of [true, false]) {
-      expect(hasGoogleSearch(buildLiveTools(enableTools, true, NOT_GROUNDED))).toBe(
-        false,
-      );
+      expect(
+        hasGoogleSearch(buildLiveTools(enableTools, true, NOT_GROUNDED)),
+      ).toBe(false);
     }
   });
 
@@ -64,5 +64,28 @@ describe("buildLiveTools", () => {
     expect(names).toContain("delegate_to_lumina_code");
     expect(names).toContain("stay_silent");
     expect(names).toContain("search_web");
+  });
+
+  it("no anuncia recall_memory cuando la memoria no está configurada", () => {
+    // Anunciar una herramienta sin credenciales solo la haría fallar.
+    expect(functionNames(buildLiveTools(true, true, GROUNDED))).not.toContain(
+      "recall_memory",
+    );
+  });
+
+  it("añade recall_memory cuando hay memoria configurada", () => {
+    const names = functionNames(buildLiveTools(true, false, GROUNDED, true));
+
+    expect(names).toContain("recall_memory");
+    expect(names).toContain("delegate_to_lumina_code");
+  });
+
+  it("con tools desactivadas manda solo las auxiliares pedidas", () => {
+    // Sin delegación ni mensajería, pero con búsqueda y memoria si se piden.
+    const names = functionNames(
+      buildLiveTools(false, true, NOT_GROUNDED, true),
+    );
+
+    expect(names.sort()).toEqual(["recall_memory", "search_web"]);
   });
 });

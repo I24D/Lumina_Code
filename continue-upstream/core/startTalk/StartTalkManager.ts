@@ -57,7 +57,9 @@ import {
 import {
   learnFromVoiceTranscript,
   loadVoiceMemoryBlock,
+  recallVoiceMemory,
   resolveVoiceUserId,
+  voiceMemoryAvailable,
   type VoiceTranscriptEntry,
 } from "./voiceMemory.js";
 import { biometricsEnabled, identifySpeaker } from "./voiceBiometrics.js";
@@ -136,6 +138,7 @@ const WHATSAPP_REPLY_FUNCTION_NAME = "reply_to_whatsapp";
 const DISMISS_NOTIFICATION_FUNCTION_NAME = "dismiss_notification";
 const STAY_SILENT_FUNCTION_NAME = "stay_silent";
 const WEB_SEARCH_FUNCTION_NAME = "search_web";
+const RECALL_MEMORY_FUNCTION_NAME = "recall_memory";
 
 /**
  * Qué capacidad ejerce cada función. Se consulta antes de despachar, así que
@@ -150,6 +153,29 @@ const CAPABILITY_BY_FUNCTION: Record<string, LuminaCapability | undefined> = {
   [WHATSAPP_REPLY_FUNCTION_NAME]: "notificationReplies",
   [DISMISS_NOTIFICATION_FUNCTION_NAME]: "notifications",
   [WEB_SEARCH_FUNCTION_NAME]: "webSearch",
+  [RECALL_MEMORY_FUNCTION_NAME]: "voiceMemory",
+};
+
+/**
+ * Recuerdo bajo demanda desde la memoria persistente en Supabase. Se añade en
+ * `buildLiveTools` solo cuando la memoria está configurada, para no anunciarle
+ * al modelo una herramienta que fallaría por falta de credenciales.
+ */
+const RECALL_MEMORY_FUNCTION: FunctionDeclaration = {
+  name: RECALL_MEMORY_FUNCTION_NAME,
+  description:
+    "Recuerda algo de conversaciones anteriores o de la base de conocimiento de Lumina: datos del usuario, preferencias, decisiones, temas ya tratados o conocimiento guardado. Usala cuando necesites recordar algo concreto que no tienes delante. La respuesta se va a usar para contestar, asi que sera breve.",
+  parametersJsonSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description:
+          "Que quieres recordar, en una frase concreta y en el idioma del usuario.",
+      },
+    },
+    required: ["query"],
+  },
 };
 
 /**
@@ -555,6 +581,7 @@ export function buildLiveTools(
   enableTools: boolean,
   enableSearch: boolean,
   model: string,
+  enableMemory = false,
 ): Tool[] {
   const tools: Tool[] = [];
   // Solo enviamos googleSearch si el modelo lo soporta: así evitamos el cierre
@@ -570,11 +597,25 @@ export function buildLiveTools(
   if (enableSearch && !nativeGrounding) {
     functions.push(WEB_SEARCH_FUNCTION);
   }
+  // Recuerdo bajo demanda: solo cuando hay memoria en Supabase configurada.
+  if (enableMemory) {
+    functions.push(RECALL_MEMORY_FUNCTION);
+  }
   if (enableTools) {
     tools.push({ functionDeclarations: functions });
-  } else if (functions.length > LUMINA_FUNCTIONS.length) {
-    // Tools desactivadas pero búsqueda pedida: mandamos solo el buscador.
-    tools.push({ functionDeclarations: [WEB_SEARCH_FUNCTION] });
+  } else {
+    // Tools desactivadas: solo se mandan las funciones auxiliares pedidas
+    // (búsqueda y/o memoria), nunca la delegación ni las de mensajería.
+    const auxiliary: FunctionDeclaration[] = [];
+    if (enableSearch && !nativeGrounding) {
+      auxiliary.push(WEB_SEARCH_FUNCTION);
+    }
+    if (enableMemory) {
+      auxiliary.push(RECALL_MEMORY_FUNCTION);
+    }
+    if (auxiliary.length > 0) {
+      tools.push({ functionDeclarations: auxiliary });
+    }
   }
   return tools;
 }
@@ -623,6 +664,8 @@ type SessionState = {
   enableSearch: boolean;
   enableSessionResumption: boolean;
   enableTools: boolean;
+  /** Memoria persistente en Supabase disponible para recall/aprendizaje. */
+  enableMemory: boolean;
   announceNotifications: boolean;
   gate?: VoiceActivityGate;
   /** Métricas por turno: latencia de respuesta, falsos inicios, entrega. */
@@ -766,6 +809,13 @@ export class StartTalkManager {
           ? false
           : (enableSessionResumption ?? true),
       enableTools: isInterpreter ? false : (enableTools ?? true),
+      // Memoria: solo en modo asistente, si el usuario no la bloqueó en
+      // Privacidad y hay credenciales de Supabase. El modo intérprete jamás
+      // recuerda ni aprende (solo traduce).
+      enableMemory:
+        !isInterpreter &&
+        isCapabilityAvailable("voiceMemory") &&
+        voiceMemoryAvailable(),
       announceNotifications: isInterpreter
         ? false
         : (announceNotifications ?? true),
@@ -817,11 +867,11 @@ export class StartTalkManager {
 
     this.sessions.set(sessionId, state);
 
-    // Precarga de memoria (best-effort): si el backend responde, Gemini arranca
-    // "recordando" al usuario. Cualquier fallo degrada a "sin memoria" y la
-    // sesión conecta igual. Se cachea en el estado para NO re-consultar en cada
-    // reconexión (openLiveSession se llama también en el reconnect por goAway).
-    // En modo intérprete no se carga memoria (irrelevante y contaminaría).
+    // Precarga de memoria (best-effort): si Supabase responde a tiempo, la voz
+    // arranca "recordando" al usuario. Cualquier fallo degrada a "sin memoria" y
+    // la sesión conecta igual. Se cachea en el estado para NO re-consultar en
+    // cada reconexión (openLiveSession se llama también en el reconnect por
+    // goAway). En modo intérprete no se carga memoria (irrelevante y contaminaría).
     if (!isInterpreter) {
       // Memoria y estado del sistema son datos personales: si están
       // bloqueados no se cargan siquiera, así que nunca entran al prompt.
@@ -1703,6 +1753,11 @@ export class StartTalkManager {
     if (state.memoryBlock) {
       parts.push(state.memoryBlock);
     }
+    if (state.enableMemory) {
+      parts.push(
+        "You have a persistent memory that survives across sessions. When you need to recall something specific that is not already in front of you — a detail about the user, a past decision, an open thread, or knowledge you have saved — call recall_memory with a short query. Do not announce that you are checking your memory; just use what comes back to answer naturally. What you learn in this conversation is saved automatically when it ends, so never tell the user to remind you next time.",
+      );
+    }
     if (state.windowsContext) {
       parts.push(formatWindowsSystemContextForPrompt(state.windowsContext));
     }
@@ -1795,6 +1850,66 @@ export class StartTalkManager {
                 visibility: "payload" as const,
               },
             }),
+      },
+    });
+  }
+
+  /**
+   * Recuerdo bajo demanda desde la memoria persistente en Supabase. Devuelve al
+   * modelo lo que encuentre (o que no recuerda nada) y refleja la actividad en
+   * la UI, igual que la búsqueda web.
+   */
+  private async handleRecallMemoryToolCall(
+    sessionId: string,
+    state: SessionState,
+    id: string,
+    args: Record<string, unknown>,
+  ): Promise<void> {
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+
+    this.emit({
+      type: "toolActivity",
+      sessionId,
+      activity: {
+        id,
+        label: "Memoria",
+        status: "running",
+        detail: query || "(sin consulta)",
+      },
+    });
+
+    const recall = await recallVoiceMemory(query, state.memoryUserId).catch(
+      () => ({ query, hits: [] }),
+    );
+
+    // La sesión pudo cerrarse o reconectar mientras buscábamos en la memoria.
+    if (!state.session || this.sessions.get(sessionId) !== state) {
+      return;
+    }
+
+    const found = recall.hits.length > 0;
+    state.session.sendToolResponse({
+      functionResponses: [
+        {
+          id,
+          name: RECALL_MEMORY_FUNCTION_NAME,
+          response: found
+            ? { memories: recall.hits.map((hit) => hit.text) }
+            : { memories: [], note: "No recuerdo nada relevante sobre eso." },
+        },
+      ],
+    });
+
+    this.emit({
+      type: "toolActivity",
+      sessionId,
+      activity: {
+        id,
+        label: "Memoria",
+        status: "done",
+        detail: found
+          ? `${recall.hits.length} recuerdo(s)`
+          : "Sin coincidencias",
       },
     });
   }
@@ -2302,6 +2417,7 @@ export class StartTalkManager {
       state.enableTools,
       state.enableSearch,
       state.model,
+      state.enableMemory,
     );
     // Epoch de conexión: en el reconnect proactivo por goAway, la sesión vieja
     // sigue abierta y su onclose puede llegar DESPUÉS de haber reconectado. El
@@ -2644,6 +2760,15 @@ export class StartTalkManager {
           continue;
         }
 
+        if (call.name === RECALL_MEMORY_FUNCTION_NAME && state) {
+          void this.handleRecallMemoryToolCall(
+            sessionId,
+            state,
+            id,
+            (call.args as Record<string, unknown>) ?? {},
+          );
+          continue;
+        }
         if (call.name === WINDOWS_CONTEXT_FUNCTION_NAME && state) {
           void this.handleWindowsContextToolCall(sessionId, state, id);
           continue;

@@ -65,6 +65,51 @@ Esta función identifica la voz predominante de un turno contra identidades ya
 registradas. No pretende separar matemáticamente dos voces simultáneas ni
 presenta el solapamiento como diarización completa.
 
+## Memoria persistente (Supabase)
+
+Start Talk recuerda entre sesiones usando directamente el cerebro de Lumina en
+Supabase (proyecto `Lumina_IA`): las tablas `long_term_memories`, `memory_wiki`,
+`knowledge_entries`, `user_profiles` y `conversations`, con búsqueda semántica
+por embeddings (`text-embedding-3-small`, 1536 dimensiones).
+
+Tres momentos:
+
+- **Al conectar** carga un bloque de memoria (perfil, memorias durables
+  recientes y últimos mensajes) y lo inyecta en el system prompt, para que la
+  voz arranque "recordando" al usuario. Nunca lo lee en voz alta ni anuncia que
+  tiene memoria.
+- **Durante la conversación**, la función `recall_memory` busca semánticamente
+  en las memorias, la wiki de conocimiento y la base de preguntas/respuestas
+  cuando necesita recordar algo concreto. Aparece como una tarjeta **Memoria**
+  en el panel de actividad, igual que las búsquedas web.
+- **Al cerrar**, extrae de la conversación un hecho durable, lo vectoriza y lo
+  guarda, de modo que la próxima sesión ya parte sabiéndolo. También guarda el
+  hilo reciente.
+
+La conexión se activa sola cuando el `.env` de la raíz tiene `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY` y `OPENAI_API_KEY`. La `service_role` solo se usa en
+core (host de la extensión) y viaja únicamente hacia Supabase: jamás llega al
+webview. Todo es best-effort — si falta una credencial o Supabase no responde a
+tiempo, la conversación sigue sin memoria en vez de fallar. Bloquear **Memoria
+de conversaciones** en Privacidad la apaga por completo (recall y aprendizaje).
+El modo intérprete nunca recuerda ni aprende: solo traduce.
+
+Variables opcionales: `START_TALK_WIKI_USER_ID` (por defecto `lumina`, el
+`user_id` de la wiki) y `START_TALK_MEMORY_SUMMARY_MODEL` (por defecto
+`gpt-4o-mini`, el modelo que resume la conversación al aprender).
+
+La búsqueda semántica ignora las filas sin vector. Si se añaden datos a mano en
+esas tablas, hay que rellenar sus embeddings:
+
+```powershell
+Set-Location "C:\Lumina Code\continue-upstream\core"
+node scripts/backfillMemoryEmbeddings.mjs --dry-run   # cuenta lo que falta
+node scripts/backfillMemoryEmbeddings.mjs             # los rellena
+```
+
+El script es idempotente y no destructivo: solo toca filas con `embedding` en
+NULL.
+
 ## Multimedia y permisos
 
 La cámara y la pantalla se eligen por fuente, reportan su estado real y pueden
