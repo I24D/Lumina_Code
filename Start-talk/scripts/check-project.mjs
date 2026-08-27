@@ -51,6 +51,24 @@ function listFiles(directory, rootDirectory = directory) {
   });
 }
 
+// No debe quedar ninguna salida de Cargo que una persona u otro agente pueda
+// confundir con el release canónico. `npm run build` las poda al terminar.
+const targetRoot = resolve(root, "src-tauri", "target");
+const targetFiles = listFiles(targetRoot).map((file) =>
+  file.replaceAll("\\", "/"),
+);
+const unexpectedTargetFiles = targetFiles.filter(
+  (file) => file !== "release/start-talk.exe",
+);
+if (unexpectedTargetFiles.length > 0) {
+  failures.push(
+    "src-tauri/target contiene artefactos binarios ambiguos " +
+      `(${unexpectedTargetFiles.slice(0, 4).join(", ")}` +
+      `${unexpectedTargetFiles.length > 4 ? ", ..." : ""}); ` +
+      "ejecuta npm run prune:binaries",
+  );
+}
+
 const tauriConfig = JSON.parse(read("src-tauri/tauri.conf.json") || "{}");
 const frontendHtml = read("orb-frontend/index.html");
 const nativeShell = read("src-tauri/src/lib.rs");

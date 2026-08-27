@@ -38,27 +38,21 @@ let restartAttempts = 0;
 let disposing = false;
 let disposeRegistered = false;
 
-/** Rutas candidatas del ejecutable del orbe (release primero, luego debug). */
+/**
+ * Resuelve una salida canónica: release local en desarrollo o copia nativa del
+ * VSIX instalado. No admite overrides ni debug porque hicieron posible lanzar
+ * silenciosamente un orbe anterior al código que se estaba probando.
+ */
 export function resolveStartTalkOrbExecutable(
   context: vscode.ExtensionContext,
 ): string | undefined {
-  const envExe = process.env.LUMINA_ORB_EXE;
-  if (envExe && fs.existsSync(envExe)) {
-    return envExe;
-  }
-
   const startTalkRoot = path.resolve(
     context.extensionPath,
     "../../../Start-talk",
   );
   const candidates = [
-    path.join(context.extensionPath, "native/start-talk/start-talk.exe"),
     path.join(startTalkRoot, "src-tauri/target/release/start-talk.exe"),
-    path.join(startTalkRoot, "src-tauri/target/debug/start-talk.exe"),
-    path.join(context.extensionPath, "native/start-talk/start-talk"),
-    // no-Windows (por si acaso)
-    path.join(startTalkRoot, "src-tauri/target/release/start-talk"),
-    path.join(startTalkRoot, "src-tauri/target/debug/start-talk"),
+    path.join(context.extensionPath, "native/start-talk/start-talk.exe"),
   ];
   return candidates.find((candidate) => fs.existsSync(candidate));
 }

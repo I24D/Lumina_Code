@@ -101,16 +101,21 @@ Tres avisos que cuestan caro si se ignoran:
   script, no el HTML. Si no se recopia, el orbe queda pidiendo la entrada del
   bundle anterior y la ventana abre en negro sin que la compilación falle.
   `npm run check` en `Start-talk` detecta justo ese desajuste.
-- ⚠️ **El exe suele estar bloqueado** porque el orbe esta corriendo y el
-  supervisor lo respawnea si lo matas. Windows si permite *renombrar* un exe
-  bloqueado, asi que la salida limpia es:
+- ⚠️ **El exe suele estar bloqueado** porque el orbe está corriendo y el
+  supervisor lo relanza si se mata abruptamente. Cierra su ventana de forma
+  normal y compila siempre mediante el script oficial:
 
   ```powershell
-  $rel = "C:\Lumina Code\Start-talk\src-tauri\target\release"
-  Rename-Item "$rel\start-talk.exe" "start-talk.old.exe"
-  # ...compilar...
-  # y borrar el .old.exe cuando el orbe se haya reiniciado
+  Get-Process start-talk -ErrorAction SilentlyContinue |
+    ForEach-Object { $_.CloseMainWindow() | Out-Null }
+  Set-Location "C:\Lumina Code\Start-talk"
+  npm run build
   ```
+
+  No renombres el ejecutable ni crees `start-talk.old.exe`. El `postbuild`
+  elimina automáticamente la caché binaria, incluidas las copias de `deps` o
+  `debug`, y conserva solamente
+  `src-tauri\target\release\start-talk.exe`.
 
 Comprobar que el bundle embebido es el recien construido:
 

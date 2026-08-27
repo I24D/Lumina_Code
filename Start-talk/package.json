@@ -8,8 +8,10 @@
     "build": "npm run tauri -- build --no-bundle",
     "check": "node scripts/check-project.mjs",
     "dev": "npm run tauri -- dev",
+    "postbuild": "npm run prune:binaries",
     "prepare:frontend": "npm --prefix ../continue-upstream/gui run build && node scripts/sync-frontend.mjs",
     "pretauri": "npm run prepare:frontend && npm run check -- --allow-stale-exe",
+    "prune:binaries": "node scripts/prune-build-artifacts.mjs",
     "tauri": "tauri"
   },
   "devDependencies": {

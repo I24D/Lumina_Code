@@ -111,9 +111,19 @@ function Repair-SqliteNativeModule {
 
 function Repair-StartTalkExecutable {
     $buildScript = Join-Path $startTalkRoot "scripts\build-native.ps1"
+    $pruneScript = Join-Path $startTalkRoot "scripts\prune-build-artifacts.mjs"
     $orbExecutable = Join-Path $startTalkRoot "src-tauri\target\release\start-talk.exe"
     if (-not (Test-Path -LiteralPath $buildScript)) {
         throw "Start Talk build script was not found: $buildScript"
+    }
+
+    if (-not (Test-Path -LiteralPath $pruneScript)) {
+        throw "Start Talk binary cleanup script was not found: $pruneScript"
+    }
+    Write-Host "Removing ambiguous Start Talk binaries..."
+    & node.exe $pruneScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "Start Talk binary cleanup failed. Review the output above."
     }
 
     $inputFiles = @()

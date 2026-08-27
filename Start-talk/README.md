@@ -68,6 +68,10 @@ Test-Path .\src-tauri\target\release\start-talk.exe
 ```
 
 `npm run build` siempre vuelve a ensamblar la GUI antes de generar el `.exe`.
+Al terminar también elimina la caché binaria de Cargo, incluidas las copias de
+`deps`, `debug` o `start-talk.old.exe`: la única ruta válida en desarrollo es
+`src-tauri/target/release/start-talk.exe`. `npm run check` falla si reaparece
+alguna copia ambigua.
 Si solo necesitas refrescar la copia embebible, usa
 `npm run prepare:frontend`; `npm run check` falla cuando la copia o el
 ejecutable quedaron atrasados.

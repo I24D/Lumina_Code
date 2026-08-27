@@ -427,8 +427,9 @@ Raiz: `Lumina-Code/Start-talk/`
   - IMPORTANTE: borrar los directorios destino ANTES de copiar, o
     PowerShell anida (`assets/assets/...`) y el exe embebe el bundle viejo.
 - Exe compilado (Rust):
-  `Start-talk/src-tauri/target/release/start-talk.exe`
-  (o `.../debug/start-talk.exe` en dev).
+  `Start-talk/src-tauri/target/release/start-talk.exe`.
+  Es la única salida canónica también en desarrollo; no usar copias `debug`,
+  `deps` ni archivos `.old.exe`.
 - NOTA: `Start-talk/src/` (App.tsx, main.tsx, index.html) son el scaffold por
   defecto de Tauri y estan SIN USO (Tauri carga `orb-frontend`, no `src/`).
   No revertir ni borrar.
@@ -443,7 +444,8 @@ Raiz: `Lumina-Code/Start-talk/`
     reenvia lo entrante con `webviewProtocol.handleExternalMessage`.
 - `continue-upstream/extensions/vscode/src/extension/startTalkOrb.ts` (NUEVO)
   - `launchStartTalkOrb(context, webviewProtocol)`: resuelve el exe en
-    `Start-talk/src-tauri/target/{release,debug}/start-talk.exe`, arranca el
+    `Start-talk/src-tauri/target/release/start-talk.exe` en desarrollo o en la
+    ruta nativa del VSIX instalado, arranca el
     bridge y hace spawn del exe con
     `env.LUMINA_ORB_BRIDGE = ws://127.0.0.1:<port>/?token=<token>`.
   - `disposeStartTalkOrb()`.
@@ -556,17 +558,17 @@ foreach ($d in "assets","fonts","logos") {
 Compilar el exe Tauri:
 
 ```powershell
-cd C:\I24D_WhatsApp\Lumina-Code\Start-talk\src-tauri
-cargo build            # debug (lo que lanza el launcher si no hay release)
-# o: cargo build --release
+cd "C:\Lumina Code\Start-talk"
+npm run build
 ```
 
 > IMPORTANTE: Tauri EMBEBE `orb-frontend` dentro del `.exe` al compilar
 > (`frontendDist`, sin dev-server). Reensamblar `orb-frontend/` NO actualiza el
 > orbe en ejecucion: hay que **recompilar el exe con `cargo build`** y volver a
-> lanzar (clic en Start talk). El launcher usa `release/start-talk.exe` si existe,
-> si no `debug/start-talk.exe`. Si el orbe esta abierto, cerrarlo antes de
-> compilar (el exe queda bloqueado).
+> lanzar (clic en Start Talk). El launcher usa únicamente
+> `release/start-talk.exe`; no existe fallback a `debug`. Si el orbe está
+> abierto, cerrar su ventana normalmente antes de compilar. `postbuild` poda
+> cualquier copia ejecutable interna y `npm run check` rechaza rutas ambiguas.
 
 Verificaciones utiles:
 
