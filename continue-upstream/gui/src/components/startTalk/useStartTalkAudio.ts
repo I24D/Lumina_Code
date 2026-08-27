@@ -1583,13 +1583,13 @@ export function useStartTalkAudio({
           for (let i = 0; i < bytes.length; i += 0x8000) {
             binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
           }
-          void ideMessenger
-            .request("startTalk/sendAudio", {
-              sessionId,
-              data: btoa(binary),
-              mimeType: "audio/pcm;rate=16000",
-            })
-            .catch(() => undefined);
+          // Continuous one-way stream: a response per audio block doubles
+          // bridge traffic and creates listeners that the caller never needs.
+          ideMessenger.post("startTalk/sendAudio", {
+            sessionId,
+            data: btoa(binary),
+            mimeType: "audio/pcm;rate=16000",
+          });
         },
         onError: (message) => {
           setErrorMessage(message);
@@ -1637,6 +1637,13 @@ export function useStartTalkAudio({
     resetNotificationQueue();
     assistantTurnActiveRef.current = false;
     assistantTranscriptRef.current = "";
+
+    // Warm AudioContext + AudioWorklet while Gemini connects so first speech
+    // does not pay output initialization latency.
+    if (!pcmPlayerRef.current) {
+      pcmPlayerRef.current = new PcmPlayer();
+    }
+    void pcmPlayerRef.current.ensureStarted().catch(() => undefined);
 
     const activeTranslation = translationRef.current;
     try {

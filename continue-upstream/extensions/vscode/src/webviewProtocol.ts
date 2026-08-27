@@ -1,5 +1,5 @@
 import { FromWebviewProtocol, ToWebviewProtocol } from "core/protocol";
-import { Message } from "core/protocol/messenger";
+import { Message, messageExpectsResponse } from "core/protocol/messenger";
 import { v4 as uuidv4 } from "uuid";
 import * as vscode from "vscode";
 
@@ -76,6 +76,10 @@ export class VsCodeWebviewProtocol
       throw new Error(`Invalid webview protocol msg: ${JSON.stringify(msg)}`);
     }
 
+    // Audio/telemetry posts are one-way. Avoid sending a response that no
+    // caller consumes; requests and streams keep the complete protocol.
+    const reply = messageExpectsResponse(msg) ? respond : (_data: any) => {};
+
     const handlers =
       this.listeners.get(msg.messageType as keyof FromWebviewProtocol) || [];
     for (const handler of handlers) {
@@ -85,28 +89,28 @@ export class VsCodeWebviewProtocol
         if (response && typeof response[Symbol.asyncIterator] === "function") {
           let next = await response.next();
           while (!next.done) {
-            respond({
+            reply({
               done: false,
               content: next.value,
               status: "success",
             });
             next = await response.next();
           }
-          respond({
+          reply({
             done: true,
             content: next.value,
             status: "success",
           });
         } else {
-          respond({ done: true, content: response, status: "success" });
+          reply({ done: true, content: response, status: "success" });
         }
       } catch (e: any) {
         if (await handleLLMError(e)) {
           // Respond without an error, so the UI doesn't show the error component
-          respond({ done: true, status: "error" });
+          reply({ done: true, status: "error" });
         }
         let message = e.message;
-        respond({ done: true, error: message, status: "error" });
+        reply({ done: true, error: message, status: "error" });
 
         const stringified = JSON.stringify({ msg }, null, 2);
         console.error(`Error handling webview message: ${stringified}\n\n${e}`);

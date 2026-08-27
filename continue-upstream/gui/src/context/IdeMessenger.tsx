@@ -79,6 +79,7 @@ export class IdeMessenger implements IIdeMessenger {
     messageType: string,
     data: any,
     messageId: string = uuidv4(),
+    fireAndForget = false,
   ) {
     if (typeof vscode === "undefined") {
       if (isJetBrains()) {
@@ -106,24 +107,33 @@ export class IdeMessenger implements IIdeMessenger {
       messageId,
       messageType,
       data,
+      ...(fireAndForget ? { fireAndForget: true } : {}),
     };
 
     vscode.postMessage(msg);
   }
 
-  post<T extends keyof FromWebviewProtocol>(
-    messageType: T,
-    data: FromWebviewProtocol[T][0],
-    messageId?: string,
-    attempt: number = 0,
-  ) {
+  private postWithRetry(
+    messageType: string,
+    data: any,
+    messageId: string | undefined,
+    fireAndForget: boolean,
+    attempt = 0,
+  ): void {
     try {
-      this._postToIde(messageType, data, messageId);
+      this._postToIde(messageType, data, messageId, fireAndForget);
     } catch (error) {
       if (attempt < 5) {
         console.log(`Attempt ${attempt} failed. Retrying...`);
         setTimeout(
-          () => this.post(messageType, data, messageId, attempt + 1),
+          () =>
+            this.postWithRetry(
+              messageType,
+              data,
+              messageId,
+              fireAndForget,
+              attempt + 1,
+            ),
           Math.pow(2, attempt) * 1000,
         );
       } else {
@@ -133,6 +143,15 @@ export class IdeMessenger implements IIdeMessenger {
         );
       }
     }
+  }
+
+  post<T extends keyof FromWebviewProtocol>(
+    messageType: T,
+    data: FromWebviewProtocol[T][0],
+    messageId?: string,
+    attempt: number = 0,
+  ) {
+    this.postWithRetry(messageType, data, messageId, true, attempt);
   }
 
   respond<T extends keyof ToWebviewProtocol>(
@@ -158,7 +177,7 @@ export class IdeMessenger implements IIdeMessenger {
       };
       window.addEventListener("message", handler);
 
-      this.post(messageType, data, messageId);
+      this.postWithRetry(messageType, data, messageId, false);
     });
   }
 
@@ -180,7 +199,7 @@ export class IdeMessenger implements IIdeMessenger {
   > {
     const messageId = uuidv4();
 
-    this.post(messageType, data, messageId);
+    this.postWithRetry(messageType, data, messageId, false);
 
     const buffer: GeneratorYieldType<FromWebviewProtocol[T][1]>[] = [];
     let index = 0;

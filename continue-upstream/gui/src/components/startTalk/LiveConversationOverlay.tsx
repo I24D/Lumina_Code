@@ -1491,6 +1491,7 @@ export function LiveConversationOverlay({
     userTranscript,
     isCrowded,
     micSettings,
+    lastTurnMetrics,
     sessionMetrics,
     videoSource,
     videoState,
@@ -2195,14 +2196,25 @@ export function LiveConversationOverlay({
             ) : null}
             {sessionMetrics && sessionMetrics.turns > 0 ? (
               <>
-                <Metric>
-                  respuesta{" "}
+                <Metric title="Mediana desde que terminas de hablar hasta el primer audio, incluido el cierre del micrófono.">
+                  respuesta total{" "}
                   <b>
                     {sessionMetrics.medianResponseLatencyMs !== undefined
                       ? `${(sessionMetrics.medianResponseLatencyMs / 1000).toFixed(1)} s`
                       : "—"}
                   </b>
                 </Metric>
+                {lastTurnMetrics?.serverResponseLatencyMs !== undefined ? (
+                  <Metric title="Último turno: red y modelo desde el cierre del VAD hasta el primer audio.">
+                    modelo{" "}
+                    <b>
+                      {(lastTurnMetrics.serverResponseLatencyMs / 1000).toFixed(
+                        1,
+                      )}{" "}
+                      s
+                    </b>
+                  </Metric>
+                ) : null}
                 {sessionMetrics.meanDeliveryRate !== undefined ? (
                   <Metric>
                     entrega <b>{sessionMetrics.meanDeliveryRate.toFixed(1)}x</b>

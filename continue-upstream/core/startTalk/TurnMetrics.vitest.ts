@@ -49,6 +49,24 @@ describe("TurnMetricsTracker", () => {
     expect(metrics.turnId).toBe(1);
   });
 
+  it("mide la latencia percibida incluyendo el cierre local del VAD", () => {
+    const { clock, tracker } = makeTracker();
+
+    clock.t = 1_000;
+    tracker.onActivityStart();
+    tracker.onUserTranscript("hola");
+    clock.t = 3_520;
+    tracker.onActivityEnd(520);
+    clock.t = 4_120;
+    tracker.onAssistantAudio(secondsOfAudio(0.2), 24000);
+
+    const metrics = tracker.onTurnComplete()!;
+    expect(metrics.userSpeechMs).toBe(2_000);
+    expect(metrics.endpointingLatencyMs).toBe(520);
+    expect(metrics.serverResponseLatencyMs).toBe(600);
+    expect(metrics.responseLatencyMs).toBe(1_120);
+  });
+
   it("mide la velocidad de entrega, que es lo que llena la cola", () => {
     const { clock, tracker } = makeTracker();
 

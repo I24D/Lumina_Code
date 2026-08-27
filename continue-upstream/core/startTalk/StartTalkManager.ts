@@ -82,6 +82,8 @@ const DEFAULT_LIVE_MODEL = "gemini-3.1-flash-live-preview";
 const DEFAULT_TRANSLATE_MODEL = "gemini-3.5-live-translate-preview";
 const DEFAULT_LUMINA_VOICE_NAME = "Leda";
 const DEFAULT_THINKING_LEVEL: StartTalkThinkingLevel = "low";
+/** Auxiliary context must never delay the real-time voice connection for seconds. */
+const STARTUP_CONTEXT_BUDGET_MS = 750;
 const PROVIDER: StartTalkProvider = "gemini-live";
 const LUMINA_VOICE_SYSTEM_INSTRUCTION = [
   "You are Lumina Code inside VS Code.",
@@ -784,10 +786,15 @@ export class StartTalkManager {
       // bloqueados no se cargan siquiera, así que nunca entran al prompt.
       const [memoryBlock, windowsContext] = await Promise.all([
         isCapabilityAvailable("voiceMemory")
-          ? loadVoiceMemoryBlock(state.memoryUserId).catch(() => "")
+          ? loadVoiceMemoryBlock(
+              state.memoryUserId,
+              STARTUP_CONTEXT_BUDGET_MS,
+            ).catch(() => "")
           : Promise.resolve(""),
         isCapabilityAvailable("systemContext")
-          ? loadWindowsSystemContext().catch(() => undefined)
+          ? loadWindowsSystemContext({
+              timeoutMs: STARTUP_CONTEXT_BUDGET_MS,
+            }).catch(() => undefined)
           : Promise.resolve(undefined),
       ]);
       state.memoryBlock = memoryBlock;
@@ -1007,8 +1014,8 @@ export class StartTalkManager {
             },
           });
         },
-        onActivityEnd: () => {
-          state.metrics.onActivityEnd();
+        onActivityEnd: (trailingSilenceMs) => {
+          state.metrics.onActivityEnd(trailingSilenceMs);
           this.safeRealtimeInput(state, { activityEnd: {} });
           if (captureBiometrics) {
             this.identifyTurnSpeaker(sessionId, state, state.speakerTurnId);

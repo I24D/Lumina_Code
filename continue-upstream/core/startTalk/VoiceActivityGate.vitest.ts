@@ -23,9 +23,7 @@ function genPcm(ms: number, amplitude: number): Buffer {
 function babbleFrame(index: number): Buffer {
   const amplitude = Math.max(
     400,
-    Math.round(
-      2600 + Math.sin(index / 3) * 900 + Math.sin(index / 7) * 500,
-    ),
+    Math.round(2600 + Math.sin(index / 3) * 900 + Math.sin(index / 7) * 500),
   );
   return genPcm(20, amplitude);
 }
@@ -93,6 +91,37 @@ describe("VoiceActivityGate", () => {
     expect(onActivityStart.mock.invocationCallOrder[0]).toBeLessThan(
       onActivityEnd.mock.invocationCallOrder[0],
     );
+  });
+
+  it("cierra un turno normal en 520 ms y reporta esa cola al medidor", () => {
+    const clock = { t: 0 };
+    const { gate, onActivityEnd } = makeGate(clock);
+
+    feed(gate, clock, 300, 6000);
+    feed(gate, clock, 500, 0);
+    expect(onActivityEnd).not.toHaveBeenCalled();
+
+    feed(gate, clock, 20, 0);
+    expect(onActivityEnd).toHaveBeenCalledTimes(1);
+    expect(onActivityEnd).toHaveBeenCalledWith(520);
+  });
+
+  it("conserva un cierre de 700 ms si el turno detectó una sala concurrida", () => {
+    const clock = { t: 0 };
+    const { gate, onActivityEnd } = makeGate(clock, {
+      crowdedWindowMs: 200,
+      crowdedVoicedRatio: 0.5,
+      softBoundaryAfterMs: 20_000,
+      maxTurnMs: 20_000,
+    });
+
+    feed(gate, clock, 500, 6000);
+    feed(gate, clock, 520, 0);
+    expect(onActivityEnd).not.toHaveBeenCalled();
+
+    feed(gate, clock, 180, 0);
+    expect(onActivityEnd).toHaveBeenCalledTimes(1);
+    expect(onActivityEnd).toHaveBeenCalledWith(700);
   });
 
   it("detecta voz suave con huecos breves entre silabas", () => {

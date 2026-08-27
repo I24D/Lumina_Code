@@ -206,7 +206,10 @@ export class PcmPlayer {
         throw new Error("AudioContext no disponible en este WebView.");
       }
       // 24 kHz = tasa nativa de Gemini: evita remuestrear en el camino normal.
-      const context = new Ctor({ sampleRate: GEMINI_OUTPUT_SAMPLE_RATE });
+      const context = new Ctor({
+        sampleRate: GEMINI_OUTPUT_SAMPLE_RATE,
+        latencyHint: "interactive",
+      });
       const blob = new Blob([WORKLET_SOURCE], {
         type: "application/javascript",
       });

@@ -32,7 +32,7 @@ export interface VoiceActivityGateCallbacks {
   /** Reenvía un frame de audio (PCM s16le mono) a la sesión Live. */
   onAudio: (pcm: Buffer) => void;
   /** Cierra el turno del usuario. Dispara la respuesta del modelo. */
-  onActivityEnd: () => void;
+  onActivityEnd: (trailingSilenceMs?: number) => void;
   /** Cambio de estado observable (para UI/telemetría). Opcional. */
   onSpeechState?: (speaking: boolean) => void;
   /**
@@ -69,6 +69,8 @@ export interface VoiceActivityGateOptions {
   startSustainMsBarge: number;
   /** Silencio necesario para cerrar el turno del usuario (ms). */
   endSilenceMs: number;
+  /** Cierre más conservador cuando se detectan varias voces (ms). */
+  crowdedEndSilenceMs: number;
   /** Pre-roll retenido para no perder el ataque de la primera palabra (ms). */
   preRollMs: number;
   /** Velocidad de adaptacion cuando el ambiente se vuelve mas silencioso. */
@@ -143,8 +145,11 @@ export const DEFAULT_GATE_OPTIONS: VoiceActivityGateOptions = {
   bargeAbsoluteFloor: 620,
   startSustainMsIdle: 100,
   startSustainMsBarge: 450,
-  endSilenceMs: 650,
-  preRollMs: 500,
+  // 520 ms stays inside Gemini's recommended 500-800 ms manual-VAD window,
+  // while removing 130 ms from every ordinary spoken turn.
+  endSilenceMs: 520,
+  crowdedEndSilenceMs: 700,
+  preRollMs: 280,
   noiseFallAlpha: 0.08,
   noiseRiseAlpha: 0.04,
   maxNoiseRiseRatio: 1.35,
@@ -186,6 +191,8 @@ export class VoiceActivityGate {
   /** Duración del turno abierto y pico de energía observado en él. */
   private turnMs = 0;
   private turnPeakRms = 0;
+  /** Conserva el modo sala durante el cierre aunque el silencio vacíe la ventana. */
+  private turnWasCrowded = false;
   /** Duración del hueco relativo en curso (cierre suave en entornos ruidosos). */
   private dipMs = 0;
 
@@ -346,6 +353,7 @@ export class VoiceActivityGate {
     }
 
     // state === "speaking": ya cedimos el turno al usuario.
+    this.turnWasCrowded ||= this.crowded;
     this.callbacks.onAudio(frame);
     this.turnMs += this.opts.frameMs;
     this.turnPeakRms = Math.max(this.turnPeakRms, rms);
@@ -355,8 +363,11 @@ export class VoiceActivityGate {
     } else {
       this.silenceMs += this.opts.frameMs;
       this.adaptNoiseFloor(rms);
-      if (this.silenceMs >= this.opts.endSilenceMs) {
-        this.closeTurn();
+      const requiredSilenceMs = this.turnWasCrowded
+        ? Math.max(this.opts.endSilenceMs, this.opts.crowdedEndSilenceMs)
+        : this.opts.endSilenceMs;
+      if (this.silenceMs >= requiredSilenceMs) {
+        this.closeTurn(this.silenceMs);
         return;
       }
     }
@@ -373,7 +384,7 @@ export class VoiceActivityGate {
 
     const canUseSoftBoundary = this.turnMs >= this.opts.softBoundaryAfterMs;
     if (canUseSoftBoundary && this.dipMs >= this.opts.softBoundarySilenceMs) {
-      this.closeTurn();
+      this.closeTurn(this.dipMs);
       return;
     }
 
@@ -493,6 +504,7 @@ export class VoiceActivityGate {
     this.silenceMs = 0;
     this.turnMs = 0;
     this.turnPeakRms = 0;
+    this.turnWasCrowded = this.crowded;
     this.dipMs = 0;
     this.callbacks.onActivityStart();
     this.callbacks.onSpeechState?.(true);
@@ -553,6 +565,7 @@ export class VoiceActivityGate {
     this.silenceMs = 0;
     this.turnMs = 0;
     this.turnPeakRms = 0;
+    this.turnWasCrowded = this.crowded;
     this.dipMs = 0;
     this.callbacks.onActivityStart();
     this.callbacks.onSpeechState?.(true);
@@ -564,14 +577,15 @@ export class VoiceActivityGate {
     this.clearPreRoll();
   }
 
-  private closeTurn(): void {
+  private closeTurn(trailingSilenceMs = 0): void {
     this.state = "idle";
     this.candidateMs = 0;
     this.silenceMs = 0;
     this.turnMs = 0;
     this.turnPeakRms = 0;
+    this.turnWasCrowded = false;
     this.dipMs = 0;
-    this.callbacks.onActivityEnd();
+    this.callbacks.onActivityEnd(trailingSilenceMs);
     this.callbacks.onSpeechState?.(false);
   }
 
@@ -581,7 +595,7 @@ export class VoiceActivityGate {
    */
   reset(flush = true): void {
     if (this.state === "speaking" && flush) {
-      this.callbacks.onActivityEnd();
+      this.callbacks.onActivityEnd(0);
       this.callbacks.onSpeechState?.(false);
     }
     this.state = "idle";
@@ -589,6 +603,7 @@ export class VoiceActivityGate {
     this.silenceMs = 0;
     this.turnMs = 0;
     this.turnPeakRms = 0;
+    this.turnWasCrowded = false;
     this.dipMs = 0;
     this.residual = Buffer.alloc(0);
     this.clearStopWordState();
@@ -615,7 +630,10 @@ export class VoiceActivityGate {
   private pushPreRoll(frame: Buffer): void {
     this.preRoll.push(Buffer.from(frame));
     this.preRollMsHeld += this.opts.frameMs;
-    while (this.preRollMsHeld > this.opts.preRollMs && this.preRoll.length > 0) {
+    while (
+      this.preRollMsHeld > this.opts.preRollMs &&
+      this.preRoll.length > 0
+    ) {
       this.preRoll.shift();
       this.preRollMsHeld -= this.opts.frameMs;
     }

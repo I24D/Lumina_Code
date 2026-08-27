@@ -42,7 +42,10 @@ export function resolveVoiceUserId(): string {
 }
 
 function clip(value: unknown, max = 240): string {
-  return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
 }
 
 async function getJson(
@@ -64,7 +67,10 @@ async function getJson(
  * Construye el bloque de memoria para el system prompt. Devuelve "" si no hay
  * nada que recordar o el backend no responde (degradación silenciosa).
  */
-export async function loadVoiceMemoryBlock(userId?: string): Promise<string> {
+export async function loadVoiceMemoryBlock(
+  userId?: string,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<string> {
   let baseUrl: string;
   try {
     baseUrl = resolveLuminaCoreUrl();
@@ -73,7 +79,7 @@ export async function loadVoiceMemoryBlock(userId?: string): Promise<string> {
   }
   const uid = (userId && userId.trim()) || resolveVoiceUserId();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const recentUrl = new URL(`${baseUrl}/api/memory/recent`);
@@ -115,7 +121,10 @@ export async function loadVoiceMemoryBlock(userId?: string): Promise<string> {
       lines.push("Most recent conversation with the user:");
       for (const item of recentMsgs.slice(-6)) {
         const role = item?.role === "assistant" ? "You" : "User";
-        const text = clip(item?.content ?? item?.summary ?? item?.memory ?? "", 200);
+        const text = clip(
+          item?.content ?? item?.summary ?? item?.memory ?? "",
+          200,
+        );
         if (text) {
           lines.push(`${role}: ${text}`);
         }
@@ -170,7 +179,11 @@ export async function learnFromVoiceTranscript(
     await fetch(`${baseUrl}/api/memory/learn`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ userId: uid, transcript: cleaned, channel: "voice" }),
+      body: JSON.stringify({
+        userId: uid,
+        transcript: cleaned,
+        channel: "voice",
+      }),
       signal: controller.signal,
     });
   } catch {

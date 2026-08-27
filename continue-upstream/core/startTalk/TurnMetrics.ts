@@ -22,10 +22,14 @@ export interface StartTalkTurnMetrics {
   /** Cuánto habló el usuario, de activityStart a activityEnd. */
   userSpeechMs: number;
   /**
-   * Latencia de respuesta: del fin del turno del usuario al primer audio de
-   * Lumina. Es EL número de experiencia de usuario en una conversación hablada.
+   * Latencia total percibida: desde el final estimado de la voz del usuario
+   * hasta el primer audio de Lumina. Incluye el cierre local del VAD.
    */
   responseLatencyMs?: number;
+  /** Tiempo empleado por el cierre local del VAD después de la última voz. */
+  endpointingLatencyMs?: number;
+  /** De activityEnd al primer audio: red + Gemini, sin el cierre local. */
+  serverResponseLatencyMs?: number;
   /** Segundos de voz que generó Lumina en este turno. */
   assistantAudioSeconds: number;
   /** Fragmentos de audio recibidos. Delata modelos que trocean en exceso. */
@@ -96,6 +100,7 @@ export class TurnMetricsTracker {
   private turnId = 0;
   private turnStartedAt?: number;
   private turnEndedAt?: number;
+  private trailingSilenceMs = 0;
   private firstAudioAt?: number;
   private lastAudioAt?: number;
   private sawUserTranscript = false;
@@ -139,12 +144,13 @@ export class TurnMetricsTracker {
     }
   }
 
-  /** El gate cerró el turno; a partir de aquí se mide la latencia de respuesta. */
-  onActivityEnd(): void {
+  /** El gate cerró el turno e informa la cola usada para detectar el final. */
+  onActivityEnd(trailingSilenceMs = 0): void {
     if (!this.open) {
       return;
     }
     this.turnEndedAt = this.now();
+    this.trailingSilenceMs = Math.max(0, trailingSilenceMs);
   }
 
   onCrowded(crowded: boolean): void {
@@ -201,8 +207,13 @@ export class TurnMetricsTracker {
       this.audioBytes / 2 / (this.audioSampleRate || 24000);
 
     let responseLatencyMs: number | undefined;
+    let serverResponseLatencyMs: number | undefined;
     if (this.turnEndedAt !== undefined && this.firstAudioAt !== undefined) {
-      responseLatencyMs = Math.max(0, this.firstAudioAt - this.turnEndedAt);
+      serverResponseLatencyMs = Math.max(
+        0,
+        this.firstAudioAt - this.turnEndedAt,
+      );
+      responseLatencyMs = serverResponseLatencyMs + this.trailingSilenceMs;
     }
 
     let deliveryRate: number | undefined;
@@ -226,9 +237,18 @@ export class TurnMetricsTracker {
       turnId: ++this.turnId,
       userSpeechMs:
         this.turnStartedAt !== undefined && this.turnEndedAt !== undefined
-          ? Math.max(0, this.turnEndedAt - this.turnStartedAt)
+          ? Math.max(
+              0,
+              this.turnEndedAt - this.turnStartedAt - this.trailingSilenceMs,
+            )
           : 0,
       ...(responseLatencyMs !== undefined ? { responseLatencyMs } : {}),
+      ...(this.trailingSilenceMs > 0
+        ? { endpointingLatencyMs: this.trailingSilenceMs }
+        : {}),
+      ...(serverResponseLatencyMs !== undefined
+        ? { serverResponseLatencyMs }
+        : {}),
       assistantAudioSeconds: Number(assistantAudioSeconds.toFixed(2)),
       assistantChunks: this.chunks,
       ...(deliveryRate !== undefined
@@ -294,6 +314,7 @@ export class TurnMetricsTracker {
     this.open = false;
     this.turnStartedAt = undefined;
     this.turnEndedAt = undefined;
+    this.trailingSilenceMs = 0;
     this.firstAudioAt = undefined;
     this.lastAudioAt = undefined;
     this.sawUserTranscript = false;

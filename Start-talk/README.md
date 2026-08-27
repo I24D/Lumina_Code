@@ -26,6 +26,28 @@ Start Talk no es una aplicación independiente: debe iniciarse desde el comando 
 
 La clave de Gemini se utiliza únicamente para la experiencia de voz. El chat y el agente principal pueden usar otro proveedor; la configuración de referencia del proyecto es Ollama Cloud con `glm-5.2:cloud`.
 
+## Latencia y calidad de audio
+
+La ruta de voz está optimizada para conversación interactiva sin depender de
+flags experimentales del navegador:
+
+- captura mono PCM a 16 kHz en bloques de 40 ms, con cancelación de eco,
+  supresión de ruido y ganancia automática de WebRTC;
+- transporte unidireccional para el audio continuo, sin una respuesta del
+  puente por cada bloque;
+- VAD local de 20 ms con pre-roll de 280 ms y cierre de 520 ms en conversación
+  normal; en una sala con varias voces conserva 700 ms para no fragmentarlas;
+- salida PCM nativa a 24 kHz mediante AudioWorklet con prioridad interactiva,
+  precalentada mientras se conecta Gemini;
+- presupuesto máximo de 750 ms para memoria y contexto auxiliar durante el
+  arranque, de modo que un servicio opcional caído no bloquee Lumina Live;
+- diagnóstico visible que separa la latencia total percibida de la latencia de
+  red/modelo del último turno.
+
+El VAD manual es deliberado: evita que el eco o una voz de fondo interrumpan a
+Lumina, permite conservar el barge-in autorizado y mantiene límites especiales
+para conversaciones con varias personas.
+
 ## Desarrollo
 
 ```powershell

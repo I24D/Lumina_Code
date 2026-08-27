@@ -7,6 +7,14 @@ export interface Message<T = any> {
   messageType: string;
   messageId: string;
   data: T;
+  /** The sender does not expect a protocol response for this message. */
+  fireAndForget?: boolean;
+}
+
+export function messageExpectsResponse(
+  message: Pick<Message, "fireAndForget">,
+): boolean {
+  return message.fireAndForget !== true;
 }
 
 export interface FromMessage<

@@ -22,8 +22,10 @@
 
 /** Formato que exige la entrada de audio de la Live API. */
 export const MIC_SAMPLE_RATE = 16000;
-/** Tamaño del bloque que se envía a core (~64 ms a 16 kHz). */
-const FRAME_SAMPLES = 1024;
+/** 40 ms equilibran latencia interactiva y sobrecarga del puente. */
+export const MIC_FRAME_SAMPLES = 640;
+export const MIC_FRAME_DURATION_MS =
+  (MIC_FRAME_SAMPLES / MIC_SAMPLE_RATE) * 1000;
 
 /**
  * Worklet de captura: recibe bloques de 128 muestras a la tasa del contexto,
@@ -169,7 +171,7 @@ export class MicCapture {
     // El contexto va a la tasa nativa del dispositivo: forzar 16 kHz aquí
     // desactiva el procesamiento WebRTC en algunas versiones de Chromium. El
     // remuestreo lo hace el worklet.
-    const context = new AudioContext();
+    const context = new AudioContext({ latencyHint: "interactive" });
     this.context = context;
 
     const blob = new Blob([WORKLET_SOURCE], { type: "application/javascript" });
@@ -185,7 +187,7 @@ export class MicCapture {
       numberOfOutputs: 0,
       processorOptions: {
         targetRate: MIC_SAMPLE_RATE,
-        frameSamples: FRAME_SAMPLES,
+        frameSamples: MIC_FRAME_SAMPLES,
       },
     });
     node.port.onmessage = (event: MessageEvent) => {
