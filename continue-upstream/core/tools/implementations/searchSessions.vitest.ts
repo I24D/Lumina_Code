@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { searchSessionsImpl } from "./searchSessions.js";
 
-const search = vi.fn();
-const browse = vi.fn();
-const refresh = vi.fn(async () => ({ indexed: 0, removed: 0 }));
+const { search, browse, refresh } = vi.hoisted(() => ({
+  search: vi.fn(),
+  browse: vi.fn(),
+  refresh: vi.fn(async () => ({ indexed: 0, removed: 0 })),
+}));
 
 vi.mock("../../learning/SessionSearchIndex", () => ({
   getSessionSearchIndex: () => ({ search, browse, refresh }),
 }));
-
-const { searchSessionsImpl } = await import("./searchSessions.js");
 
 const CURRENT = "file:///c%3A/repo";
 
