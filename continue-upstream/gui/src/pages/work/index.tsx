@@ -21,7 +21,14 @@ import {
   type WorkboardPriority,
   type WorkboardSnapshot,
 } from "core/workboard/types";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import AcceptRejectDiffButtons from "../../components/AcceptRejectDiffButtons";
 import FileIcon from "../../components/FileIcon";
@@ -119,7 +126,12 @@ export default function WorkPanel() {
     useState<WorkboardSnapshot>(EMPTY_WORKBOARD);
   const [todos, setTodos] = useState<TodoSnapshot>(EMPTY_TODOS);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>();
+  // Kept apart on purpose: the 3-second poll owns the first, user actions own
+  // the second. When one variable held both, a poll landing right after a
+  // failed "Añadir" wiped the only explanation the user was going to get.
+  const [pollError, setPollError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
+  const error = actionError ?? pollError;
   const [recipe, setRecipe] = useState<VerificationRecipe | undefined>();
   const [newCardTitle, setNewCardTitle] = useState("");
   const [newCardPriority, setNewCardPriority] =
@@ -140,7 +152,15 @@ export default function WorkPanel() {
     };
   }, [ideMessenger]);
 
+  // A tick that starts while the previous one is still in flight only queues
+  // more work behind it; on a slow core the six requests pile up indefinitely.
+  const refreshing = useRef(false);
+
   const refresh = useCallback(async () => {
+    if (refreshing.current) {
+      return;
+    }
+    refreshing.current = true;
     try {
       const [
         runtimeResult,
@@ -173,22 +193,44 @@ export default function WorkPanel() {
         workboardResult,
         todosResult,
       ].find((result) => result.status === "error");
-      setError(failure?.status === "error" ? failure.error : undefined);
+      setPollError(failure?.status === "error" ? failure.error : undefined);
     } catch (cause) {
-      setError(
+      setPollError(
         cause instanceof Error
           ? cause.message
           : "No se pudo actualizar el panel.",
       );
     } finally {
+      refreshing.current = false;
       setLoading(false);
     }
   }, [ideMessenger]);
 
   useEffect(() => {
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 3000);
-    return () => window.clearInterval(timer);
+
+    // The webview is created with retainContextWhenHidden, so it keeps running
+    // after the user switches to another panel. Polling on regardless meant six
+    // IPC round-trips a second — several of them reading disk — for a screen
+    // nobody was looking at. Coming back refreshes immediately, so returning to
+    // the panel still shows current state rather than whatever was last drawn.
+    const tick = () => {
+      if (!document.hidden) {
+        void refresh();
+      }
+    };
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        void refresh();
+      }
+    };
+
+    const timer = window.setInterval(tick, 3000);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [refresh]);
 
   const activeGoals = goals.filter((goal) => goal.status === "active");
@@ -225,6 +267,7 @@ export default function WorkPanel() {
     const title = newCardTitle.trim();
     if (!title) return;
     setMutatingCard("new");
+    setActionError(undefined);
     try {
       const result = await ideMessenger.request("workboard/create", {
         title,
@@ -236,7 +279,7 @@ export default function WorkPanel() {
       setNewCardTitle("");
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setActionError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setMutatingCard(undefined);
     }
@@ -244,6 +287,7 @@ export default function WorkPanel() {
 
   const moveCard = async (card: WorkboardCard, column: WorkboardColumn) => {
     setMutatingCard(card.id);
+    setActionError(undefined);
     try {
       const result = await ideMessenger.request("workboard/update", {
         id: card.id,
@@ -252,7 +296,7 @@ export default function WorkPanel() {
       if (result.status === "error") throw new Error(result.error);
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setActionError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setMutatingCard(undefined);
     }
@@ -260,6 +304,7 @@ export default function WorkPanel() {
 
   const deleteCard = async (card: WorkboardCard) => {
     setMutatingCard(card.id);
+    setActionError(undefined);
     try {
       const result = await ideMessenger.request("workboard/delete", {
         id: card.id,
@@ -267,7 +312,7 @@ export default function WorkPanel() {
       if (result.status === "error") throw new Error(result.error);
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setActionError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setMutatingCard(undefined);
     }
@@ -340,7 +385,11 @@ export default function WorkPanel() {
         </div>
 
         {error && (
-          <div className="mb-3 rounded border border-solid border-red-500/40 p-2 text-xs text-red-300">
+          <div
+            role="alert"
+            data-testid="work-error"
+            className="mb-3 rounded border border-solid border-red-500/40 p-2 text-xs text-red-300"
+          >
             {error}
           </div>
         )}
