@@ -9,6 +9,18 @@ import type {
   SkillCandidate,
 } from "./types.js";
 
+/**
+ * How much memory is kept. These were inline literals applied only when the
+ * snapshot was read back from disk, which made them a cap on what survives a
+ * restart rather than a cap on what the process holds: a long-lived window kept
+ * appending, and every tool call rewrote the whole file synchronously. Exported
+ * so the in-memory log enforces the same ceiling as the file format.
+ */
+export const MAX_STORED_EXPERIENCES = 2_000;
+export const MAX_STORED_INSIGHTS = 1_000;
+export const MAX_STORED_SKILL_CANDIDATES = 1_000;
+export const MAX_STORED_TOMBSTONES = 5_000;
+
 function isStringArray(value: unknown): value is string[] {
   return (
     Array.isArray(value) && value.every((entry) => typeof entry === "string")
@@ -81,16 +93,18 @@ export function sanitizeMemorySnapshot(value: unknown): MemorySnapshot {
   return {
     version: 1,
     experiences: Array.isArray(raw.experiences)
-      ? raw.experiences.filter(isExperience).slice(-2_000)
+      ? raw.experiences.filter(isExperience).slice(-MAX_STORED_EXPERIENCES)
       : [],
     insights: Array.isArray(raw.insights)
-      ? raw.insights.filter(isInsight).slice(-1_000)
+      ? raw.insights.filter(isInsight).slice(-MAX_STORED_INSIGHTS)
       : [],
     skillCandidates: Array.isArray(raw.skillCandidates)
-      ? raw.skillCandidates.filter(isSkillCandidate).slice(-1_000)
+      ? raw.skillCandidates
+          .filter(isSkillCandidate)
+          .slice(-MAX_STORED_SKILL_CANDIDATES)
       : [],
     tombstones: Array.isArray(raw.tombstones)
-      ? raw.tombstones.filter(isTombstone).slice(-5_000)
+      ? raw.tombstones.filter(isTombstone).slice(-MAX_STORED_TOMBSTONES)
       : [],
     updatedAt:
       typeof raw.updatedAt === "string"
@@ -127,7 +141,7 @@ export function mergeMemorySnapshots(
     remote.tombstones,
     (entry) => entry.id,
     (entry) => entry.deletedAt,
-    5_000,
+    MAX_STORED_TOMBSTONES,
   );
   const deleted = new Map(
     tombstones.map((entry) => [entry.id, entry.deletedAt]),
@@ -137,7 +151,7 @@ export function mergeMemorySnapshots(
     remote.experiences,
     (record) => record.id,
     (record) => record.createdAt,
-    2_000,
+    MAX_STORED_EXPERIENCES,
   ).filter(
     (record) =>
       !deleted.has(record.id) || deleted.get(record.id)! < record.createdAt,
@@ -148,7 +162,7 @@ export function mergeMemorySnapshots(
     remote.insights,
     (insight) => insight.id,
     (insight) => insight.createdAt,
-    1_000,
+    MAX_STORED_INSIGHTS,
   )
     .map((insight) => ({
       ...insight,
@@ -162,7 +176,7 @@ export function mergeMemorySnapshots(
     remote.skillCandidates,
     (candidate) => `${candidate.name}\u0000${candidate.createdAt}`,
     (candidate) => candidate.createdAt,
-    1_000,
+    MAX_STORED_SKILL_CANDIDATES,
   );
   return {
     version: 1,
@@ -198,7 +212,9 @@ export class MemoryPersistence {
   save(snapshot: MemorySnapshot): void {
     fs.mkdirSync(path.dirname(this.storagePath), { recursive: true });
     const temporaryPath = `${this.storagePath}.tmp`;
-    fs.writeFileSync(temporaryPath, JSON.stringify(snapshot, null, 2), "utf8");
+    // Compact, not pretty-printed: nothing reads this by hand, and the
+    // indentation was roughly 40% of a file rewritten on every tool call.
+    fs.writeFileSync(temporaryPath, JSON.stringify(snapshot), "utf8");
     fs.renameSync(temporaryPath, this.storagePath);
   }
 

@@ -1,3 +1,4 @@
+import { MAX_STORED_EXPERIENCES } from "./MemoryPersistence.js";
 import { ExperienceRecord } from "./types.js";
 
 function createId(prefix: string): string {
@@ -6,6 +7,26 @@ function createId(prefix: string): string {
 
 export class ExperienceLogger {
   private readonly records: ExperienceRecord[] = [];
+
+  constructor(private readonly maxRecords = MAX_STORED_EXPERIENCES) {}
+
+  /**
+   * Drops the oldest records past the cap and hands them back.
+   *
+   * The limit used to live only in `sanitizeMemorySnapshot`, so it applied when
+   * the snapshot was read back and never while the process ran: a window left
+   * open kept appending, and since every tool call rewrites the whole snapshot
+   * synchronously, each one got slower than the last. Evicted records are
+   * returned rather than discarded because the caller also has to drop them
+   * from the vector index, which would otherwise keep matching entries that no
+   * longer exist.
+   */
+  evictOverflow(): ExperienceRecord[] {
+    if (this.records.length <= this.maxRecords) {
+      return [];
+    }
+    return this.records.splice(0, this.records.length - this.maxRecords);
+  }
 
   log(
     input: Omit<ExperienceRecord, "id" | "createdAt"> & {

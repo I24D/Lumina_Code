@@ -37,6 +37,9 @@ export class MemoryService {
         item: record,
       });
     }
+    for (const evicted of this.experienceLogger.evictOverflow()) {
+      this.vectorIndex.delete(evicted.id);
+    }
     this.insights.push(...insights);
     this.skillCandidates.push(...skillCandidates);
     this.tombstones.push(...tombstones);
@@ -53,6 +56,11 @@ export class MemoryService {
       text: `${record.goal}\n${record.summary}\n${record.error ?? ""}\n${record.tags.join(" ")}`,
       item: record,
     });
+    // The index has to shed whatever the log just shed, or it keeps returning
+    // experiences that are no longer in the snapshot.
+    for (const evicted of this.experienceLogger.evictOverflow()) {
+      this.vectorIndex.delete(evicted.id);
+    }
 
     const shouldReflect =
       this.experienceLogger.count() % 5 === 0 ||

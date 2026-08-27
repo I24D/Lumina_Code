@@ -136,9 +136,27 @@ function isTaskRecord(value: unknown): value is LuminaTaskRecord {
   );
 }
 
+/**
+ * How long writes are allowed to wait so a burst of tool calls costs one write
+ * instead of one per call.
+ *
+ * Every tool call used to rewrite both state files synchronously — three full
+ * rewrites per call, counting startToolCall. Measured at the 2.000-experience
+ * ceiling the format allows, one memory snapshot is ~1,3 MB and costs ~30 ms to
+ * serialise and write, all of it blocking the extension host. A turn with
+ * thirty tool calls spent about a second doing nothing but rewriting the same
+ * file. State is never more than this stale, and flushNow() closes the gap
+ * wherever the value is about to be read back.
+ */
+const PERSIST_COALESCE_MS = 250;
+
 export class LuminaAgentRuntime {
   readonly memoryService = new MemoryService();
   readonly taskLedger = new TaskLedger();
+
+  private persistTimer: ReturnType<typeof setTimeout> | undefined;
+  private memoryDirty = false;
+  private tasksDirty = false;
 
   private readonly stateDir =
     process.env.LUMINA_AGENT_STATE_DIR ??
@@ -296,23 +314,29 @@ export class LuminaAgentRuntime {
     );
   }
 
+  // The three below are user-initiated and destructive, so they are written
+  // through immediately rather than coalesced: someone who just deleted a
+  // memory expects it to stay deleted even if the window closes a moment later.
   deleteMemory(id: string): MemorySnapshot {
     if (!this.memoryService.removeExperience(id)) {
       throw new Error("La experiencia de memoria no existe.");
     }
     this.persistMemory();
+    this.flushNow();
     return this.memoryService.snapshot();
   }
 
   clearMemory(): MemorySnapshot {
     this.memoryService.clear();
     this.persistMemory();
+    this.flushNow();
     return this.memoryService.snapshot();
   }
 
   replaceMemory(snapshot: MemorySnapshot): MemorySnapshot {
     this.memoryService.replace(snapshot);
     this.persistMemory();
+    this.flushNow();
     return this.memoryService.snapshot();
   }
 
@@ -336,12 +360,55 @@ export class LuminaAgentRuntime {
     }
   }
 
+  /**
+   * Writes whatever is pending right now.
+   *
+   * Called before any read that has to reflect the latest state, and available
+   * to a shutdown path so a coalesced write is not lost on exit.
+   */
+  flushNow(): void {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = undefined;
+    }
+    if (this.tasksDirty) {
+      this.tasksDirty = false;
+      this.writeTasks();
+    }
+    if (this.memoryDirty) {
+      this.memoryDirty = false;
+      this.writeMemory();
+    }
+  }
+
   private persistTasks(): void {
+    this.tasksDirty = true;
+    this.schedulePersist();
+  }
+
+  private persistMemory(): void {
+    this.memoryDirty = true;
+    this.schedulePersist();
+  }
+
+  private schedulePersist(): void {
+    if (this.persistTimer) {
+      return;
+    }
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined;
+      this.flushNow();
+    }, PERSIST_COALESCE_MS);
+    // A pending write must never be the reason the process stays alive.
+    this.persistTimer.unref?.();
+  }
+
+  private writeTasks(): void {
     try {
       mkdirSync(this.stateDir, { recursive: true });
       writeFileSync(
         this.tasksPath,
-        JSON.stringify(this.taskLedger.snapshot(), null, 2),
+        JSON.stringify(this.taskLedger.snapshot()),
         "utf8",
       );
     } catch {
@@ -349,7 +416,7 @@ export class LuminaAgentRuntime {
     }
   }
 
-  private persistMemory(): void {
+  private writeMemory(): void {
     try {
       this.memoryPersistence.save(this.memoryService.snapshot());
     } catch {
