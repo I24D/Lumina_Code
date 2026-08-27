@@ -41,6 +41,27 @@ export default function ConnectionsPage() {
   const [trustedDrafts, setTrustedDrafts] = useState<
     Partial<Record<LuminaChannelId, string>>
   >({});
+  const [channelError, setChannelError] = useState<string>();
+  const [channelSaved, setChannelSaved] = useState<LuminaChannelId>();
+
+  /**
+   * Core rewrites what it stores: sanitizeSenders trims, dedupes by an
+   * accent-folded key and caps the list. Echoing the saved snapshot back into
+   * the text box is what makes the two agree — typing "Ana, ana" and saving
+   * used to leave the box reading "Ana, ana" while only "Ana" had been kept,
+   * and nothing on screen said so.
+   */
+  const adoptSnapshot = (snapshot: LuminaChannelSnapshot) => {
+    setChannels(snapshot);
+    setTrustedDrafts(
+      Object.fromEntries(
+        snapshot.channels.map((channel) => [
+          channel.id,
+          channel.trustedSenders.join(", "),
+        ]),
+      ),
+    );
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -53,15 +74,9 @@ export default function ConnectionsPage() {
       if (runtimeResult.status === "success") setRuntime(runtimeResult.content);
       if (talkResult.status === "success") setTalk(talkResult.content);
       if (channelResult.status === "success") {
-        setChannels(channelResult.content);
-        setTrustedDrafts(
-          Object.fromEntries(
-            channelResult.content.channels.map((channel) => [
-              channel.id,
-              channel.trustedSenders.join(", "),
-            ]),
-          ),
-        );
+        adoptSnapshot(channelResult.content);
+      } else {
+        setChannelError(channelResult.error);
       }
     });
     return () => {
@@ -154,10 +169,19 @@ export default function ConnectionsPage() {
   const connected = cards.filter((card) => card.state === "connected").length;
 
   const updateChannel = (id: LuminaChannelId, patch: LuminaChannelPatch) => {
+    setChannelError(undefined);
+    setChannelSaved(undefined);
     void ideMessenger
       .request("channels/update", { id, patch })
       .then((result) => {
-        if (result.status === "success") setChannels(result.content);
+        if (result.status === "success") {
+          adoptSnapshot(result.content);
+          setChannelSaved(id);
+          return;
+        }
+        // A rejected write left the control snapping back to its old value with
+        // no explanation, which reads exactly like the click never registered.
+        setChannelError(result.error);
       });
   };
 
@@ -229,6 +253,16 @@ export default function ConnectionsPage() {
             </p>
           </div>
         </div>
+
+        {channelError ? (
+          <div
+            role="alert"
+            data-testid="channel-error"
+            className="mb-3 rounded border border-solid border-red-500/40 bg-red-500/5 p-2 text-xs text-red-300"
+          >
+            No se pudo guardar el canal: {channelError}
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {(channels?.channels ?? []).map((channel) => (
@@ -309,6 +343,15 @@ export default function ConnectionsPage() {
                     Guardar
                   </button>
                 </div>
+                {channelSaved === channel.id ? (
+                  <span
+                    role="status"
+                    data-testid={`channel-saved-${channel.id}`}
+                    className="text-[10px] text-emerald-400"
+                  >
+                    Guardado. La lista de arriba es la que quedó registrada.
+                  </span>
+                ) : null}
               </label>
             </article>
           ))}

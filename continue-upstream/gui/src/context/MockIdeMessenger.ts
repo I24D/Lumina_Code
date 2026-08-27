@@ -354,6 +354,15 @@ export class MockIdeMessenger implements IIdeMessenger {
   responseHandlers: MockResponseHandlers = {
     ...DEFAULT_MOCK_CORE_RESPONSE_HANDLERS,
   };
+  /**
+   * Channels core should answer with a failure, keyed by message type.
+   *
+   * The real IdeMessenger never rejects: a handler that throws in core comes
+   * back over the wire as `{ status: "error", error }`, which is the shape the
+   * webview branches on. The mock could only throw, so no test could reach any
+   * of that error handling and the error paths went uncovered.
+   */
+  errors: Partial<Record<keyof FromWebviewProtocol, string>> = {};
   chatResponse: ChatMessage[] = DEFAULT_CHAT_RESPONSE;
   chatStreamDelay: number = 0;
   setChatResponseText(text: string): void {
@@ -399,6 +408,10 @@ export class MockIdeMessenger implements IIdeMessenger {
     messageType: T,
     data: FromWebviewProtocol[T][0],
   ): Promise<WebviewSingleProtocolMessage<T>> {
+    const failure = this.errors[messageType];
+    if (failure !== undefined) {
+      return { status: "error", error: failure, done: true };
+    }
     if (this.responseHandlers[messageType]) {
       const content = await this.responseHandlers[messageType](data);
       return {
@@ -442,6 +455,7 @@ export class MockIdeMessenger implements IIdeMessenger {
   resetMocks(): void {
     this.responses = { ...DEFAULT_MOCK_CORE_RESPONSES };
     this.responseHandlers = { ...DEFAULT_MOCK_CORE_RESPONSE_HANDLERS };
+    this.errors = {};
     this.chatResponse = DEFAULT_CHAT_RESPONSE;
     this.chatStreamDelay = 0;
   }

@@ -51,4 +51,43 @@ describe("ConnectionsPage channels", () => {
       patch: { trustedSenders: ["Ana", "José"] },
     });
   });
+
+  it("shows the list core actually stored, not the one that was typed", async () => {
+    // sanitizeSenders recorta y deduplica por una clave sin tildes, asi que lo
+    // guardado no siempre es lo escrito. Antes la caja seguia mostrando el
+    // texto original y nada avisaba de la diferencia.
+    const mockIdeMessenger = new MockIdeMessenger();
+    const snapshot = mockIdeMessenger.responses["channels/get"]!;
+    mockIdeMessenger.responseHandlers["channels/update"] = async ({ id }) => ({
+      ...snapshot,
+      channels: snapshot.channels.map((channel) =>
+        channel.id === id ? { ...channel, trustedSenders: ["Ana"] } : channel,
+      ),
+    });
+    await renderWithProviders(<ConnectionsPage />, { mockIdeMessenger });
+
+    const trusted = await screen.findByTestId(
+      "channel-trusted-whatsapp_desktop",
+    );
+    await userEvent.type(trusted, "Ana, ana, ANA");
+    await userEvent.click(screen.getAllByText("Guardar")[0]);
+
+    expect(await screen.findByTestId("channel-saved-whatsapp_desktop")).toBeInTheDocument();
+    expect(trusted).toHaveValue("Ana");
+  });
+
+  it("says so when core refuses the write instead of silently reverting", async () => {
+    const mockIdeMessenger = new MockIdeMessenger();
+    mockIdeMessenger.errors["channels/update"] =
+      "Canal desconocido: whatsapp_desktop";
+    await renderWithProviders(<ConnectionsPage />, { mockIdeMessenger });
+
+    await userEvent.click(
+      await screen.findByTestId("channel-enabled-whatsapp_desktop"),
+    );
+
+    expect(await screen.findByTestId("channel-error")).toHaveTextContent(
+      "Canal desconocido",
+    );
+  });
 });
