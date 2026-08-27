@@ -6,6 +6,8 @@ Start Talk es la interfaz de voz nativa de Lumina Code. Se ejecuta como una apli
 
 - conversación de voz bidireccional en tiempo real;
 - transcripción visible de la conversación;
+- núcleo energético animado con tenazas, aura y reacción al micrófono y a la voz;
+- evidencia visible de cada búsqueda web: consulta, proveedor, síntesis y fuentes;
 - lectura en voz alta de respuestas finales de Lumina Code, Claude Code y Codex;
 - selección de micrófono, cámara o monitor;
 - autorización explícita antes de enviar tareas de voz al agente;
@@ -29,15 +31,24 @@ La clave de Gemini se utiliza únicamente para la experiencia de voz. El chat y 
 ```powershell
 cd Start-talk
 npm install
-npm run tauri dev
+npm run dev
 ```
+
+El comando compila `continue-upstream/gui`, sincroniza el bundle completo con
+`orb-frontend`, valida que ambas copias sean idénticas y entonces inicia Tauri.
+Así el orbe no puede abrir silenciosamente una interfaz anterior.
 
 Para generar el ejecutable que se incluye en el VSIX:
 
 ```powershell
-npm run tauri build -- --no-bundle
+npm run build
 Test-Path .\src-tauri\target\release\start-talk.exe
 ```
+
+`npm run build` siempre vuelve a ensamblar la GUI antes de generar el `.exe`.
+Si solo necesitas refrescar la copia embebible, usa
+`npm run prepare:frontend`; `npm run check` falla cuando la copia o el
+ejecutable quedaron atrasados.
 
 Después inicia Lumina Code con el launcher de la raíz del repositorio. Ejecutar `start-talk.exe` directamente omite el puente de sesión y no permite comunicarse con la extensión.
 

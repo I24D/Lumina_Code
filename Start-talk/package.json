@@ -5,7 +5,11 @@
   "description": "Lumina Live native voice interface for the Lumina Code VS Code extension",
   "type": "module",
   "scripts": {
+    "build": "npm run tauri -- build --no-bundle",
     "check": "node scripts/check-project.mjs",
+    "dev": "npm run tauri -- dev",
+    "prepare:frontend": "npm --prefix ../continue-upstream/gui run build && node scripts/sync-frontend.mjs",
+    "pretauri": "npm run prepare:frontend && npm run check -- --allow-stale-exe",
     "tauri": "tauri"
   },
   "devDependencies": {

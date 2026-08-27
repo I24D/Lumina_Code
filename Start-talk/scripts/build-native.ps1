@@ -42,11 +42,14 @@ foreach ($line in $environment) {
 $env:PATH = "$rustBin;$env:PATH"
 Set-Location -LiteralPath $projectRoot
 
-& npm.cmd run check
-if ($LASTEXITCODE -ne 0) {
-  exit $LASTEXITCODE
+$tauri = Join-Path $projectRoot "node_modules\.bin\tauri.cmd"
+if (-not (Test-Path -LiteralPath $tauri)) {
+  Write-Host "Installing Start Talk build dependencies..."
+  & npm.cmd install
+  if ($LASTEXITCODE -ne 0) {
+    throw "Start Talk dependencies could not be installed."
+  }
 }
 
-$tauri = Join-Path $projectRoot "node_modules\.bin\tauri.cmd"
-& $tauri $Mode
+& npm.cmd run $Mode
 exit $LASTEXITCODE

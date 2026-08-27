@@ -32,6 +32,7 @@ import {
 } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
+import { LuminaEnergyCore } from "./LuminaEnergyCore";
 import { StartTalkControls } from "./StartTalkControls";
 import type {
   StartTalkModelOption,
@@ -148,6 +149,8 @@ const thinkingOptions: Array<{
   },
 ];
 
+// Reutilizadas por los indicadores compactos y el botón central inferior.
+// El núcleo principal tiene sus animaciones propias en LuminaEnergyCore.
 const breathe = keyframes`
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
   50% { transform: translate3d(0, -3px, 0) scale(1.035); }
@@ -162,12 +165,6 @@ const speakingWarp = keyframes`
   0%, 100% { transform: scaleX(1) scaleY(1); filter: saturate(1.08); }
   34% { transform: scaleX(1.08) scaleY(0.93); filter: saturate(1.3); }
   67% { transform: scaleX(0.97) scaleY(1.05); filter: saturate(1.18); }
-`;
-
-const thoughtShift = keyframes`
-  0% { background-position: 50% 18%, 50% 112%, 0% 50%; }
-  50% { background-position: 48% 22%, 52% 104%, 100% 50%; }
-  100% { background-position: 50% 18%, 50% 112%, 0% 50%; }
 `;
 
 const levelDance = keyframes`
@@ -657,106 +654,6 @@ const StatusLine = styled.div<{ $roomy: boolean; $tone: StartTalkStatus }>`
   font-weight: 620;
   line-height: 1.35;
   text-overflow: ellipsis;
-`;
-
-const OrbWrap = styled.div<{ $large: boolean; $roomy: boolean }>`
-  position: relative;
-  display: flex;
-  width: ${({ $large, $roomy }) =>
-    $roomy ? "clamp(174px, 13vw, 214px)" : $large ? "166px" : "128px"};
-  height: ${({ $large, $roomy }) =>
-    $roomy ? "clamp(174px, 13vw, 214px)" : $large ? "166px" : "128px"};
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-
-  @media (max-height: 560px) {
-    width: 102px;
-    height: 102px;
-  }
-`;
-
-const Ring = styled.div<{ $status: StartTalkStatus }>`
-  position: absolute;
-  inset: 7px;
-  border-radius: 50%;
-  background: ${({ $status }) =>
-    $status === "speaking"
-      ? "rgba(255, 91, 109, 0.3)"
-      : "rgba(53, 151, 255, 0.32)"};
-  filter: blur(14px);
-  opacity: ${({ $status }) =>
-    $status === "listening" || $status === "speaking" ? 1 : 0};
-  animation: ${listeningRing} 1.7s ease-in-out infinite;
-`;
-
-const Orb = styled.div<{
-  $large: boolean;
-  $roomy: boolean;
-  $status: StartTalkStatus;
-}>`
-  position: relative;
-  width: ${({ $large, $roomy }) =>
-    $roomy ? "clamp(148px, 11vw, 182px)" : $large ? "138px" : "108px"};
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background:
-    radial-gradient(
-      circle at 50% 18%,
-      rgba(255, 255, 242, 0.98) 0 20%,
-      rgba(255, 255, 255, 0.88) 32%,
-      transparent 48%
-    ),
-    radial-gradient(
-      circle at 50% 112%,
-      rgba(37, 115, 255, 0.98) 0 22%,
-      rgba(91, 182, 255, 0.72) 38%,
-      transparent 55%
-    ),
-    linear-gradient(180deg, #fffbea 0%, #f9fbff 42%, #9fd8ff 73%, #367dff 100%);
-  background-size:
-    100% 100%,
-    100% 100%,
-    170% 170%;
-  box-shadow:
-    inset 0 2px 18px rgba(255, 255, 255, 0.84),
-    inset 0 -14px 30px rgba(54, 127, 255, 0.3),
-    0 18px 42px rgba(49, 139, 255, 0.24);
-  animation:
-    ${breathe} 3.9s ease-in-out infinite,
-    ${thoughtShift} 6.5s ease-in-out infinite;
-  will-change: transform, filter, background-position;
-
-  ${({ $status }) =>
-    $status === "listening" &&
-    css`
-      animation:
-        ${breathe} 2.1s ease-in-out infinite,
-        ${thoughtShift} 4.4s ease-in-out infinite;
-    `}
-
-  ${({ $status }) =>
-    $status === "speaking" &&
-    css`
-      animation:
-        ${speakingWarp} 640ms ease-in-out infinite,
-        ${thoughtShift} 2.8s ease-in-out infinite;
-    `}
-
-  ${({ $status }) =>
-    $status === "error" &&
-    css`
-      filter: grayscale(0.35) saturate(0.72);
-      animation: none;
-    `}
-
-  @media (max-height: 560px) {
-    width: 86px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
-  }
 `;
 
 const AudioBars = styled.div<{ $active: boolean }>`
@@ -2357,21 +2254,12 @@ export function LiveConversationOverlay({
             <StatusLine $roomy={isRoomy} $tone={status}>
               {statusText}
             </StatusLine>
-            <OrbWrap $large={isLarge} $roomy={isRoomy}>
-              <Ring $status={status} />
-              <Orb
-                $large={isLarge}
-                $roomy={isRoomy}
-                $status={status}
-                aria-hidden="true"
-                style={{
-                  transform:
-                    status === "listening"
-                      ? `scale(${1 + micLevel * 0.18})`
-                      : undefined,
-                }}
-              />
-            </OrbWrap>
+            <LuminaEnergyCore
+              large={isLarge}
+              micLevel={micLevel}
+              roomy={isRoomy}
+              status={status}
+            />
             <AudioBars
               $active={status === "listening" || status === "speaking"}
               aria-hidden="true"
