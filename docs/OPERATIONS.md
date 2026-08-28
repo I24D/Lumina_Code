@@ -11,7 +11,7 @@ Doctor comprueba de forma explícita:
 - plataforma, arquitectura y versión de Node del Extension Host;
 - bundle HTML de la GUI;
 - bindings nativos de SQLite y LanceDB;
-- ejecutable nativo de Start Talk;
+- bundle web de Start Talk y su disponibilidad para el puente local;
 - presencia de una configuración global de Gemini, sin leer ni devolver la
   clave;
 - disponibilidad real de Core, Windows Bridge y Model Router;

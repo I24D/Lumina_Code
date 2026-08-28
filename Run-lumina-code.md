@@ -1,12 +1,12 @@
 # Ejecutar Lumina Code en modo desarrollador
 
-Ultima actualizacion: 2026-08-15.
+Ultima actualizacion: 2026-08-28.
 
 Este documento es la fuente de verdad para volver a levantar el proyecto desde
 cero (por ejemplo despues de apagar el PC). El flujo actual conserva solo:
 
 - Lumina Code dentro de un VS Code Extension Development Host aislado.
-- Start Talk como orbe nativo Windows lanzado desde Lumina Code.
+- Start Talk como pestaña del navegador servida y abierta desde Lumina Code.
 - Windows Bridge (`:8765`) y Lumina MCP Gateway (`:8808`) como runtime de
   apoyo, mas Lumina Core (`:3000`) y Model Router cuando se necesiten.
 
@@ -41,17 +41,21 @@ Las ventanas de VS Code y Codex que ya tengas abiertas no se tocan.
 
 ## Start Talk
 
-Start Talk se abre **desde la paleta de comandos del Dev Host**:
+Start Talk se abre **desde el boton "Start talk" del chat** o desde la paleta de
+comandos del Dev Host:
 
 ```text
-Lumina Code: Start Talk (orbe de escritorio)
+Lumina Code: Start Talk
 ```
 
-Ese comando es importante porque crea el `OrbBridgeServer` (WebSocket en
-`127.0.0.1`, puerto efimero + token de sesion) y lanza
-`Start-talk\src-tauri\target\release\start-talk.exe` con `LUMINA_ORB_BRIDGE`.
-Si se ejecuta el `.exe` a mano, la ventana nativa abre pero no responde: no
-tiene puente con Lumina Code.
+Ese comando arranca el `OrbBridgeServer` (HTTP + WebSocket en `127.0.0.1`,
+puerto efimero + token de sesion), que sirve la MISMA gui de Lumina Code, y
+abre el navegador en esa URL. La pagina inicial exige el token, asi que abrir
+`http://127.0.0.1:<puerto>/` a mano devuelve 403.
+
+`127.0.0.1` cuenta como contexto seguro en el navegador, asi que el microfono y
+el AudioWorklet funcionan. La primera vez el navegador pedira permiso de
+microfono para ese origen.
 
 Requisito: la clave del proveedor de voz en el `.env` de la raiz.
 `OPENAI_API_KEY` para la configuracion por defecto (`gpt-realtime-2.1`, voz
@@ -59,73 +63,34 @@ Requisito: la clave del proveedor de voz en el `.env` de la raiz.
 
 ## Que hay que reconstruir segun lo que toques
 
-Esto es lo que mas tiempo hace perder. El frontend del orbe va **embebido
-dentro del exe** en tiempo de compilacion, asi que no todos los cambios se ven
-igual de rapido:
+Esto es lo que mas tiempo hace perder. El orbe ya no embebe nada: se sirve
+`gui/dist` en caliente, asi que un cambio de interfaz se ve recargando la
+pestaña.
 
 | Tocaste | Reconstruir | Como se ve el cambio |
 |---|---|---|
 | `continue-upstream/core/**` | `npm run esbuild` en `extensions/vscode` | Recargar el Dev Host |
 | `continue-upstream/extensions/vscode/**` | igual que arriba | Recargar el Dev Host |
-| `continue-upstream/gui/**` (incluye la UI de Start Talk) | build de gui + ensamblar `orb-frontend` + recompilar el exe | Reiniciar el orbe |
+| `continue-upstream/gui/**` (incluye la UI de Start Talk) | `npm run build` en `gui` | Recargar la pestaña del orbe |
 
-### Reconstruir el orbe completo (cambios de GUI)
+### Reconstruir el orbe (cambios de GUI)
+
+El orbe ya no es un ejecutable: la extension sirve `gui/dist` en 127.0.0.1 y lo
+abre en el navegador. Un cambio de interfaz son dos pasos:
 
 ```powershell
-# 1. Bundle de la GUI
 Set-Location "C:\Lumina Code\continue-upstream\gui"
 npm run build
-
-# 2. Ensamblar orb-frontend desde gui/dist
-$dist = "C:\Lumina Code\continue-upstream\gui\dist"
-$orb  = "C:\Lumina Code\Start-talk\orb-frontend"
-foreach ($d in @("assets","fonts","logos")) {
-  if (Test-Path "$orb\$d") { Remove-Item "$orb\$d" -Recurse -Force }
-  Copy-Item "$dist\$d" "$orb\$d" -Recurse -Force
-}
-Copy-Item "$dist\*.html" $orb -Force
-Copy-Item "$dist\*.png"  $orb -Force
-
-# 3. Recompilar el exe
-Set-Location "C:\Lumina Code\Start-talk\src-tauri"
-cargo build --release      # ~7 min en frio
+# y recargar la pestaña del orbe (F5)
 ```
 
-Tres avisos que cuestan caro si se ignoran:
+En desarrollo se sirve **siempre** `gui/dist`, no la copia empaquetada en
+`extensions/vscode/gui` (que solo se refresca al generar el VSIX y suele estar
+dias atrasada). Esa preferencia la decide `resolveOrbFrontendRoot` a partir del
+modo de la extension.
 
-- ⚠️ **Borrar los directorios destino ANTES de copiar.** Si no, PowerShell anida
-  (`assets/assets/...`) y el exe termina embebiendo el bundle viejo sin que nada
-  falle visiblemente.
-- ⚠️ **`orb-frontend/index.html` SÍ hay que copiarlo.** Antes este documento
-  decía lo contrario — que era un shim propio que falseaba `window.vscode` —, y
-  era falso: se comprobó y el fichero es byte a byte el de `gui/dist`. El puente
-  `window.vscode` sobre WebSocket lo inyecta `src-tauri/src/lib.rs` como init
-  script, no el HTML. Si no se recopia, el orbe queda pidiendo la entrada del
-  bundle anterior y la ventana abre en negro sin que la compilación falle.
-  `npm run check` en `Start-talk` detecta justo ese desajuste.
-- ⚠️ **El exe suele estar bloqueado** porque el orbe está corriendo y el
-  supervisor lo relanza si se mata abruptamente. Cierra su ventana de forma
-  normal y compila siempre mediante el script oficial:
-
-  ```powershell
-  Get-Process start-talk -ErrorAction SilentlyContinue |
-    ForEach-Object { $_.CloseMainWindow() | Out-Null }
-  Set-Location "C:\Lumina Code\Start-talk"
-  npm run build
-  ```
-
-  No renombres el ejecutable ni crees `start-talk.old.exe`. El `postbuild`
-  elimina automáticamente la caché binaria, incluidas las copias de `deps` o
-  `debug`, y conserva solamente
-  `src-tauri\target\release\start-talk.exe`.
-
-Comprobar que el bundle embebido es el recien construido:
-
-```powershell
-Get-Item "C:\Lumina Code\Start-talk\orb-frontend\assets\index.js" | Select-Object LastWriteTime
-Get-Item "C:\Lumina Code\Start-talk\src-tauri\target\release\start-talk.exe" | Select-Object LastWriteTime
-# El exe tiene que ser MAS NUEVO que el index.js
-```
+El launcher ya reconstruye `gui/dist` solo si detecta fuentes mas nuevas, asi
+que normalmente basta con abrirlo.
 
 ## Servicios de apoyo (estado real al 2026-08-15)
 
@@ -170,8 +135,8 @@ el resto de tools ya funcione.
 ## No Usar
 
 - `setup.exe` durante desarrollo.
-- Navegador para Start Talk.
-- Ejecutar `Start-talk` con `npm run dev` para probar el orbe nativo.
+- Abrir la URL del orbe a mano sin el token: la sirve el comando, que es quien
+  crea el puente de sesion.
 - Arrancar proyectos externos desde este launcher.
 
 ## Verificacion Rapida
@@ -181,7 +146,7 @@ foreach ($p in 5174,8765,8808,3000) {
   $c = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue
   Write-Output "puerto $p : $(if ($c) {'ESCUCHANDO'} else {'caido'})"
 }
-Get-Process -Name Code, start-talk -ErrorAction SilentlyContinue |
+Get-Process -Name Code -ErrorAction SilentlyContinue |
   Select-Object Name, Id, StartTime
 ```
 
@@ -203,11 +168,7 @@ npx tsc -p ./ --noEmit
 Set-Location "C:\Lumina Code\continue-upstream\gui"
 npx vitest run src/components/startTalk   # 45 tests
 npx tsc --noEmit -p tsconfig.json
-```
 
-Y antes de compilar el orbe, la validación del propio proyecto:
-
-```powershell
-Set-Location "C:\Lumina Code\Start-talk"
-npm run check
+Set-Location "C:\Lumina Code\continue-upstream\extensions\vscode"
+npx vitest run src/extension/OrbBridgeServer   # 11 tests: token, rutas, puerto
 ```

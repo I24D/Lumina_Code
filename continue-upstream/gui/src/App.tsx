@@ -146,21 +146,23 @@ const router = createMemoryRouter([
 ]);
 
 function closeOrbWindow() {
-  // En el orbe de escritorio (Tauri) cerrar Start Talk cierra la ventana.
-  const tauri = (window as any).__TAURI__;
+  // El orbe es una pestaña del navegador: cerrar Start Talk cierra la pestaña.
+  // Los navegadores solo permiten `close()` en pestañas abiertas por script, así
+  // que cuando lo deniegan la pestaña simplemente se queda y la cierra el
+  // usuario; no hay nada más honesto que podamos hacer aquí.
   try {
-    tauri?.window?.getCurrentWindow?.().close();
-  } catch {
     window.close();
+  } catch {
+    // Cierre denegado por el navegador.
   }
 }
 
 /**
- * Modo orbe: la ventana Tauri flotante monta SOLO el overlay de Start Talk
- * (no todo el chat de Lumina Code), reutilizando los mismos providers y
- * `ParallelListeners` (que carga la config desde core). El overlay es una
- * tarjeta flotante con click-through alrededor → parece un widget sobre el
- * escritorio. La activa el flag `window.luminaOrbAutostart` (shell Rust).
+ * Modo orbe: la pestaña del navegador monta SOLO el overlay de Start Talk (no
+ * todo el chat de Lumina Code), reutilizando los mismos providers y
+ * `ParallelListeners` (que carga la config desde core). La activa el flag
+ * `window.luminaOrbAutostart`, que inyecta el arranque servido por el puente
+ * (ver `extension/orbBootstrap.ts`).
  */
 function OrbApp() {
   return (
@@ -180,7 +182,10 @@ function OrbApp() {
   most of which interact with redux etc.
 */
 function App() {
-  if ((window as any).luminaOrbAutostart) {
+  const isOrbDesignPreview =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).has("luminaOrbPreview");
+  if ((window as any).luminaOrbAutostart || isOrbDesignPreview) {
     return <OrbApp />;
   }
 

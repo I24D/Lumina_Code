@@ -34,6 +34,7 @@ import {
 import styled, { css, keyframes } from "styled-components";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { LuminaEnergyCore } from "./LuminaEnergyCore";
+import { StartTalkBrowserWorkspace } from "./StartTalkBrowserWorkspace";
 import { StartTalkControls } from "./StartTalkControls";
 import type {
   StartTalkModelOption,
@@ -71,27 +72,6 @@ type Position = {
 type PanelSize = {
   width: number;
   height: number;
-};
-
-type TauriWindowHandle = {
-  setFullscreen?: (value: boolean) => Promise<void> | void;
-  setSize?: (size: unknown) => Promise<void> | void;
-  startDragging?: () => Promise<void> | void;
-};
-
-type TauriGlobal = {
-  core?: {
-    invoke?: (
-      command: string,
-      args?: Record<string, unknown>,
-    ) => Promise<unknown>;
-  };
-  dpi?: {
-    LogicalSize?: new (width: number, height: number) => unknown;
-  };
-  window?: {
-    getCurrentWindow?: () => TauriWindowHandle;
-  };
 };
 
 const compactSize: PanelSize = {
@@ -236,9 +216,17 @@ const PanelShell = styled.div<{
   box-sizing: border-box;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--live-border);
-  border-radius: ${({ $mode }) => ($mode === "minimized" ? "50%" : "16px")};
-  background: var(--live-surface);
+  border: ${({ $isOrb }) => ($isOrb ? "0" : "1px solid var(--live-border)")};
+  border-radius: ${({ $isOrb, $mode }) =>
+    $isOrb ? "0" : $mode === "minimized" ? "50%" : "16px"};
+  background: ${({ $isOrb }) =>
+    $isOrb
+      ? `
+        radial-gradient(circle at 50% 23%, rgba(0, 137, 208, 0.09), transparent 29%),
+        radial-gradient(circle at 4% 70%, rgba(0, 177, 219, 0.035), transparent 27%),
+        #070c10
+      `
+      : "var(--live-surface)"};
   box-shadow: ${({ $mode }) =>
     $mode === "minimized"
       ? "0 10px 28px rgba(12, 20, 32, 0.32)"
@@ -284,20 +272,20 @@ const PanelShell = styled.div<{
     `}
 `;
 
-const Header = styled.header`
+const Header = styled.header<{ $roomy: boolean }>`
   display: flex;
-  min-height: 52px;
+  min-height: ${({ $roomy }) => ($roomy ? "52px" : "52px")};
   box-sizing: border-box;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   border-bottom: 1px solid var(--live-border);
-  padding: 8px 10px;
+  padding: ${({ $roomy }) => ($roomy ? "4px 10px" : "8px 10px")};
   user-select: none;
-  cursor: grab;
+  cursor: ${({ $roomy }) => ($roomy ? "default" : "grab")};
 
   &:active {
-    cursor: grabbing;
+    cursor: ${({ $roomy }) => ($roomy ? "default" : "grabbing")};
   }
 `;
 
@@ -332,6 +320,10 @@ const BrandCopy = styled.div`
   display: grid;
   min-width: 0;
   gap: 1px;
+
+  @media (max-width: 430px) {
+    display: none;
+  }
 `;
 
 const Title = styled.div`
@@ -367,7 +359,56 @@ const HeaderActions = styled.div`
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+
+  @media (max-width: 620px) {
+    gap: 4px;
+  }
+
+  @media (max-width: 560px) {
+    > button:nth-of-type(3),
+    > button:nth-of-type(4) {
+      display: none;
+    }
+  }
+`;
+
+const HeaderModelField = styled.div`
+  position: relative;
+  display: grid;
+  width: clamp(172px, 18vw, 206px);
+  height: 44px;
+  box-sizing: border-box;
+  align-content: center;
+  gap: 0;
+  border: 1px solid var(--live-border);
+  border-radius: 10px;
+  background: var(--live-control);
+
+  @media (max-width: 620px) {
+    width: clamp(122px, 35vw, 160px);
+  }
+
+  @media (max-width: 430px) {
+    width: clamp(116px, 42vw, 150px);
+  }
+  margin-right: 10px;
+  padding: 3px 10px 2px;
+
+  > span:first-child {
+    font-size: 8px;
+  }
+
+  > button {
+    height: 25px;
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  @media (max-width: 720px) {
+    display: none;
+  }
 `;
 
 const IconButton = styled.button<{
@@ -1142,17 +1183,48 @@ const AdvancedSheetBody = styled.div`
   scrollbar-width: thin;
 `;
 
-const Dock = styled.footer`
+const AdvancedPrimarySettings = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  border-bottom: 1px solid var(--live-border);
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const AdvancedSelect = styled.select`
+  width: 100%;
+  height: 38px;
+  box-sizing: border-box;
+  border: 1px solid var(--live-border);
+  border-radius: 8px;
+  background: var(--live-control);
+  color: var(--live-text);
+  outline: none;
+  padding: 0 9px;
+  font-size: 11px;
+
+  &:focus-visible {
+    border-color: var(--live-accent);
+    box-shadow: 0 0 0 2px var(--live-focus);
+  }
+`;
+
+const Dock = styled.footer<{ $roomy: boolean }>`
   position: relative;
   z-index: 6;
   display: flex;
-  min-height: 70px;
+  min-height: ${({ $roomy }) => ($roomy ? "92px" : "70px")};
   box-sizing: border-box;
   align-items: center;
   justify-content: center;
   border-top: 1px solid var(--live-border);
   background: var(--live-surface);
-  padding: 9px 14px 12px;
+  padding: ${({ $roomy }) => ($roomy ? "12px 14px 15px" : "9px 14px 12px")};
 `;
 
 const Controls = styled.div`
@@ -1356,38 +1428,30 @@ function getInitialPosition(size: PanelSize): Position {
   );
 }
 
-function getTauriGlobal(): TauriGlobal | undefined {
-  return (window as typeof window & { __TAURI__?: TauriGlobal }).__TAURI__;
-}
-
-function getTauriWindow(): TauriWindowHandle | undefined {
-  return getTauriGlobal()?.window?.getCurrentWindow?.();
-}
-
-async function setNativeOrbSize(size: PanelSize) {
-  const tauri = getTauriGlobal();
-  if (tauri?.core?.invoke) {
-    await tauri.core.invoke("set_orb_window_size", {
-      width: size.width,
-      height: size.height,
-    });
-    return;
+/**
+ * Pantalla completa de la pestaña del orbe. Antes esto redimensionaba la
+ * ventana nativa de Tauri; en el navegador es la Fullscreen API, que además
+ * requiere gesto del usuario (siempre se llama desde un click).
+ */
+async function setOrbFullscreenMode(value: boolean): Promise<void> {
+  try {
+    if (value) {
+      await document.documentElement.requestFullscreen?.();
+    } else if (document.fullscreenElement) {
+      await document.exitFullscreen?.();
+    }
+  } catch {
+    // El navegador puede denegarla; la tarjeta se agranda igual por CSS.
   }
-
-  const currentWindow = tauri?.window?.getCurrentWindow?.();
-  const LogicalSize = tauri?.dpi?.LogicalSize;
-  if (!currentWindow?.setSize || !LogicalSize) return;
-
-  await currentWindow.setSize(new LogicalSize(size.width, size.height));
 }
 
 function readInitialTheme(): StartTalkTheme {
   try {
-    return localStorage.getItem("lumina-start-talk-theme") === "dark"
-      ? "dark"
-      : "light";
+    return localStorage.getItem("lumina-start-talk-theme") === "light"
+      ? "light"
+      : "dark";
   } catch {
-    return "light";
+    return "dark";
   }
 }
 
@@ -1444,9 +1508,14 @@ export function LiveConversationOverlay({
   const [openSettingMenu, setOpenSettingMenu] = useState<OpenSettingMenu>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [theme, setTheme] = useState<StartTalkTheme>(readInitialTheme);
+  const designPreview =
+    typeof window !== "undefined" &&
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).has("luminaOrbPreview");
   const isOrb =
     typeof window !== "undefined" &&
-    Boolean((window as { luminaOrbAutostart?: boolean }).luminaOrbAutostart);
+    (Boolean((window as { luminaOrbAutostart?: boolean }).luminaOrbAutostart) ||
+      designPreview);
   const [orbFullscreen, setOrbFullscreen] = useState(false);
   const [position, setPosition] = useState<Position>(() =>
     getInitialPosition(compactSize),
@@ -1492,6 +1561,7 @@ export function LiveConversationOverlay({
     status,
     stopSpeaking,
     toolActivities,
+    transcriptEntries,
     userTranscript,
     isCrowded,
     micSettings,
@@ -1541,7 +1611,10 @@ export function LiveConversationOverlay({
   const size = useMemo(() => getSizeForMode(mode), [mode]);
   const visualMode: PanelMode = orbFullscreen ? "expanded" : mode;
   const isLarge = visualMode === "expanded";
-  const isRoomy = isOrb && orbFullscreen;
+  // La pestaña del navegador siempre dispone del lienzo de escritorio. Antes
+  // solo activaba la composición amplia al entrar en fullscreen, por eso la UI
+  // se veía como una tarjeta pequeña aunque ocupara toda la ventana.
+  const isRoomy = isOrb;
 
   useEffect(() => {
     if (pendingDelegationApproval && mode === "minimized") {
@@ -1605,15 +1678,11 @@ export function LiveConversationOverlay({
   useEffect(() => {
     if (!isOrb || !isOpen) return;
 
+    // La tarjeta se dimensiona por CSS a partir de este modo; en una pestaña no
+    // hay ventana nativa que redimensionar.
     document.documentElement.dataset.luminaOrbMode = mode;
     document.body.dataset.luminaOrbMode = mode;
-
-    if (!orbFullscreen) {
-      void setNativeOrbSize(
-        mode === "minimized" ? miniSize : compactSize,
-      ).catch(() => undefined);
-    }
-  }, [isOpen, isOrb, mode, orbFullscreen]);
+  }, [isOpen, isOrb, mode]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1748,9 +1817,7 @@ export function LiveConversationOverlay({
     setAdvancedOpen(false);
     setOpenSettingMenu(null);
     if (isOrb && orbFullscreen) {
-      void Promise.resolve(getTauriWindow()?.setFullscreen?.(false)).catch(
-        () => undefined,
-      );
+      void setOrbFullscreenMode(false);
       setOrbFullscreen(false);
     }
     setMode("minimized");
@@ -1781,13 +1848,7 @@ export function LiveConversationOverlay({
     const next = !orbFullscreen;
     setAdvancedOpen(false);
     setOpenSettingMenu(null);
-    const currentWindow = getTauriWindow();
-    void Promise.resolve(currentWindow?.setFullscreen?.(next))
-      .then(() => {
-        if (!next) return setNativeOrbSize(compactSize);
-        return undefined;
-      })
-      .catch(() => undefined);
+    void setOrbFullscreenMode(next);
     setOrbFullscreen(next);
     setMode("compact");
   }, [orbFullscreen]);
@@ -1796,6 +1857,8 @@ export function LiveConversationOverlay({
     () => getStatusText(status, errorMessage, isCrowded),
     [errorMessage, isCrowded, status],
   );
+  const visualStatus: StartTalkStatus = designPreview ? "listening" : status;
+  const visualStatusText = designPreview ? "Escuchando…" : statusText;
 
   const isSharingScreen =
     videoSource === "screen" ||
@@ -1887,12 +1950,9 @@ export function LiveConversationOverlay({
     (event: ReactPointerEvent<HTMLElement>) => {
       if (event.button !== 0) return;
 
-      if (isOrb) {
-        void Promise.resolve(getTauriWindow()?.startDragging?.()).catch(
-          () => undefined,
-        );
-        return;
-      }
+      // En el orbe la tarjeta ocupa toda la pestaña, así que no hay nada que
+      // arrastrar; en el overlay dentro de VS Code sí se reposiciona.
+      if (isOrb) return;
 
       event.currentTarget.setPointerCapture(event.pointerId);
       const startX = event.clientX;
@@ -1940,11 +2000,6 @@ export function LiveConversationOverlay({
 
         if (!didDrag && (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4)) {
           didDrag = true;
-          if (isOrb) {
-            void Promise.resolve(getTauriWindow()?.startDragging?.()).catch(
-              () => undefined,
-            );
-          }
         }
 
         if (didDrag && !isOrb) {
@@ -2018,19 +2073,59 @@ export function LiveConversationOverlay({
         role="dialog"
         aria-label="Start Talk"
       >
-        <Header onPointerDown={handleDragStart}>
+        <Header $roomy={isRoomy} onPointerDown={handleDragStart}>
           <Brand>
             <LuminaMark $small aria-hidden="true" />
             <BrandCopy>
               <Title>Lumina Live</Title>
               <LiveState>
-                <StateDot $status={status} />
-                {statusText}
+                <StateDot $status={visualStatus} />
+                {visualStatusText}
               </LiveState>
             </BrandCopy>
           </Brand>
 
           <HeaderActions onPointerDown={(event) => event.stopPropagation()}>
+            {isRoomy ? (
+              <HeaderModelField ref={settingsRef}>
+                <SettingLabel>Modelo de voz</SettingLabel>
+                <SettingMenuButton
+                  type="button"
+                  aria-label="Modelo de Start Talk"
+                  aria-expanded={openSettingMenu === "model"}
+                  onClick={() =>
+                    setOpenSettingMenu((current) =>
+                      current === "model" ? null : "model",
+                    )
+                  }
+                >
+                  <SettingMenuValue>{liveModelLabel}</SettingMenuValue>
+                  <SettingMenuChevron $open={openSettingMenu === "model"} />
+                </SettingMenuButton>
+                {openSettingMenu === "model" ? (
+                  <SettingMenuList role="listbox">
+                    {liveModelOptions.map((option) => (
+                      <SettingMenuItem
+                        key={option.model}
+                        type="button"
+                        role="option"
+                        $active={option.model === liveModel.model}
+                        aria-selected={option.model === liveModel.model}
+                        onClick={() => {
+                          setLiveModel(option);
+                          setOpenSettingMenu(null);
+                        }}
+                      >
+                        <MenuItemLabel>{option.label}</MenuItemLabel>
+                        <MenuItemDescription>
+                          {option.description}
+                        </MenuItemDescription>
+                      </SettingMenuItem>
+                    ))}
+                  </SettingMenuList>
+                ) : null}
+              </HeaderModelField>
+            ) : null}
             <IconButton
               type="button"
               $small
@@ -2109,94 +2204,97 @@ export function LiveConversationOverlay({
           </HeaderActions>
         </Header>
 
-        <SessionStrip
-          $roomy={isRoomy}
-          ref={settingsRef}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <SettingField>
-            <SettingLabel>Modelo de voz</SettingLabel>
-            <SettingMenuButton
-              type="button"
-              aria-label="Modelo de Start Talk"
-              aria-expanded={openSettingMenu === "model"}
-              onClick={() =>
-                setOpenSettingMenu((current) =>
-                  current === "model" ? null : "model",
-                )
-              }
-            >
-              <SettingMenuValue>{liveModelLabel}</SettingMenuValue>
-              <SettingMenuChevron $open={openSettingMenu === "model"} />
-            </SettingMenuButton>
-            {openSettingMenu === "model" ? (
-              <SettingMenuList role="listbox">
-                {liveModelOptions.map((option) => (
-                  <SettingMenuItem
-                    key={option.model}
-                    type="button"
-                    role="option"
-                    $active={option.model === liveModel.model}
-                    aria-selected={option.model === liveModel.model}
-                    onClick={() => {
-                      setLiveModel(option);
-                      setOpenSettingMenu(null);
-                    }}
-                  >
-                    <MenuItemLabel>{option.label}</MenuItemLabel>
-                    <MenuItemDescription>
-                      {option.description}
-                    </MenuItemDescription>
-                  </SettingMenuItem>
-                ))}
-              </SettingMenuList>
-            ) : null}
-          </SettingField>
+        {!isRoomy ? (
+          <SessionStrip
+            $roomy={isRoomy}
+            ref={settingsRef}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <SettingField>
+              <SettingLabel>Modelo de voz</SettingLabel>
+              <SettingMenuButton
+                type="button"
+                aria-label="Modelo de Start Talk"
+                aria-expanded={openSettingMenu === "model"}
+                onClick={() =>
+                  setOpenSettingMenu((current) =>
+                    current === "model" ? null : "model",
+                  )
+                }
+              >
+                <SettingMenuValue>{liveModelLabel}</SettingMenuValue>
+                <SettingMenuChevron $open={openSettingMenu === "model"} />
+              </SettingMenuButton>
+              {openSettingMenu === "model" ? (
+                <SettingMenuList role="listbox">
+                  {liveModelOptions.map((option) => (
+                    <SettingMenuItem
+                      key={option.model}
+                      type="button"
+                      role="option"
+                      $active={option.model === liveModel.model}
+                      aria-selected={option.model === liveModel.model}
+                      onClick={() => {
+                        setLiveModel(option);
+                        setOpenSettingMenu(null);
+                      }}
+                    >
+                      <MenuItemLabel>{option.label}</MenuItemLabel>
+                      <MenuItemDescription>
+                        {option.description}
+                      </MenuItemDescription>
+                    </SettingMenuItem>
+                  ))}
+                </SettingMenuList>
+              ) : null}
+            </SettingField>
 
-          <SettingField>
-            <SettingLabel>Pensamiento</SettingLabel>
-            <SettingMenuButton
-              type="button"
-              aria-label="Nivel de pensamiento"
-              disabled={status === "connecting"}
-              aria-expanded={openSettingMenu === "thinking"}
-              onClick={() =>
-                setOpenSettingMenu((current) =>
-                  current === "thinking" ? null : "thinking",
-                )
-              }
-            >
-              <SettingMenuValue>
-                {selectedThinkingOption.label}
-              </SettingMenuValue>
-              <SettingMenuChevron $open={openSettingMenu === "thinking"} />
-            </SettingMenuButton>
-            {openSettingMenu === "thinking" ? (
-              <SettingMenuList role="listbox">
-                {thinkingOptions.map((option) => (
-                  <SettingMenuItem
-                    key={option.level}
-                    type="button"
-                    role="option"
-                    $active={option.level === thinkingLevel}
-                    aria-selected={option.level === thinkingLevel}
-                    onClick={() => {
-                      setThinkingLevel(option.level);
-                      setOpenSettingMenu(null);
-                    }}
-                  >
-                    <MenuItemLabel>{option.label}</MenuItemLabel>
-                    <MenuItemDescription>
-                      {option.description}
-                    </MenuItemDescription>
-                  </SettingMenuItem>
-                ))}
-              </SettingMenuList>
-            ) : null}
-          </SettingField>
-        </SessionStrip>
+            <SettingField>
+              <SettingLabel>Pensamiento</SettingLabel>
+              <SettingMenuButton
+                type="button"
+                aria-label="Nivel de pensamiento"
+                disabled={status === "connecting"}
+                aria-expanded={openSettingMenu === "thinking"}
+                onClick={() =>
+                  setOpenSettingMenu((current) =>
+                    current === "thinking" ? null : "thinking",
+                  )
+                }
+              >
+                <SettingMenuValue>
+                  {selectedThinkingOption.label}
+                </SettingMenuValue>
+                <SettingMenuChevron $open={openSettingMenu === "thinking"} />
+              </SettingMenuButton>
+              {openSettingMenu === "thinking" ? (
+                <SettingMenuList role="listbox">
+                  {thinkingOptions.map((option) => (
+                    <SettingMenuItem
+                      key={option.level}
+                      type="button"
+                      role="option"
+                      $active={option.level === thinkingLevel}
+                      aria-selected={option.level === thinkingLevel}
+                      onClick={() => {
+                        setThinkingLevel(option.level);
+                        setOpenSettingMenu(null);
+                      }}
+                    >
+                      <MenuItemLabel>{option.label}</MenuItemLabel>
+                      <MenuItemDescription>
+                        {option.description}
+                      </MenuItemDescription>
+                    </SettingMenuItem>
+                  ))}
+                </SettingMenuList>
+              ) : null}
+            </SettingField>
+          </SessionStrip>
+        ) : null}
 
-        {micSettings || (sessionMetrics && sessionMetrics.turns > 0) ? (
+        {!isRoomy &&
+        (micSettings || (sessionMetrics && sessionMetrics.turns > 0)) ? (
           <MetricsStrip $roomy={isRoomy} aria-label="Diagnóstico de la sesión">
             {micSettings ? (
               <Metric
@@ -2274,113 +2372,125 @@ export function LiveConversationOverlay({
           </MetricsStrip>
         ) : null}
 
-        <Stage $large={isLarge} $roomy={isRoomy}>
-          <HeroRegion $roomy={isRoomy}>
-            <Prompt $large={isLarge} $roomy={isRoomy}>
-              ¿En qué deberíamos enfocarnos?
-            </Prompt>
-            <StatusLine $roomy={isRoomy} $tone={status}>
-              {statusText}
-            </StatusLine>
-            <LuminaEnergyCore
-              large={isLarge}
-              micLevel={micLevel}
-              roomy={isRoomy}
-              status={status}
-            />
-            <AudioBars
-              $active={status === "listening" || status === "speaking"}
-              aria-hidden="true"
-            >
-              {Array.from({ length: 7 }).map((_, index) => (
-                <span key={index} />
-              ))}
-            </AudioBars>
-          </HeroRegion>
+        {isRoomy ? (
+          <StartTalkBrowserWorkspace
+            assistantTranscript={assistantTranscript}
+            micLevel={micLevel}
+            onOpenUrl={(url) => ideMessenger.post("openUrl", url)}
+            status={visualStatus}
+            toolActivities={toolActivities}
+            transcriptEntries={transcriptEntries}
+            userTranscript={userTranscript}
+          />
+        ) : (
+          <Stage $large={isLarge} $roomy={isRoomy}>
+            <HeroRegion $roomy={isRoomy}>
+              <Prompt $large={isLarge} $roomy={isRoomy}>
+                ¿En qué deberíamos enfocarnos?
+              </Prompt>
+              <StatusLine $roomy={isRoomy} $tone={status}>
+                {statusText}
+              </StatusLine>
+              <LuminaEnergyCore
+                large={isLarge}
+                micLevel={micLevel}
+                roomy={isRoomy}
+                status={status}
+              />
+              <AudioBars
+                $active={status === "listening" || status === "speaking"}
+                aria-hidden="true"
+              >
+                {Array.from({ length: 7 }).map((_, index) => (
+                  <span key={index} />
+                ))}
+              </AudioBars>
+            </HeroRegion>
 
-          <ConversationRegion $roomy={isRoomy}>
-            <ConversationHeader>
-              <ConversationHeading>
-                <ConversationEyebrow>Transcripción</ConversationEyebrow>
-                <ConversationTitle $roomy={isRoomy}>
-                  Conversación en vivo
-                </ConversationTitle>
-              </ConversationHeading>
-              <ConversationHint>
-                {isCrowded
-                  ? "Varias voces detectadas"
-                  : speaker?.matched && speaker.name
-                    ? `Habla ${speaker.name}`
-                    : "Solo tú y Lumina"}
-              </ConversationHint>
-            </ConversationHeader>
+            <ConversationRegion $roomy={isRoomy}>
+              <ConversationHeader>
+                <ConversationHeading>
+                  <ConversationEyebrow>Transcripción</ConversationEyebrow>
+                  <ConversationTitle $roomy={isRoomy}>
+                    Conversación en vivo
+                  </ConversationTitle>
+                </ConversationHeading>
+                <ConversationHint>
+                  {isCrowded
+                    ? "Varias voces detectadas"
+                    : speaker?.matched && speaker.name
+                      ? `Habla ${speaker.name}`
+                      : "Solo tú y Lumina"}
+                </ConversationHint>
+              </ConversationHeader>
 
-            <TranscriptPanel
-              $large={isLarge}
-              $roomy={isRoomy}
-              aria-label="Conversación de Start Talk"
-              aria-live="polite"
-            >
-              {speaker ? (
-                <SpeakerLabel>
-                  {speaker.matched &&
-                  speaker.name &&
-                  !speaker.name.trim().startsWith("<")
-                    ? speaker.name
-                    : "Voz no reconocida"}
-                </SpeakerLabel>
-              ) : null}
-              {userTranscript ? (
-                <TranscriptMessage $roomy={isRoomy} $source="user">
-                  <TranscriptRole $source="user">Tú</TranscriptRole>
-                  <TranscriptLine $roomy={isRoomy} $source="user">
-                    {userTranscript}
-                  </TranscriptLine>
-                </TranscriptMessage>
-              ) : null}
-              {assistantTranscript ? (
-                <TranscriptMessage $roomy={isRoomy} $source="assistant">
-                  <TranscriptRole $source="assistant">Lumina</TranscriptRole>
-                  <TranscriptLine $roomy={isRoomy} $source="assistant">
-                    {assistantTranscript}
-                  </TranscriptLine>
-                </TranscriptMessage>
-              ) : null}
-              {!hasTranscript ? (
-                <EmptyTranscript $roomy={isRoomy}>
-                  La conversación aparecerá aquí mientras hablas con Lumina.
-                </EmptyTranscript>
-              ) : null}
-            </TranscriptPanel>
+              <TranscriptPanel
+                $large={isLarge}
+                $roomy={isRoomy}
+                aria-label="Conversación de Start Talk"
+                aria-live="polite"
+              >
+                {speaker ? (
+                  <SpeakerLabel>
+                    {speaker.matched &&
+                    speaker.name &&
+                    !speaker.name.trim().startsWith("<")
+                      ? speaker.name
+                      : "Voz no reconocida"}
+                  </SpeakerLabel>
+                ) : null}
+                {userTranscript ? (
+                  <TranscriptMessage $roomy={isRoomy} $source="user">
+                    <TranscriptRole $source="user">Tú</TranscriptRole>
+                    <TranscriptLine $roomy={isRoomy} $source="user">
+                      {userTranscript}
+                    </TranscriptLine>
+                  </TranscriptMessage>
+                ) : null}
+                {assistantTranscript ? (
+                  <TranscriptMessage $roomy={isRoomy} $source="assistant">
+                    <TranscriptRole $source="assistant">Lumina</TranscriptRole>
+                    <TranscriptLine $roomy={isRoomy} $source="assistant">
+                      {assistantTranscript}
+                    </TranscriptLine>
+                  </TranscriptMessage>
+                ) : null}
+                {!hasTranscript ? (
+                  <EmptyTranscript $roomy={isRoomy}>
+                    La conversación aparecerá aquí mientras hablas con Lumina.
+                  </EmptyTranscript>
+                ) : null}
+              </TranscriptPanel>
 
-            <ToolActivityPanel
-              $roomy={isRoomy}
-              $visible={toolActivities.length > 0}
-            >
-              {toolActivities.slice(-5).map((activity) =>
-                activity.webSearch ? (
-                  <WebSearchActivityCard
-                    key={activity.id}
-                    activity={activity}
-                    roomy={isRoomy}
-                    onOpenUrl={(url) => ideMessenger.post("openUrl", url)}
-                  />
-                ) : (
-                  <ToolActivityRow $roomy={isRoomy} key={activity.id}>
-                    <ToolActivityIcon $status={activity.status}>
-                      <ToolActivityStatusIcon activity={activity} />
-                    </ToolActivityIcon>
-                    <ToolActivityText>
-                      {activity.detail
-                        ? `${activity.label}: ${activity.detail}`
-                        : activity.label}
-                    </ToolActivityText>
-                  </ToolActivityRow>
-                ),
-              )}
-            </ToolActivityPanel>
-          </ConversationRegion>
-        </Stage>
+              <ToolActivityPanel
+                $roomy={isRoomy}
+                $visible={toolActivities.length > 0}
+              >
+                {toolActivities.slice(-5).map((activity) =>
+                  activity.webSearch ? (
+                    <WebSearchActivityCard
+                      key={activity.id}
+                      activity={activity}
+                      roomy={isRoomy}
+                      onOpenUrl={(url) => ideMessenger.post("openUrl", url)}
+                    />
+                  ) : (
+                    <ToolActivityRow $roomy={isRoomy} key={activity.id}>
+                      <ToolActivityIcon $status={activity.status}>
+                        <ToolActivityStatusIcon activity={activity} />
+                      </ToolActivityIcon>
+                      <ToolActivityText>
+                        {activity.detail
+                          ? `${activity.label}: ${activity.detail}`
+                          : activity.label}
+                      </ToolActivityText>
+                    </ToolActivityRow>
+                  ),
+                )}
+              </ToolActivityPanel>
+            </ConversationRegion>
+          </Stage>
+        )}
 
         {pendingDelegationApproval ? (
           <DelegationApprovalCard
@@ -2431,6 +2541,47 @@ export function LiveConversationOverlay({
               </IconButton>
             </AdvancedSheetHeader>
             <AdvancedSheetBody>
+              {isRoomy ? (
+                <AdvancedPrimarySettings>
+                  <SettingField>
+                    <SettingLabel>Modelo de voz</SettingLabel>
+                    <AdvancedSelect
+                      aria-label="Modelo de voz en ajustes"
+                      value={liveModel.model}
+                      onChange={(event) => {
+                        const selected = liveModelOptions.find(
+                          (option) => option.model === event.target.value,
+                        );
+                        if (selected) setLiveModel(selected);
+                      }}
+                    >
+                      {liveModelOptions.map((option) => (
+                        <option key={option.model} value={option.model}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </AdvancedSelect>
+                  </SettingField>
+                  <SettingField>
+                    <SettingLabel>Pensamiento</SettingLabel>
+                    <AdvancedSelect
+                      aria-label="Pensamiento en ajustes"
+                      value={thinkingLevel}
+                      onChange={(event) =>
+                        setThinkingLevel(
+                          event.target.value as StartTalkThinkingLevel,
+                        )
+                      }
+                    >
+                      {thinkingOptions.map((option) => (
+                        <option key={option.level} value={option.level}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </AdvancedSelect>
+                  </SettingField>
+                </AdvancedPrimarySettings>
+              ) : null}
               <StartTalkControls
                 isActive={isActive}
                 languages={INTERPRETER_LANGUAGES}
@@ -2546,7 +2697,7 @@ export function LiveConversationOverlay({
           </VisionCard>
         ) : null}
 
-        <Dock>
+        <Dock $roomy={isRoomy}>
           <Controls>
             <IconButton
               type="button"

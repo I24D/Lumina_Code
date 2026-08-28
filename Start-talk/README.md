@@ -1,6 +1,8 @@
 # Lumina Live — Start Talk
 
-Start Talk es la interfaz de voz nativa de Lumina Code. Se ejecuta como una aplicación de escritorio Tauri para Windows, se conecta de forma segura con la extensión de VS Code y permite conversar con el agente por voz en tiempo real, con la Realtime API de OpenAI o con Gemini Live.
+Start Talk es la interfaz de voz de Lumina Code. Se abre como una pestaña del navegador que sirve la extensión de VS Code desde `127.0.0.1`, se conecta a ella por un puente local autenticado y permite conversar con el agente por voz en tiempo real, con la Realtime API de OpenAI o con Gemini Live.
+
+> Hasta el 2026-08-28 Start Talk fue una ventana de escritorio Tauri que embebía la interfaz en un `.exe`. Se cambió a una pestaña para eliminar el `cargo build` de ~7 minutos por cada cambio de interfaz, los fallos silenciosos por bundle desincronizado y el ejecutable bloqueado. Lo que se perdió a cambio —una ventana flotante siempre encima— fue una decisión consciente.
 
 ## Qué incluye
 
@@ -11,17 +13,31 @@ Start Talk es la interfaz de voz nativa de Lumina Code. Se ejecuta como una apli
 - lectura en voz alta de respuestas finales de Lumina Code, Claude Code y Codex;
 - selección de micrófono, cámara o monitor;
 - autorización explícita antes de enviar tareas de voz al agente;
-- ventana compacta o experiencia ampliada siempre visible.
+- vista compacta o ampliada, con pantalla completa del navegador.
 
-Start Talk no es una aplicación independiente: debe iniciarse desde el comando **Lumina Code: Start Talk (orbe de escritorio)** para que la extensión cree el puente local autenticado.
+## Interfaz de conversación
+
+La pestaña de Lumina Live utiliza una sola interfaz de tres zonas, adaptable al
+tamaño del navegador:
+
+- **Tú hablas:** transcripción cronológica y medidor del micrófono;
+- **Acciones en curso:** núcleo energético animado y estado real de búsquedas,
+  análisis, herramientas y tareas;
+- **Start Talk responde:** respuestas completas, reproducción de voz y fuentes
+  consultadas con enlaces verificables.
+
+No son tarjetas de demostración: durante una sesión, todo el contenido proviene
+de la transcripción, las actividades y las fuentes emitidas por el agente. La
+vista pasa a dos columnas en tablet y a una columna ordenada en móvil, sin
+perder controles ni información.
+
+Start Talk no es una aplicación independiente: se abre con el botón **Start talk** del chat o con el comando **Lumina Code: Start Talk**, porque es la extensión quien sirve la interfaz y crea el puente autenticado. Abrir la URL a mano sin el token devuelve 403.
 
 ## Requisitos
 
-- Windows 10/11 x64;
-- Rust con toolchain `stable-msvc`;
-- Microsoft C++ Build Tools;
-- Microsoft Edge WebView2;
 - Node.js y npm;
+- un navegador moderno (el micrófono funciona porque `127.0.0.1` es contexto
+  seguro; la primera vez pedirá permiso para ese origen);
 - la clave del proveedor de voz que vayas a usar: `OPENAI_API_KEY` (por
   defecto) o `GEMINI_API_KEY` de Google AI Studio.
 
@@ -65,40 +81,33 @@ para conversaciones con varias personas.
 
 ## Desarrollo
 
-```powershell
-cd Start-talk
-npm install
-npm run dev
-```
-
-El comando compila `continue-upstream/gui`, sincroniza el bundle completo con
-`orb-frontend`, valida que ambas copias sean idénticas y entonces inicia Tauri.
-Así el orbe no puede abrir silenciosamente una interfaz anterior.
-
-Para generar el ejecutable que se incluye en el VSIX:
+Esta carpeta ya no contiene la interfaz: vive entera en `continue-upstream/gui`
+y la sirve la extensión. Un cambio de interfaz son dos pasos:
 
 ```powershell
+Set-Location "..\continue-upstream\gui"
 npm run build
-Test-Path .\src-tauri\target\release\start-talk.exe
+# y recargar la pestaña del orbe (F5)
 ```
 
-`npm run build` siempre vuelve a ensamblar la GUI antes de generar el `.exe`.
-Al terminar también elimina la caché binaria de Cargo, incluidas las copias de
-`deps`, `debug` o `start-talk.old.exe`: la única ruta válida en desarrollo es
-`src-tauri/target/release/start-talk.exe`. `npm run check` falla si reaparece
-alguna copia ambigua.
-Si solo necesitas refrescar la copia embebible, usa
-`npm run prepare:frontend`; `npm run check` falla cuando la copia o el
-ejecutable quedaron atrasados.
+En desarrollo se sirve `gui/dist`, no la copia empaquetada en
+`extensions/vscode/gui`, que solo se refresca al generar el VSIX. Lo decide
+`resolveOrbFrontendRoot` según el modo de la extensión, para que la pestaña no
+pueda mostrar una interfaz de hace días sin que nada falle.
 
-Después inicia Lumina Code con el launcher de la raíz del repositorio. Ejecutar `start-talk.exe` directamente omite el puente de sesión y no permite comunicarse con la extensión.
+Arranca Lumina Code con el launcher de la raíz del repositorio, que reconstruye
+`gui/dist` solo si detecta fuentes más nuevas.
+
+Lo que queda aquí son piezas independientes del orbe: `host/` (core headless sin
+VS Code), `services/`, `integrations/` (hooks de voz para Claude Code y Codex) y
+`runtime/`.
 
 Consulta el [README principal](../README.md) para configurar modelos y la [guía de instalación del VSIX](../docs/INSTALLATION_AND_VSIX.md) para el flujo completo.
 
 ## Seguridad
 
-El puente entre Start Talk y VS Code escucha únicamente en `127.0.0.1` y utiliza un token efímero por sesión. Las tareas detectadas por voz requieren autorización explícita del usuario antes de enviarse al agente. No publiques claves API, archivos `.env` ni registros personales.
+El puente entre Start Talk y VS Code escucha únicamente en `127.0.0.1` y utiliza un token efímero por sesión, exigido tanto para servir la página como para abrir el WebSocket. El token se borra de la barra de direcciones nada más cargar, para que no quede en el historial. Las tareas detectadas por voz requieren autorización explícita del usuario antes de enviarse al agente. No publiques claves API, archivos `.env` ni registros personales.
 
 ## English
 
-Start Talk is Lumina Code's native Windows voice interface. It connects to the VS Code extension through an authenticated local bridge, streams real-time audio through the OpenAI Realtime API (`gpt-realtime-2.1`, voice "marin") or Gemini Live, displays the conversation transcript, and requires explicit approval before a voice request becomes an agent task. Start it from the Lumina Code command palette rather than launching the executable directly.
+Start Talk is Lumina Code's voice interface. It runs as a browser tab served by the VS Code extension over an authenticated local bridge on `127.0.0.1`, streams real-time audio through the OpenAI Realtime API (`gpt-realtime-2.1`, voice "marin") or Gemini Live, displays the conversation transcript, and requires explicit approval before a voice request becomes an agent task. Open it from the chat's Start talk button or the command palette; opening the URL by hand without the session token returns 403.

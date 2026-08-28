@@ -25,6 +25,7 @@ import {
   StartTalkStatus,
   StartTalkThinkingLevel,
   StartTalkToolActivity,
+  StartTalkTranscriptItem,
 } from "./types";
 import {
   buildNotificationAnnouncementPrompt,
@@ -105,6 +106,34 @@ function mergeTranscriptChunk(current: string, next: string) {
     /[.!?]$/.test(current.trimEnd()) && /^[A-Za-z0-9]/.test(next);
 
   return `${current}${shouldSeparate ? " " : ""}${next}`;
+}
+
+function commitTranscriptTurn(
+  entries: StartTalkTranscriptItem[],
+  role: StartTalkTranscriptItem["role"],
+  text: string,
+): StartTalkTranscriptItem[] {
+  const clean = text.replace(/\s+/gu, " ").trim();
+  if (!clean) return entries;
+
+  const last = entries.at(-1);
+  if (last?.role === role) {
+    if (last.text === clean || last.text.startsWith(clean)) {
+      return entries;
+    }
+    if (clean.startsWith(last.text)) {
+      return entries.slice(0, -1).concat({ ...last, text: clean });
+    }
+  }
+
+  return entries
+    .concat({
+      id: `${role}-${Date.now()}-${entries.length}`,
+      role,
+      text: clean,
+      createdAt: Date.now(),
+    })
+    .slice(-60);
 }
 
 /** Lo que la UI sabe del stream de vídeo, siempre según lo que reporta core. */
@@ -248,6 +277,9 @@ export function useStartTalkAudio({
     useState<StartTalkDelegationApproval | null>(null);
   const [userTranscript, setUserTranscript] = useState("");
   const [assistantTranscript, setAssistantTranscript] = useState("");
+  const [transcriptEntries, setTranscriptEntries] = useState<
+    StartTalkTranscriptItem[]
+  >([]);
   const [videoSource, setVideoSource] = useState<StartTalkVideoSource | null>(
     null,
   );
@@ -1256,6 +1288,11 @@ export function useStartTalkAudio({
           lastUserActivityAtRef.current = Date.now();
           serverTurnCompleteRef.current = false;
           setUserTranscript(event.text);
+          if (event.final) {
+            setTranscriptEntries((entries) =>
+              commitTranscriptTurn(entries, "user", event.text),
+            );
+          }
           // If Start Talk just asked "¿quieres que le responda?", turn the
           // user's spoken answer into a yes/no decision and, on yes, delegate
           // the reply to the Lumina Code chat — deterministically, without
@@ -1297,6 +1334,15 @@ export function useStartTalkAudio({
             base,
             event.text,
           );
+          if (event.final) {
+            setTranscriptEntries((entries) =>
+              commitTranscriptTurn(
+                entries,
+                "assistant",
+                assistantTranscriptRef.current,
+              ),
+            );
+          }
           scheduleAssistantTranscriptFlush();
         }
         return;
@@ -1636,6 +1682,7 @@ export function useStartTalkAudio({
     setToolActivities([]);
     setUserTranscript("");
     setAssistantTranscript("");
+    setTranscriptEntries([]);
     setSpeaker(null);
     latestSpeakerTurnIdRef.current = 0;
     setLastSoundEvent(null);
@@ -1814,6 +1861,7 @@ export function useStartTalkAudio({
     stopSpeaking: stopPlayback,
     restartListening,
     toolActivities,
+    transcriptEntries,
     userTranscript,
     isCrowded,
     lastTurnMetrics,

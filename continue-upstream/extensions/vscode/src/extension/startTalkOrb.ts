@@ -1,100 +1,112 @@
-import { ChildProcess, spawn } from "node:child_process";
-import * as fs from "node:fs";
-import * as path from "node:path";
-
-import { getStartTalkRetryDelayMs } from "core/startTalk/resiliencePolicy";
 import * as vscode from "vscode";
 
-import {
-  type ProcessLock,
-  releaseProcessLock,
-  tryAcquireProcessLock,
-} from "../util/processLock";
-
-import { OrbBridgeServer } from "./OrbBridgeServer";
+import { OrbBridgeServer, resolveOrbFrontendRoot } from "./OrbBridgeServer";
 
 import type { VsCodeWebviewProtocol } from "../webviewProtocol";
 
 /**
- * Lanza el orbe de Start Talk: la MISMA gui de Lumina Code corriendo en una
- * ventana Tauri sin bordes y siempre-encima, fuera de VS Code y movible entre
- * monitores. El cerebro (Gemini Live, mic, delegación al agente) sigue en core;
- * el orbe se conecta por WebSocket al `OrbBridgeServer`.
+ * Abre el orbe de Start Talk: la MISMA gui de Lumina Code en una pestaña del
+ * navegador, servida por `OrbBridgeServer` desde 127.0.0.1. El cerebro (voz,
+ * micrófono, delegación al agente) sigue en core; la pestaña se conecta por
+ * WebSocket al puente.
+ *
+ * Antes el orbe era un ejecutable Tauri que embebía la gui en tiempo de
+ * compilación. Servirla elimina el `cargo build` de ~7 minutos por cada cambio
+ * de interfaz y, con él, los fallos silenciosos por bundle desincronizado y por
+ * ejecutable bloqueado. Lo que se pierde —ventana flotante siempre-encima— es
+ * una decisión tomada a conciencia.
+ *
+ * No hay proceso hijo que supervisar: la pestaña la gobierna el usuario. El
+ * puente sí sobrevive a una recarga del host de la extensión, reusando puerto y
+ * token para que una pestaña abierta se reconecte sola.
  */
 
 const KEEP_ALIVE_KEY = "lumina.startTalk.keepAlive";
-const ORB_PID_KEY = "lumina.startTalk.pid";
-const ORB_LOCK_FILE = "start-talk-orb.lock";
-const STABLE_PROCESS_MS = 60_000;
+const BRIDGE_PORT_KEY = "lumina.startTalk.bridgePort";
+const BRIDGE_TOKEN_KEY = "lumina.startTalk.bridgeToken";
 
 let bridge: OrbBridgeServer | undefined;
-let orbProcess: ChildProcess | undefined;
-let orbLock: ProcessLock | undefined;
-let supervisorContext: vscode.ExtensionContext | undefined;
-let supervisorProtocol: VsCodeWebviewProtocol | undefined;
-let restartTimer: ReturnType<typeof setTimeout> | undefined;
-let stableTimer: ReturnType<typeof setTimeout> | undefined;
-let restartAttempts = 0;
-let disposing = false;
 let disposeRegistered = false;
 
-/**
- * Resuelve una salida canónica: release local en desarrollo o copia nativa del
- * VSIX instalado. No admite overrides ni debug porque hicieron posible lanzar
- * silenciosamente un orbe anterior al código que se estaba probando.
- */
-export function resolveStartTalkOrbExecutable(
+/** Arranca el puente y devuelve la URL del orbe, o `undefined` si no pudo. */
+async function startBridge(
   context: vscode.ExtensionContext,
-): string | undefined {
-  const startTalkRoot = path.resolve(
-    context.extensionPath,
-    "../../../Start-talk",
-  );
-  const candidates = [
-    path.join(startTalkRoot, "src-tauri/target/release/start-talk.exe"),
-    path.join(context.extensionPath, "native/start-talk/start-talk.exe"),
-  ];
-  return candidates.find((candidate) => fs.existsSync(candidate));
+  webviewProtocol: VsCodeWebviewProtocol,
+  reuseSession: boolean,
+): Promise<string | undefined> {
+  if (!bridge) {
+    const frontendRoot = resolveOrbFrontendRoot(
+      context.extensionPath,
+      context.extensionMode === vscode.ExtensionMode.Development,
+    );
+    if (!frontendRoot) {
+      throw new Error(
+        "No se encontró el bundle de la interfaz. Ejecuta `npm run build` en continue-upstream/gui.",
+      );
+    }
+    bridge = new OrbBridgeServer(webviewProtocol, frontendRoot);
+  }
+
+  const { port, token } = await bridge.start({
+    preferredPort: reuseSession
+      ? context.globalState.get<number>(BRIDGE_PORT_KEY)
+      : undefined,
+    token: reuseSession
+      ? context.globalState.get<string>(BRIDGE_TOKEN_KEY)
+      : undefined,
+  });
+  await context.globalState.update(BRIDGE_PORT_KEY, port);
+  await context.globalState.update(BRIDGE_TOKEN_KEY, token);
+  return bridge.orbUrl();
 }
 
 export async function launchStartTalkOrb(
   context: vscode.ExtensionContext,
   webviewProtocol: VsCodeWebviewProtocol,
 ): Promise<void> {
-  registerOrbSupervisor(context, webviewProtocol);
-  disposing = false;
+  registerOrbSupervisor(context);
   await context.globalState.update(KEEP_ALIVE_KEY, true);
 
-  if (orbProcess && orbProcess.exitCode === null) {
-    void vscode.window.showInformationMessage(
-      "El orbe de Start Talk ya está abierto.",
+  let url: string | undefined;
+  try {
+    url = await startBridge(context, webviewProtocol, false);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Orb bridge failed to start.";
+    disposeStartTalkOrb();
+    void vscode.window.showErrorMessage(
+      `No se pudo iniciar Start Talk: ${message}`,
     );
     return;
   }
 
-  await spawnStartTalkOrb(context, webviewProtocol, true);
+  if (url) {
+    await vscode.env.openExternal(vscode.Uri.parse(url));
+  }
 }
 
-/** Restaura el orbe después de una recarga del host de la extensión. */
+/**
+ * Reabre el puente tras una recarga del host de la extensión, en el mismo
+ * puerto y con el mismo token, para que una pestaña ya abierta se reconecte sin
+ * intervención. No abre una pestaña nueva: eso sería robar el foco al usuario.
+ */
 export async function restoreStartTalkOrb(
   context: vscode.ExtensionContext,
   webviewProtocol: VsCodeWebviewProtocol,
 ): Promise<void> {
-  registerOrbSupervisor(context, webviewProtocol);
-  disposing = false;
+  registerOrbSupervisor(context);
   if (!context.globalState.get<boolean>(KEEP_ALIVE_KEY, false)) {
     return;
   }
 
-  await spawnStartTalkOrb(context, webviewProtocol, false);
+  try {
+    await startBridge(context, webviewProtocol, true);
+  } catch (error) {
+    console.error(`[StartTalkOrb] Bridge restore failed: ${error}`);
+  }
 }
 
-function registerOrbSupervisor(
-  context: vscode.ExtensionContext,
-  webviewProtocol: VsCodeWebviewProtocol,
-): void {
-  supervisorContext = context;
-  supervisorProtocol = webviewProtocol;
+function registerOrbSupervisor(context: vscode.ExtensionContext): void {
   if (disposeRegistered) {
     return;
   }
@@ -102,222 +114,8 @@ function registerOrbSupervisor(
   context.subscriptions.push({ dispose: disposeStartTalkOrb });
 }
 
-function acquireOrbLock(context: vscode.ExtensionContext): boolean {
-  if (orbLock) {
-    return false;
-  }
-  orbLock = tryAcquireProcessLock(
-    path.join(context.globalStorageUri.fsPath, ORB_LOCK_FILE),
-  );
-  return Boolean(orbLock);
-}
-
-function releaseOrbLock(): void {
-  const lock = orbLock;
-  orbLock = undefined;
-  try {
-    releaseProcessLock(lock);
-  } catch (error) {
-    console.error(`[StartTalkOrb] Could not release orb lock: ${error}`);
-  }
-}
-
-async function spawnStartTalkOrb(
-  context: vscode.ExtensionContext,
-  webviewProtocol: VsCodeWebviewProtocol,
-  notifyOnFailure: boolean,
-): Promise<void> {
-  if (disposing || (orbProcess && orbProcess.exitCode === null)) {
-    return;
-  }
-
-  const exe = resolveStartTalkOrbExecutable(context);
-  if (!exe) {
-    const message =
-      "No se encontró el ejecutable del orbe. Compílalo con `npm run tauri build` en Lumina-Code/Start-talk.";
-    if (notifyOnFailure) {
-      void vscode.window.showErrorMessage(message);
-    } else {
-      console.error(`[StartTalkOrb] ${message}`);
-      scheduleOrbRestart();
-    }
-    return;
-  }
-
-  let ownsOrbLock: boolean;
-  try {
-    ownsOrbLock = acquireOrbLock(context);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Orb lock could not be created.";
-    if (notifyOnFailure) {
-      void vscode.window.showErrorMessage(
-        `No se pudo reservar Start Talk: ${message}`,
-      );
-    } else {
-      console.error(`[StartTalkOrb] Lock acquisition failed: ${message}`);
-    }
-    scheduleOrbRestart();
-    return;
-  }
-  if (!ownsOrbLock) {
-    if (notifyOnFailure) {
-      void vscode.window.showInformationMessage(
-        "Start Talk ya se esta abriendo o esta controlado por otra ventana de VS Code.",
-      );
-    }
-    return;
-  }
-
-  const stalePid = context.globalState.get<number>(ORB_PID_KEY);
-  if (stalePid && stalePid !== orbProcess?.pid) {
-    try {
-      process.kill(stalePid, 0);
-      process.kill(stalePid);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    } catch {
-      // The previous extension host may have already released the process.
-    }
-  }
-  await context.globalState.update(ORB_PID_KEY, undefined);
-
-  if (!bridge) {
-    bridge = new OrbBridgeServer(webviewProtocol);
-  }
-  let port: number;
-  let token: string;
-  try {
-    ({ port, token } = await bridge.start());
-  } catch (error) {
-    bridge.dispose();
-    bridge = undefined;
-    releaseOrbLock();
-    const message =
-      error instanceof Error ? error.message : "Orb bridge failed to start.";
-    if (notifyOnFailure) {
-      void vscode.window.showErrorMessage(
-        `No se pudo iniciar el puente de Start Talk: ${message}`,
-      );
-    } else {
-      console.error(`[StartTalkOrb] Bridge start failed: ${message}`);
-    }
-    scheduleOrbRestart();
-    return;
-  }
-  const bridgeUrl = `ws://127.0.0.1:${port}/?token=${token}`;
-
-  let child: ChildProcess;
-  try {
-    child = spawn(exe, [], {
-      cwd: path.dirname(exe),
-      env: { ...process.env, LUMINA_ORB_BRIDGE: bridgeUrl },
-      windowsHide: false,
-      detached: false,
-    });
-  } catch (error) {
-    releaseOrbLock();
-    const message =
-      error instanceof Error ? error.message : "Orb process failed to start.";
-    if (notifyOnFailure) {
-      void vscode.window.showErrorMessage(
-        `No se pudo lanzar el orbe de Start Talk: ${message}`,
-      );
-    } else {
-      console.error(`[StartTalkOrb] Process start failed: ${message}`);
-    }
-    scheduleOrbRestart();
-    return;
-  }
-  orbProcess = child;
-  await context.globalState.update(ORB_PID_KEY, child.pid);
-
-  child.on("spawn", () => {
-    if (stableTimer) {
-      clearTimeout(stableTimer);
-    }
-    stableTimer = setTimeout(() => {
-      restartAttempts = 0;
-      stableTimer = undefined;
-    }, STABLE_PROCESS_MS);
-  });
-
-  child.on("error", (error) => {
-    if (orbProcess !== child) {
-      return;
-    }
-    orbProcess = undefined;
-    void context.globalState.update(ORB_PID_KEY, undefined);
-    releaseOrbLock();
-    const message = `No se pudo lanzar el orbe de Start Talk: ${error.message}`;
-    if (notifyOnFailure) {
-      void vscode.window.showErrorMessage(message);
-    } else {
-      console.error(`[StartTalkOrb] ${message}`);
-    }
-    scheduleOrbRestart();
-  });
-
-  child.on("exit", (code) => {
-    if (orbProcess !== child) {
-      return;
-    }
-    orbProcess = undefined;
-    void context.globalState.update(ORB_PID_KEY, undefined);
-    releaseOrbLock();
-    if (stableTimer) {
-      clearTimeout(stableTimer);
-      stableTimer = undefined;
-    }
-    if (disposing) {
-      return;
-    }
-    if (code === 0) {
-      restartAttempts = 0;
-      void context.globalState.update(KEEP_ALIVE_KEY, false);
-      return;
-    }
-    scheduleOrbRestart();
-  });
-}
-
-function scheduleOrbRestart(): void {
-  if (
-    disposing ||
-    restartTimer ||
-    !supervisorContext ||
-    !supervisorProtocol ||
-    !supervisorContext.globalState.get<boolean>(KEEP_ALIVE_KEY, false)
-  ) {
-    return;
-  }
-
-  restartAttempts += 1;
-  const delayMs = getStartTalkRetryDelayMs(restartAttempts);
-  restartTimer = setTimeout(() => {
-    restartTimer = undefined;
-    if (!supervisorContext || !supervisorProtocol) {
-      return;
-    }
-    void spawnStartTalkOrb(supervisorContext, supervisorProtocol, false);
-  }, delayMs);
-}
-
-/** Cierra el orbe y libera el bridge al desactivar la extensión. */
+/** Cierra el puente al desactivar la extensión. */
 export function disposeStartTalkOrb(): void {
-  disposing = true;
-  if (restartTimer) {
-    clearTimeout(restartTimer);
-    restartTimer = undefined;
-  }
-  if (stableTimer) {
-    clearTimeout(stableTimer);
-    stableTimer = undefined;
-  }
-  if (orbProcess && orbProcess.exitCode === null) {
-    orbProcess.kill();
-  }
-  orbProcess = undefined;
   bridge?.dispose();
   bridge = undefined;
-  releaseOrbLock();
 }

@@ -7,7 +7,7 @@ import { getContinueGlobalPath } from "core/util/paths";
 import * as vscode from "vscode";
 
 import { getLuminaRuntimeStatus } from "./backendLifecycle";
-import { resolveStartTalkOrbExecutable } from "./startTalkOrb";
+import { resolveOrbFrontendRoot } from "./OrbBridgeServer";
 
 import type {
   LuminaBackupResult,
@@ -479,22 +479,26 @@ export async function runLuminaDoctor(
     ),
   ];
 
-  const orb = resolveStartTalkOrbExecutable(context);
+  // El orbe se sirve desde el mismo bundle de la gui, así que basta con que ese
+  // bundle exista: ya lo comprueba el check "gui" de arriba.
+  const orbFrontend = resolveOrbFrontendRoot(
+    context.extensionPath,
+    context.extensionMode === vscode.ExtensionMode.Development,
+  );
   checks.push(
-    orb
+    orbFrontend
       ? {
           id: "start-talk",
-          label: "Ejecutable Start Talk",
+          label: "Start Talk web",
           status: "pass",
-          detail: "Orbe nativo disponible.",
+          detail: "Se abre en el navegador desde el bundle de la interfaz.",
         }
       : {
           id: "start-talk",
-          label: "Ejecutable Start Talk",
+          label: "Start Talk web",
           status: "warning",
-          detail: "El chat funciona, pero el orbe nativo no está compilado.",
-          remediation:
-            "Compila Start-talk con npm run tauri build -- --no-bundle.",
+          detail: "El chat funciona, pero falta el bundle que sirve el orbe.",
+          remediation: "Ejecuta npm run build en continue-upstream/gui.",
         },
   );
 

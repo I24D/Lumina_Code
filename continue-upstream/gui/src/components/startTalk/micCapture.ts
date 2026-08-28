@@ -32,8 +32,8 @@ export const MIC_FRAME_DURATION_MS =
  * remuestrea a 16 kHz y acumula hasta completar un bloque antes de enviarlo.
  *
  * Va inline y se carga por Blob URL por el mismo motivo que el de reproducción:
- * un asset suelto habría que añadirlo al build de Vite y volver a copiarlo al
- * ensamblar `orb-frontend`, que es justo el paso que se olvida.
+ * un asset suelto habría que añadirlo al build de Vite y servirlo aparte, que
+ * es justo el paso que se olvida.
  */
 const WORKLET_SOURCE = `
 class MicCaptureProcessor extends AudioWorkletProcessor {

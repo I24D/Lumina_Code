@@ -32,9 +32,9 @@ export const GEMINI_OUTPUT_SAMPLE_RATE = 24000;
 
 /**
  * Código del worklet. Va como texto y se carga por Blob URL a propósito: así no
- * hay que añadir un asset suelto al build de Vite ni copiarlo aparte al
- * ensamblar `orb-frontend`, que es justo el tipo de paso que se olvida y hace
- * que el exe embeba una versión vieja sin que nada falle visiblemente.
+ * hay que añadir un asset suelto al build de Vite ni servirlo aparte, que es
+ * justo el tipo de paso que se olvida y deja el audio mudo sin que nada falle
+ * visiblemente.
  */
 const WORKLET_SOURCE = `
 class PcmPlayerProcessor extends AudioWorkletProcessor {

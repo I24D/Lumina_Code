@@ -1,8 +1,21 @@
 # Voz y multimedia de Start Talk
 
-Start Talk usa la misma GUI y el mismo core de Lumina Code. El orbe Tauri no
-mantiene una implementación paralela: transporta los mensajes del webview al
-host de la extensión mediante el puente autenticado local.
+Start Talk usa la misma GUI y el mismo core de Lumina Code, sin implementación
+paralela. Se abre como una **pestaña del navegador**: `OrbBridgeServer` sirve el
+bundle de la GUI en `127.0.0.1` e inyecta un arranque que sustituye
+`vscode.postMessage` por un WebSocket contra el mismo `VsCodeWebviewProtocol`.
+Así las tools, MCP y la delegación al agente funcionan idénticas a la barra
+lateral.
+
+Tanto la página como el WebSocket exigen el token de sesión, que crea el comando
+de Lumina Code; el token se borra de la barra de direcciones al cargar. Como
+`127.0.0.1` es contexto seguro, el micrófono y el AudioWorklet funcionan con
+normalidad (la primera vez el navegador pedirá permiso).
+
+Hasta el 2026-08-28 el orbe fue una ventana Tauri que embebía la GUI en un
+`.exe`. Se cambió por la pestaña para eliminar el `cargo build` de ~7 minutos
+por cada cambio de interfaz y los fallos silenciosos por bundle desincronizado;
+el precio consciente fue perder la ventana flotante siempre encima.
 
 ## Proveedores de voz
 
@@ -141,8 +154,8 @@ una conversación larga no aumente la memoria sin límite.
 
 1. Abre **Ajustes de conversación → Entrada de audio** y actualiza la lista.
 2. Confirma que la pantalla de métricas diga `eco cancelado`.
-3. Si el orbe no conecta, ábrelo desde el comando de la extensión; ejecutar el
-   `.exe` directamente omite el puente autenticado.
+3. Si Lumina Live no conecta, ábrelo desde el botón del chat o el comando de la
+   extensión; una URL copiada de otra sesión ya no tiene un token válido.
 4. Comprueba que la clave del proveedor activo (`OPENAI_API_KEY` o
    `GEMINI_API_KEY`) esté puesta y que el modelo sea de ese mismo proveedor.
 5. Mantén la biometría apagada si no has instalado su backend opcional.

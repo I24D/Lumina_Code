@@ -8,9 +8,9 @@ import { IMessenger } from "../../../core/protocol/messenger";
 import { handleLLMError } from "./util/errorHandling";
 
 /**
- * Destino adicional para los mensajes core→webview. Lo usa el orbe de Start Talk
- * (proceso Tauri) que se conecta por WebSocket: la misma gui corre fuera de VS
- * Code y recibe/emite los mismos mensajes del protocolo, así que Start Talk y la
+ * Destino adicional para los mensajes core→webview. Lo usa la pestaña web de
+ * Start Talk, que se conecta por WebSocket: la misma gui corre fuera de VS Code
+ * y recibe/emite los mismos mensajes del protocolo, así que Start Talk y la
  * delegación al agente funcionan idénticos. Ver `OrbBridgeServer`.
  */
 export type ExternalWebviewSink = (msg: Message) => void;
@@ -23,7 +23,7 @@ export class VsCodeWebviewProtocol
     ((message: Message) => any)[]
   >();
 
-  /** Superficies externas (orbe Tauri) suscritas a los mensajes core→webview. */
+  /** Superficies externas (como Lumina Live web) suscritas a core→webview. */
   private externalSinks = new Set<ExternalWebviewSink>();
 
   send(messageType: string, data: any, messageId?: string): string {
@@ -151,7 +151,7 @@ export class VsCodeWebviewProtocol
   }
 
   /**
-   * Registra una superficie externa (orbe Tauri por WS) para que reciba los
+   * Registra una superficie externa (Lumina Live por WS) para que reciba los
    * mensajes core→webview. Devuelve un disposer para retirarla al desconectar.
    */
   addExternalSink(sink: ExternalWebviewSink): () => void {

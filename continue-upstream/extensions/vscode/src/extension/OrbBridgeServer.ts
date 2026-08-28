@@ -1,4 +1,7 @@
 import * as crypto from "node:crypto";
+import * as fs from "node:fs";
+import * as http from "node:http";
+import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { evaluateSurfaceAuthorization } from "@continuedev/terminal-security";
@@ -7,44 +10,233 @@ import { WebSocket, WebSocketServer } from "ws";
 
 import { VsCodeWebviewProtocol } from "../webviewProtocol";
 
-import type { IncomingMessage } from "node:http";
+import { buildOrbBootstrapScript } from "./orbBootstrap";
+
+import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
 /**
- * Puente WebSocket local que expone el protocolo del webview al orbe de Start
- * Talk (proceso Tauri, fuera de VS Code).
+ * Servidor local del orbe de Start Talk: sirve la MISMA gui de Lumina Code en
+ * una pestaña del navegador y expone el protocolo del webview por WebSocket.
  *
- * El orbe carga la MISMA gui de Lumina Code; su transporte `vscode.postMessage`
- * viaja por aquí en vez de por el webview de VS Code. Como los mensajes se
- * enrutan por el mismísimo `VsCodeWebviewProtocol`, Start Talk, las tools, MCP y
- * la delegación al agente completo funcionan idénticos. Ver `webviewProtocol.ts`.
+ * Antes el orbe era una ventana Tauri que embebía la gui en tiempo de
+ * compilación. Servirla en vez de empotrarla elimina el ciclo de `cargo build`
+ * y, con él, toda la clase de fallos por bundle desincronizado: aquí siempre se
+ * sirve el bundle que hay en disco.
  *
- * Seguridad: escucha solo en 127.0.0.1 y exige un token de sesión en la query.
+ * HTTP y WebSocket comparten puerto para que haya UNA sola URL y UN solo token.
+ * El transporte `vscode.postMessage` de la gui viaja por el WebSocket en vez de
+ * por el webview de VS Code; como los mensajes se enrutan por el mismísimo
+ * `VsCodeWebviewProtocol`, Start Talk, las tools, MCP y la delegación al agente
+ * funcionan idénticos. Ver `webviewProtocol.ts`.
+ *
+ * Seguridad: escucha solo en 127.0.0.1 (que además es contexto seguro para el
+ * navegador, así que el micrófono funciona) y exige el token de sesión tanto
+ * para servir la página como para abrir el WebSocket.
  */
+
+/** Tipos MIME de lo que compone el bundle de la gui. */
+const CONTENT_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".map": "application/json; charset=utf-8",
+};
+
+/**
+ * Raíz del bundle de la gui que se sirve al orbe.
+ *
+ * El orden importa y no es cosmético: en un checkout de desarrollo conviven la
+ * copia empaquetada (`extensions/vscode/gui`, que solo se refresca al generar
+ * el VSIX) y la recién compilada (`gui/dist`). Servir la primera en desarrollo
+ * mostraría una interfaz de hace días sin que nada fallara —justo el fallo
+ * silencioso que el orbe embebido ya provocaba—, así que en desarrollo manda
+ * `gui/dist` y en producción la copia empaquetada.
+ */
+export function resolveOrbFrontendRoot(
+  extensionPath: string,
+  isDevelopment = false,
+): string | undefined {
+  const packaged = path.join(extensionPath, "gui");
+  const built = path.resolve(extensionPath, "../../gui/dist");
+  const candidates = isDevelopment ? [built, packaged] : [packaged, built];
+  return candidates.find((candidate) =>
+    fs.existsSync(path.join(candidate, "index.html")),
+  );
+}
+
 export class OrbBridgeServer {
+  private server: http.Server | undefined;
   private wss: WebSocketServer | undefined;
   private port = 0;
-  private readonly token = crypto.randomBytes(16).toString("hex");
+  private token = crypto.randomBytes(16).toString("hex");
 
-  constructor(private readonly webviewProtocol: VsCodeWebviewProtocol) {}
+  /**
+   * `frontendRoot` solo lo necesita el orbe, que además de mensajes sirve la
+   * interfaz. El puente MCP usa la misma clase como transporte WebSocket puro y
+   * lo omite: sin raíz de bundle, el servidor no sirve ninguna página.
+   */
+  constructor(
+    private readonly webviewProtocol: VsCodeWebviewProtocol,
+    private readonly frontendRoot?: string,
+  ) {}
 
-  /** Arranca (idempotente) y devuelve el puerto efímero + token de esta sesión. */
-  async start(): Promise<{ port: number; token: string }> {
-    if (this.wss) {
+  /** URL que abre el orbe en el navegador, con el token de esta sesión. */
+  orbUrl(): string {
+    return `http://127.0.0.1:${this.port}/?token=${this.token}`;
+  }
+
+  /**
+   * Arranca (idempotente) y devuelve el puerto + token. `preferredPort` permite
+   * recuperar el mismo puerto tras recargar el host de la extensión, para que
+   * una pestaña ya abierta se reconecte sola en vez de quedarse huérfana.
+   */
+  async start(options?: {
+    preferredPort?: number;
+    token?: string;
+  }): Promise<{ port: number; token: string }> {
+    if (this.server) {
       return { port: this.port, token: this.token };
     }
+    if (options?.token) {
+      this.token = options.token;
+    }
 
-    return new Promise((resolve, reject) => {
-      const wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    const listen = (port: number): Promise<{ port: number; token: string }> =>
+      new Promise((resolve, reject) => {
+        const server = http.createServer((req, res) =>
+          this.onHttpRequest(req, res),
+        );
+        const wss = new WebSocketServer({ server });
+        wss.on("connection", (socket, req) => this.onConnection(socket, req));
+        // Un evento `error` sin oyente en un EventEmitter tumba el proceso. El
+        // servidor de sockets hereda los fallos del HTTP al que va adosado, así
+        // que un puerto ocupado bastaría para llevarse por delante el host de
+        // la extensión entera.
+        wss.on("error", () => undefined);
 
-      wss.on("listening", () => {
-        this.wss = wss;
-        this.port = (wss.address() as AddressInfo).port;
-        resolve({ port: this.port, token: this.token });
+        const onListenError = (error: Error) => {
+          // Sin cerrarlos, el par fallido queda colgando en el bucle de eventos.
+          wss.close();
+          server.close();
+          reject(error);
+        };
+
+        server.once("error", onListenError);
+        server.listen(port, "127.0.0.1", () => {
+          server.removeListener("error", onListenError);
+          // A partir de aquí los fallos son de una conexión, no del arranque:
+          // se registran, pero no derriban el host.
+          server.on("error", (error) =>
+            console.error(`[OrbBridgeServer] ${error.message}`),
+          );
+          this.server = server;
+          this.wss = wss;
+          this.port = (server.address() as AddressInfo).port;
+          resolve({ port: this.port, token: this.token });
+        });
       });
-      wss.on("error", reject);
-      wss.on("connection", (socket, req) => this.onConnection(socket, req));
+
+    const preferred = options?.preferredPort;
+    if (preferred && preferred > 0) {
+      try {
+        return await listen(preferred);
+      } catch {
+        // El puerto puede estar ocupado por otra cosa: se cae a uno efímero.
+      }
+    }
+    return listen(0);
+  }
+
+  /**
+   * Sirve el bundle de la gui. La página inicial exige el token; los recursos
+   * (js/css/fuentes) no, porque son el mismo bundle que ya se distribuye en el
+   * VSIX y el navegador no los pide con la query. Lo que el token protege es el
+   * arranque, que es donde va el secreto del puente.
+   */
+  private onHttpRequest(req: IncomingMessage, res: ServerResponse): void {
+    const frontendRoot = this.frontendRoot;
+    if (!frontendRoot) {
+      // Transporte WebSocket puro (puente MCP): no hay interfaz que servir.
+      res.writeHead(404).end();
+      return;
+    }
+
+    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const isEntry = url.pathname === "/" || url.pathname === "/index.html";
+
+    if (isEntry) {
+      if (url.searchParams.get("token") !== this.token) {
+        res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Start Talk: token invalido. Abrelo desde Lumina Code.");
+        return;
+      }
+      this.serveEntry(res);
+      return;
+    }
+
+    const relative = decodeURIComponent(url.pathname).replace(/^\/+/u, "");
+    const target = path.resolve(frontendRoot, relative);
+    // Nunca servir fuera de la raíz del bundle.
+    if (
+      target !== frontendRoot &&
+      !target.startsWith(frontendRoot + path.sep)
+    ) {
+      res.writeHead(403).end();
+      return;
+    }
+
+    fs.readFile(target, (error, data) => {
+      if (error) {
+        res.writeHead(404).end();
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type":
+          CONTENT_TYPES[path.extname(target).toLowerCase()] ??
+          "application/octet-stream",
+        "Cache-Control": "no-store",
+      });
+      res.end(data);
     });
+  }
+
+  /** index.html con el arranque del puente inyectado antes que la gui. */
+  private serveEntry(res: ServerResponse): void {
+    let html: string;
+    try {
+      html = fs.readFileSync(
+        path.join(this.frontendRoot ?? "", "index.html"),
+        "utf8",
+      );
+    } catch {
+      res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Start Talk: no se encontro el bundle de la interfaz.");
+      return;
+    }
+
+    const bootstrap = `<script>${buildOrbBootstrapScript(
+      `ws://127.0.0.1:${this.port}/?token=${this.token}`,
+    )}</script>`;
+    const injected = html.includes("<head>")
+      ? html.replace("<head>", `<head>${bootstrap}`)
+      : `${bootstrap}${html}`;
+
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    res.end(injected);
   }
 
   private onConnection(socket: WebSocket, req: IncomingMessage): void {
@@ -216,5 +408,8 @@ export class OrbBridgeServer {
   dispose(): void {
     this.wss?.close();
     this.wss = undefined;
+    this.server?.close();
+    this.server = undefined;
+    this.port = 0;
   }
 }

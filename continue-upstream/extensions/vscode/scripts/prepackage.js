@@ -168,23 +168,8 @@ void (async () => {
   // Copy over native / wasm modules //
   process.chdir("../extensions/vscode");
 
-  const orbBinaryName = isWinTarget ? "start-talk.exe" : "start-talk";
-  const orbSourcePath = path.resolve(
-    __dirname,
-    "../../../../Start-talk/src-tauri/target/release",
-    orbBinaryName,
-  );
-  const orbDestinationDir = path.resolve(__dirname, "../native/start-talk");
-  const orbDestinationPath = path.join(orbDestinationDir, orbBinaryName);
-  if (!fs.existsSync(orbSourcePath)) {
-    throw new Error(
-      `Start Talk release binary was not found at ${orbSourcePath}. Build it before packaging the VSIX.`,
-    );
-  }
-  rimrafSync(orbDestinationDir);
-  fs.mkdirSync(orbDestinationDir, { recursive: true });
-  fs.copyFileSync(orbSourcePath, orbDestinationPath);
-  console.log(`[info] Copied Start Talk orb to ${orbDestinationPath}`);
+  // El orbe de Start Talk ya no es un binario que empaquetar: se sirve desde la
+  // copia de la gui que se acaba de copiar arriba y se abre en el navegador.
 
   fs.mkdirSync("bin", { recursive: true });
 

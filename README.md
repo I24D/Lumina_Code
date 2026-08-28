@@ -50,7 +50,7 @@ El objetivo no es crear otro cuadro de chat. Es construir un colaborador técnic
 ## Capacidades principales / Main capabilities
 
 - Agente de código dentro de VS Code.
-- Experiencia de voz nativa **Start Talk** con orbe de escritorio.
+- Experiencia de voz **Start Talk** en una pestaña segura del navegador.
 - Búsquedas de Start Talk auditables en el chat: consulta, proveedor, fuentes
   y extractos realmente entregados al modelo cuando el proveedor los expone.
 - Contexto y memoria entre sesiones.
@@ -235,8 +235,7 @@ Los requisitos del entorno de desarrollo y empaquetado son:
 | VS Code 1.70 o superior              | Extension Development Host                                                |
 | Git                                  | Clonación y flujo de contribución                                         |
 | Node.js 20.20.1                      | Extensión y monorepo base; versión indicada en `continue-upstream/.nvmrc` |
-| Rust `stable-msvc`                   | Aplicación nativa Start Talk basada en Tauri                              |
-| Microsoft C++ Build Tools y WebView2 | Requisitos de Tauri sobre Windows                                         |
+| Navegador moderno                    | Start Talk se abre como pestaña servida en `127.0.0.1`                    |
 | Node.js 22                           | Bridges TypeScript opcionales; no se usa para empaquetar la extensión     |
 | Python                               | Sidecars opcionales para ciertas integraciones Windows                    |
 
@@ -244,16 +243,13 @@ Los requisitos del entorno de desarrollo y empaquetado son:
 
 ```powershell
 git clone https://github.com/I24D/Lumina_Code.git
-cd Lumina_Code\Start-talk
-npm install
-npm run tauri build -- --no-bundle
-cd ..\continue-upstream
+cd Lumina_Code\continue-upstream
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-dependencies.ps1
 cd ..
 powershell -NoProfile -ExecutionPolicy Bypass -File .\ABRIR_LUMINA_CODE_DEV.ps1
 ```
 
-Start Talk debe compilarse primero porque su ejecutable se incluye dentro del VSIX. `install-dependencies.ps1` no es una comprobación pasiva: instala dependencias, compila los módulos compartidos, prepara los recursos nativos y genera un primer paquete. El proceso necesita red y puede tardar según el equipo.
+Start Talk no necesita un paso de compilación propio: su interfaz es la misma GUI de Lumina Code, que la extensión sirve en `127.0.0.1` y abre en el navegador. `install-dependencies.ps1` no es una comprobación pasiva: instala dependencias, compila los módulos compartidos, prepara los recursos nativos y genera un primer paquete. El proceso necesita red y puede tardar según el equipo.
 
 El launcher abre un **VS Code Extension Development Host aislado** y levanta la interfaz de desarrollo en `127.0.0.1:5174`; no reemplaza tu instalación normal de VS Code.
 
@@ -334,7 +330,7 @@ Get-ChildItem .\build\*.vsix
 
 Consulta la guía completa de [instalación, generación e instalación del VSIX](docs/INSTALLATION_AND_VSIX.md). Incluye verificaciones, ubicación del artefacto, instalación desde la interfaz o la CLI de VS Code, limitaciones y errores frecuentes.
 
-Después de instalar o abrir la extensión, inicia el orbe mediante **Lumina Code: Start Talk (orbe de escritorio)**. Ejecutar `start-talk.exe` directamente omite el puente de comunicación con Lumina Code.
+Después de instalar o abrir la extensión, inicia Start Talk con el botón **Start talk** del chat o el comando **Lumina Code: Start Talk**. Se abrirá en una pestaña del navegador servida en `127.0.0.1`; abrir esa URL a mano, sin el token de sesión, devuelve 403 porque el puente lo crea el comando.
 
 Los componentes avanzados tienen documentación propia:
 

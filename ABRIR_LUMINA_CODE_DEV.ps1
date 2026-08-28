@@ -4,7 +4,6 @@ $luminaCodeRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sourceRoot = Join-Path $luminaCodeRoot "continue-upstream"
 $guiRoot = Join-Path $sourceRoot "gui"
 $extensionRoot = Join-Path $sourceRoot "extensions\vscode"
-$startTalkRoot = Join-Path $luminaCodeRoot "Start-talk"
 $workspaceRoot = Join-Path $sourceRoot "manual-testing-sandbox"
 $codeCommand = Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\bin\code.cmd"
 $isolatedRoot = Join-Path $env:LOCALAPPDATA "LuminaCode\DevelopmentHost"
@@ -109,60 +108,49 @@ function Repair-SqliteNativeModule {
     }
 }
 
-function Repair-StartTalkExecutable {
-    $buildScript = Join-Path $startTalkRoot "scripts\build-native.ps1"
-    $pruneScript = Join-Path $startTalkRoot "scripts\prune-build-artifacts.mjs"
-    $orbExecutable = Join-Path $startTalkRoot "src-tauri\target\release\start-talk.exe"
-    if (-not (Test-Path -LiteralPath $buildScript)) {
-        throw "Start Talk build script was not found: $buildScript"
-    }
-
-    if (-not (Test-Path -LiteralPath $pruneScript)) {
-        throw "Start Talk binary cleanup script was not found: $pruneScript"
-    }
-    Write-Host "Removing ambiguous Start Talk binaries..."
-    & node.exe $pruneScript
-    if ($LASTEXITCODE -ne 0) {
-        throw "Start Talk binary cleanup failed. Review the output above."
-    }
+# El orbe de Start Talk se abre en el navegador y la extension lo sirve desde
+# gui/dist, asi que lo unico que hay que garantizar es que ese bundle este al
+# dia. Antes aqui se compilaba un ejecutable Tauri (~7 minutos); ese paso
+# desaparecio junto con el orbe nativo.
+function Repair-OrbFrontendBundle {
+    $bundleEntry = Join-Path $guiRoot "dist\index.html"
 
     $inputFiles = @()
-    foreach ($inputRoot in @(
-        (Join-Path $guiRoot "src"),
-        (Join-Path $startTalkRoot "src-tauri\src")
-    )) {
-        if (Test-Path -LiteralPath $inputRoot) {
-            $inputFiles += Get-ChildItem -LiteralPath $inputRoot -File -Recurse
-        }
+    $guiSources = Join-Path $guiRoot "src"
+    if (Test-Path -LiteralPath $guiSources) {
+        $inputFiles += Get-ChildItem -LiteralPath $guiSources -File -Recurse
     }
     foreach ($inputFile in @(
         (Join-Path $guiRoot "index.html"),
         (Join-Path $guiRoot "package.json"),
-        (Join-Path $guiRoot "vite.config.ts"),
-        (Join-Path $startTalkRoot "package.json"),
-        (Join-Path $startTalkRoot "src-tauri\Cargo.toml"),
-        (Join-Path $startTalkRoot "src-tauri\tauri.conf.json")
+        (Join-Path $guiRoot "vite.config.ts")
     )) {
         if (Test-Path -LiteralPath $inputFile) {
             $inputFiles += Get-Item -LiteralPath $inputFile
         }
     }
 
-    $needsBuild = -not (Test-Path -LiteralPath $orbExecutable)
+    $needsBuild = -not (Test-Path -LiteralPath $bundleEntry)
     if (-not $needsBuild) {
-        $executableTime = (Get-Item -LiteralPath $orbExecutable).LastWriteTimeUtc
+        $bundleTime = (Get-Item -LiteralPath $bundleEntry).LastWriteTimeUtc
         $needsBuild = $null -ne ($inputFiles | Where-Object {
-            $_.LastWriteTimeUtc -gt $executableTime
+            $_.LastWriteTimeUtc -gt $bundleTime
         } | Select-Object -First 1)
     }
     if (-not $needsBuild) {
         return
     }
 
-    Write-Host "Start Talk sources changed; rebuilding the embedded GUI and native orb..."
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $buildScript -Mode build
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $orbExecutable)) {
-        throw "Start Talk could not be rebuilt. Review the build output above."
+    Write-Host "GUI sources changed; rebuilding the bundle that serves the orb..."
+    Push-Location $guiRoot
+    try {
+        & npm.cmd run build
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $bundleEntry)) {
+            throw "The GUI bundle could not be rebuilt. Review the build output above."
+        }
+    }
+    finally {
+        Pop-Location
     }
 }
 
@@ -182,7 +170,7 @@ foreach ($requiredPath in @($guiRoot, $extensionRoot, $workspaceRoot)) {
 
 Repair-LanceDbNativeModule
 Repair-SqliteNativeModule
-Repair-StartTalkExecutable
+Repair-OrbFrontendBundle
 
 if (-not (Test-LocalPort -Port 5174)) {
     Write-Host "Starting the Lumina Code development UI on port 5174..."

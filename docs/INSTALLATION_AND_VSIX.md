@@ -25,13 +25,11 @@ Esta guía documenta el flujo oficial para abrir Lumina Code en modo desarrollad
 | Node.js                   | `20.20.1`, definido en `continue-upstream/.nvmrc`       |
 | npm                       | Incluido con Node.js                                    |
 | VS Code                   | `1.70` o posterior, según el manifiesto de la extensión |
-| Rust                      | Toolchain estable MSVC                                  |
-| Microsoft C++ Build Tools | Carga de trabajo **Desktop development with C++**       |
-| Microsoft Edge WebView2   | Runtime utilizado por Tauri                             |
+| Navegador                 | Cualquiera moderno, para la pestaña de Start Talk       |
 | PowerShell                | Ejecución de los scripts Windows                        |
 | Conexión de red           | Descarga de dependencias npm y binarios nativos         |
 
-Tauri mantiene sus [requisitos oficiales para Windows](https://v2.tauri.app/start/prerequisites/). En Windows 10 actualizado y Windows 11, WebView2 normalmente ya está presente.
+Rust, Microsoft C++ Build Tools y WebView2 **ya no hacen falta**: eran requisitos del orbe nativo Tauri, retirado el 2026-08-28 en favor de una pestaña del navegador.
 
 Node.js 22 se utiliza en algunos bridges TypeScript opcionales, pero **no sustituye** la versión `20.20.1` utilizada por el monorepo y el empaquetado de la extensión.
 
@@ -44,8 +42,6 @@ cd Lumina_Code
 git --version
 node --version
 npm --version
-rustc --version
-cargo --version
 code --version
 ```
 
@@ -57,27 +53,15 @@ Get-Content .\continue-upstream\.nvmrc
 
 No copies un `.env` privado ni agregues tokens, contraseñas o rutas personales al checkout.
 
-## 2. Compilar Start Talk para el VSIX
+## 2. Start Talk no necesita un paso propio
 
-El preempaquetado copia Start Talk dentro de la extensión y se detiene si no encuentra este archivo:
+Start Talk se abre como una pestaña del navegador y la extensión la sirve desde
+la misma copia de la GUI que ya viaja en el VSIX (`extensions/vscode/gui`). No
+hay ningún binario que compilar ni copiar: el paso que antes exigía Rust, MSVC
+Build Tools y un `cargo build` de ~7 minutos desapareció junto con el orbe
+nativo.
 
-```text
-Start-talk\src-tauri\target\release\start-talk.exe
-```
-
-Desde la raíz de `Lumina_Code`:
-
-```powershell
-cd .\Start-talk
-npm install
-npm run tauri build -- --no-bundle
-Test-Path .\src-tauri\target\release\start-talk.exe
-cd ..
-```
-
-`--no-bundle` crea el ejecutable de release que necesita el VSIX sin generar instaladores MSI o NSIS. Tauri documenta este flujo en su guía de [build y bundling](https://v2.tauri.app/distribute/#bundling).
-
-No abras `start-talk.exe` directamente para probar la integración. El comando de Lumina Code crea un puente de sesión antes de lanzar el orbe.
+Basta con que la GUI esté construida, cosa que hace el paso siguiente.
 
 ## 3. Preparar dependencias y generar el primer VSIX
 
@@ -119,19 +103,13 @@ Pop-Location
 
 `npm run package` ejecuta primero el script asociado `prepackage`. Ese paso:
 
-- reconstruye y copia la GUI;
+- reconstruye y copia la GUI (que es también la interfaz de Start Talk);
 - prepara dependencias nativas para el target;
-- copia `start-talk.exe` al paquete;
 - valida que existan los archivos requeridos;
 - ejecuta `@vscode/vsce` para crear el VSIX.
 
-Si cambiaste Start Talk, vuelve a ejecutar antes:
-
-```powershell
-Push-Location .\Start-talk
-npm run tauri build -- --no-bundle
-Pop-Location
-```
+Un cambio en Start Talk no necesita ningún paso extra: su interfaz es la GUI que
+este mismo script reconstruye.
 
 No uses `npm run package-all` para una build comunitaria. El script cross-platform continúa marcado como experimental y el flujo público documentado actualmente es `win32-x64`.
 
@@ -188,26 +166,26 @@ El launcher:
 - abre un Extension Development Host aislado;
 - mantiene desactivadas por defecto las automatizaciones de aplicaciones personales.
 
-Dentro del Development Host, usa **Lumina Code: Start Talk (orbe de escritorio)** para iniciar el orbe con su puente de sesión.
+Dentro del Development Host, usa **Lumina Code: Start Talk** para abrir Lumina Live con su puente de sesión.
 
 ## Contenido del VSIX
 
 El proceso de preempaquetado prepara, copia y valida al menos:
 
 - el bundle de la extensión y la GUI;
-- el ejecutable nativo de Start Talk;
+- la GUI web de Start Talk servida por el puente local autenticado;
 - SQLite, LanceDB, ONNX Runtime y ripgrep para el target;
 - modelos y archivos WASM requeridos por el contexto de código;
 - licencia y atribución del proyecto.
 
-El VSIX contiene una extensión funcional. El chat y el agente requieren configurar un proveedor de modelos, mientras que Start Talk requiere una clave independiente de Gemini. Algunas integraciones avanzadas también necesitan servicios o permisos opcionales.
+El VSIX contiene una extensión funcional. El chat y el agente requieren configurar un proveedor de modelos, mientras que Start Talk requiere una clave independiente de OpenAI o Gemini, según el proveedor de voz elegido. Algunas integraciones avanzadas también necesitan servicios o permisos opcionales.
 
 ## Errores frecuentes
 
 | Mensaje o síntoma                            | Causa probable                             | Comprobación                                                  |
 | -------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------- |
-| `Start Talk release binary was not found`    | No se compiló el orbe antes del VSIX       | Verifica `Start-talk\src-tauri\target\release\start-talk.exe` |
-| Error de linker o compilación Rust           | Falta toolchain MSVC o C++ Build Tools     | Ejecuta `rustc --version` y revisa los requisitos de Tauri    |
+| Start Talk abre una pestaña con 403          | Se abrió la URL a mano, sin token de sesión | Ábrelo desde el botón del chat o la paleta de comandos       |
+| Start Talk abre una interfaz vieja           | `gui/dist` sin reconstruir                 | `npm run build` en `continue-upstream/gui` y recarga (F5)     |
 | La versión de Node no coincide               | Se está usando otro runtime                | Compara `node --version` con `.nvmrc`                         |
 | No aparece ningún `.vsix`                    | Falló prepackage o `vsce`                  | Busca el primer error y revisa `extensions\vscode\build`      |
 | `code` no se reconoce                        | La CLI de VS Code no está en `PATH`        | Instala desde la interfaz o corrige el PATH                   |
@@ -229,11 +207,11 @@ Los reportes deben seguir la [política de seguridad](../SECURITY.md).
 
 - [`continue-upstream/.nvmrc`](../continue-upstream/.nvmrc)
 - [`continue-upstream/scripts/install-dependencies.ps1`](../continue-upstream/scripts/install-dependencies.ps1)
-- [`Start-talk/src-tauri/tauri.conf.json`](../Start-talk/src-tauri/tauri.conf.json)
+- [`continue-upstream/extensions/vscode/src/extension/OrbBridgeServer.ts`](../continue-upstream/extensions/vscode/src/extension/OrbBridgeServer.ts)
 - [`continue-upstream/extensions/vscode/package.json`](../continue-upstream/extensions/vscode/package.json)
 - [`continue-upstream/extensions/vscode/scripts/prepackage.js`](../continue-upstream/extensions/vscode/scripts/prepackage.js)
 - [`continue-upstream/extensions/vscode/scripts/package.js`](../continue-upstream/extensions/vscode/scripts/package.js)
 
 ## English quick reference
 
-Lumina Code provides a stable, functional Windows x64 extension from source. Build `Start-talk\src-tauri\target\release\start-talk.exe` first with `npm run tauri build -- --no-bundle`, prepare the monorepo with `continue-upstream\scripts\install-dependencies.ps1`, and generate the extension from `continue-upstream\extensions\vscode` with `npm run package -- --target win32-x64`. Install the newest file under `build\*.vsix` through **Install from VSIX...** or `code --install-extension <path>`. The locally generated VSIX is not signed and is not yet distributed through Marketplace.
+Lumina Code provides a stable, functional Windows x64 extension from source. Prepare the monorepo with `continue-upstream\scripts\install-dependencies.ps1`, then generate the extension from `continue-upstream\extensions\vscode` with `npm run package -- --target win32-x64`. Start Talk needs no separate build step: it opens as a browser tab served from the same GUI bundle that ships in the VSIX. Install the newest file under `build\*.vsix` through **Install from VSIX...** or `code --install-extension <path>`. The locally generated VSIX is not signed and is not yet distributed through Marketplace.

@@ -1,5 +1,19 @@
 # Plan de Desarrollo: Start Talk para Lumina Code
 
+> ⚠️ **DOCUMENTO HISTORICO (2026-08-28).** Todo lo que este documento describe
+> sobre el **orbe de escritorio Tauri** ya NO existe: `Start-talk/src-tauri/`,
+> `Start-talk/orb-frontend/`, el shim `index.html`, `start-talk.exe` y sus
+> scripts de build fueron eliminados. Start Talk se abre hoy como una **pestaña
+> del navegador** que sirve `OrbBridgeServer` desde `127.0.0.1`, inyectando el
+> puente con `extensions/vscode/src/extension/orbBootstrap.ts`.
+>
+> Lo que sigue vigente: la UI unica en `continue-upstream/gui`, el backend de voz
+> en `continue-upstream/core/startTalk`, y el transporte `vscode.postMessage`
+> sobre WebSocket contra el mismo `VsCodeWebviewProtocol`.
+>
+> Para el estado real, ver [`Run-lumina-code.md`](Run-lumina-code.md) y
+> [`docs/VOICE_AND_MULTIMEDIA.md`](docs/VOICE_AND_MULTIMEDIA.md).
+
 ## Objetivo
 
 Redisenar Start Talk como una experiencia de voz nativa de Lumina Code dentro de VS Code.

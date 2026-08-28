@@ -169,7 +169,7 @@
       {
         "command": "lumina.startTalkOrb",
         "category": "Lumina Code",
-        "title": "Start Talk (orbe de escritorio)",
+        "title": "Start Talk",
         "group": "Lumina Code"
       },
       {
