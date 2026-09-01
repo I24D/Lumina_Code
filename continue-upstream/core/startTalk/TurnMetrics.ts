@@ -90,6 +90,12 @@ export interface StartTalkSessionMetrics {
   inputAudioSeconds: number;
   /** Audio hablado que entregó el proveedor. */
   assistantAudioSeconds: number;
+  /**
+   * Búsquedas servidas por un adelanto hecho mientras el usuario aún hablaba,
+   * de las `searches` totales. Es la métrica que dice si la especulación está
+   * ahorrando latencia o solo gastando llamadas.
+   */
+  speculativeHits: number;
   /** Function calls propuestas por el modelo durante la sesión. */
   toolCalls: number;
   /** Estimación solo cuando el usuario configuró tarifas explícitas. */
@@ -157,6 +163,7 @@ export class TurnMetricsTracker {
     reconnects: 0,
     videoRestarts: 0,
     searches: 0,
+    speculativeHits: 0,
     echoSuppressed: 0,
     backchannels: 0,
     inputAudioSeconds: 0,
@@ -262,6 +269,15 @@ export class TurnMetricsTracker {
 
   onSearch(): void {
     this.totals.searches += 1;
+  }
+
+  /**
+   * La búsqueda ya estaba hecha antes de que el modelo la pidiera. Contra
+   * `searches` dice cuántas veces el adelanto acertó: si casi nunca, el
+   * detector de intención está disparando donde no debe y se está pagando.
+   */
+  onSpeculativeHit(): void {
+    this.totals.speculativeHits += 1;
   }
 
   /** Se descartó una transcripción por ser el eco de su propia voz. */

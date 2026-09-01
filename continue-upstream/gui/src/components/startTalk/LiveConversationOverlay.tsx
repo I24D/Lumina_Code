@@ -2364,8 +2364,17 @@ export function LiveConversationOverlay({
                   </Metric>
                 ) : null}
                 {sessionMetrics.searches > 0 ? (
-                  <Metric>
+                  <Metric
+                    title={
+                      sessionMetrics.speculativeHits > 0
+                        ? `${sessionMetrics.speculativeHits} ya estaban buscadas antes de que las pidiera, mientras hablabas.`
+                        : undefined
+                    }
+                  >
                     búsquedas <b>{sessionMetrics.searches}</b>
+                    {sessionMetrics.speculativeHits > 0 ? (
+                      <> · adelantadas <b>{sessionMetrics.speculativeHits}</b></>
+                    ) : null}
                   </Metric>
                 ) : null}
                 {sessionMetrics.reconnects > 0 ? (

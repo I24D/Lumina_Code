@@ -34,6 +34,7 @@ import {
   type LuminaCapability,
 } from "../privacy/permissions.js";
 import { SoundEventDetector } from "./SoundEventDetector.js";
+import { SpeculativeSearch } from "./SpeculativeSearch.js";
 import {
   ConversationTurnManager,
   isVoiceBackchannel,
@@ -831,6 +832,11 @@ type SessionState = {
    * runtime es el del turno del usuario.
    */
   turnStartedAsBargeIn: boolean;
+  /**
+   * Búsqueda adelantada mientras el usuario habla. Solo existe cuando es esta
+   * sesión la que busca (sin grounding nativo) y la búsqueda está activada.
+   */
+  speculation?: SpeculativeSearch;
   // Session behaviour. In "interpreter" mode the model only translates and no
   // persona/memory/tools/grounding are used.
   mode: StartTalkMode;
@@ -1091,6 +1097,15 @@ export class StartTalkManager {
       voiceName: resolveVoiceForProvider(activeProvider, voiceName),
     };
 
+    // Adelantar la búsqueda solo tiene sentido cuando es ESTA sesión la que
+    // busca. Con grounding nativo el modelo resuelve dentro y nunca llama a
+    // `search_web`: especular allí sería pagar llamadas que nadie reclama.
+    if (state.enableSearch && !modelSupportsSearch(state.model)) {
+      state.speculation = new SpeculativeSearch({
+        run: (query, signal) => searchWebForVoice(query, undefined, signal),
+      });
+    }
+
     this.sessions.set(sessionId, state);
 
     // Precarga de memoria (best-effort): si Supabase responde a tiempo, la voz
@@ -1339,6 +1354,8 @@ export class StartTalkManager {
           // estaba cortando.
           state.turnStartedAsBargeIn =
             state.turnManager.snapshot().state === "ASSISTANT_SPEAKING";
+          // Lo que se adelantara para el turno anterior ya no vale.
+          state.speculation?.beginTurn();
           state.turnManager.onUserSpeechStart();
           state.speakerTurnId += 1;
           state.turnAudio = [];
@@ -1632,6 +1649,7 @@ export class StartTalkManager {
     this.closingSessionIds.add(sessionId);
     state.isCapturing = false;
     state.cancellation.cancel("session-stopped");
+    state.speculation?.cancel();
     state.turnManager.onStopped();
     state.gate?.reset(false);
     state.gate = undefined;
@@ -2120,7 +2138,15 @@ export class StartTalkManager {
     });
 
     const operation = state.cancellation.startOperation();
-    const outcome = await searchWebForVoice(query, undefined, operation.signal);
+    // Si ya se estaba buscando esto mientras el usuario hablaba, la respuesta
+    // llega sin esperar a la red. Solo se reutiliza cuando la consulta que pide
+    // el modelo es la misma pregunta (ver `queryOverlap`).
+    const speculated = state.speculation?.take(query);
+    if (speculated) {
+      state.metrics.onSpeculativeHit();
+    }
+    const outcome = await (speculated ??
+      searchWebForVoice(query, undefined, operation.signal));
     const operationIsCurrent = operation.isCurrent();
     operation.finish();
 
@@ -3491,6 +3517,11 @@ export class StartTalkManager {
       // Sirve para distinguir un turno real de un falso positivo del gate.
       state?.metrics.onUserTranscript(inputText);
       state?.turnManager.onTranscript(inputText);
+      // Con el parcial ya se puede ir buscando: es de solo lectura, y el
+      // permiso se comprueba aquí porque la sesión pudo abrirse hace horas.
+      if (state?.speculation && isCapabilityAvailable("webSearch")) {
+        state.speculation.observe(inputText);
+      }
       this.emit({
         type: "transcript",
         sessionId,

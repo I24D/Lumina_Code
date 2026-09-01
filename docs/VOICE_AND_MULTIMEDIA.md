@@ -222,6 +222,32 @@ enviada, el proveedor, el resumen recibido y las fuentes citadas.
 La actividad conserva las 50 operaciones más recientes de la sesión para que
 una conversación larga no aumente la memoria sin límite.
 
+### Búsqueda adelantada
+
+Cuando la frase ya pide buscar algo —«busca en internet cuál es el modelo de voz
+más reciente de Gemini»—, la búsqueda arranca con la transcripción parcial, sin
+esperar a que el turno se cierre y el modelo llame a `search_web`. Si al llegar
+la llamada la consulta es la misma pregunta, la respuesta ya está y se ahorra el
+viaje completo a la red.
+
+Solo se adelanta la búsqueda, que es de solo lectura. Ninguna acción con efectos
+—responder un mensaje, tocar el PC, delegar una tarea— se ejecuta antes de que
+el modelo la pida y el usuario la autorice.
+
+Los límites existen porque cada adelanto fallido es una llamada pagada:
+
+- Hace falta una petición explícita de búsqueda. «¿Cuál es la última versión?»
+  no la dispara aunque a menudo acabe en una búsqueda.
+- Un adelanto por turno, y solo cuando el parcial no está cortado a media frase.
+- El resultado se reutiliza únicamente si la consulta que pide el modelo es la
+  misma pregunta; si el usuario cambió de idea a mitad, se descarta. Contestar
+  la pregunta de al lado es peor que tardar.
+- Solo se activa cuando es esta sesión la que busca. Con el grounding nativo de
+  Google el modelo resuelve dentro y nunca llama a `search_web`.
+
+La tira de métricas muestra cuántas búsquedas venían adelantadas. Comparado con
+el total dice si el detector de intención acierta o solo está gastando.
+
 Los extractos y páginas recuperados se etiquetan internamente como
 `UNTRUSTED_EXTERNAL_DATA`. El prompt del sistema prohíbe tratarlos como órdenes
 o elevarlos por encima de las instrucciones del usuario. Mostrar una fuente no
