@@ -248,4 +248,19 @@ describe("TurnMetricsTracker", () => {
 
     expect(tracker.sessionMetrics().estimatedCostUsd).toBe(0.19);
   });
+
+  it("cuenta los asentimientos aparte, sin descontar la interrupción", () => {
+    // Las dos cifras juntas son las que dicen si el barge-in está calibrado:
+    // muchas interrupciones que resultan ser "ajá" significan que corta sola.
+    const tracker = new TurnMetricsTracker(() => 0);
+    tracker.onActivityStart();
+    tracker.onInterrupted();
+    tracker.onBackchannel();
+    tracker.onActivityEnd();
+    tracker.onTurnComplete();
+
+    const session = tracker.sessionMetrics();
+    expect(session.interruptions).toBe(1);
+    expect(session.backchannels).toBe(1);
+  });
 });

@@ -4,6 +4,7 @@ import {
   consumeReplyAuthorization,
   grantReplyAuthorization,
   isAssistantEcho,
+  isBackchannelInterruption,
 } from "./StartTalkManager.js";
 
 const SAID =
@@ -98,5 +99,29 @@ describe("autorización de respuestas", () => {
     expect(
       consumeReplyAuthorization(ledger, "whatsapp", "  hugo tennessee ", NOW),
     ).toBe(true);
+  });
+});
+
+describe("isBackchannelInterruption", () => {
+  it("un ajá que la corta no es una petición", () => {
+    expect(isBackchannelInterruption(true, "Ajá")).toBe(true);
+    expect(isBackchannelInterruption(true, "entiendo.")).toBe(true);
+  });
+
+  it("el mismo ajá dicho en silencio SÍ es un turno del usuario", () => {
+    // No la estaba cortando: está contestando a algo, y merece respuesta.
+    expect(isBackchannelInterruption(false, "Ajá")).toBe(false);
+  });
+
+  it("no confunde una orden que empieza igual", () => {
+    expect(isBackchannelInterruption(true, "sí, busca eso")).toBe(false);
+    expect(isBackchannelInterruption(true, "para, para, espera")).toBe(false);
+  });
+
+  it("sin transcripción no adivina", () => {
+    // El endpoint local no espera al proveedor: a veces el turno se cierra
+    // antes de que llegue el texto. Callarla ahí sería peor que responder.
+    expect(isBackchannelInterruption(true, "")).toBe(false);
+    expect(isBackchannelInterruption(true, "   ")).toBe(false);
   });
 });

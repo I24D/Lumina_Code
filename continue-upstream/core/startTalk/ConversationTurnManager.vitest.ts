@@ -90,4 +90,18 @@ describe("turn semantics", () => {
     expect(isVoiceBackchannel("Sí")).toBe(true);
     expect(isVoiceBackchannel("Sí, busca esa información")).toBe(false);
   });
+
+  it("expone el parcial del turno y lo olvida al cerrarlo", () => {
+    const manager = new ConversationTurnManager();
+    manager.onUserSpeechStart();
+    manager.onTranscript("Ajá");
+
+    // Sigue disponible en `onUserSpeechEnd`: es ahí donde se decide si el
+    // corte fue un asentimiento.
+    manager.onUserSpeechEnd();
+    expect(manager.currentTranscript()).toBe("Ajá");
+
+    manager.onTurnComplete(true);
+    expect(manager.currentTranscript()).toBe("");
+  });
 });

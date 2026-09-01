@@ -66,6 +66,17 @@ export interface VoiceProviderCapabilities {
   streamingOutput: boolean;
   tools: boolean;
   vision: boolean;
+  /**
+   * El proveedor entrega un handle para retomar la sesión tras una caída.
+   * Es de la Live API; la Realtime API no cierra la sesión sola ni da handles,
+   * así que allí pedirla es pedir algo que nunca llega.
+   */
+  sessionResumption: boolean;
+  /**
+   * El proveedor caduca la conexión por tiempo y hay que rotarla antes de que
+   * lo haga. Rotar donde no hace falta solo tira el contexto de la conversación.
+   */
+  sessionRotation: boolean;
 }
 
 export interface VoiceProviderAdapter<TContext> {

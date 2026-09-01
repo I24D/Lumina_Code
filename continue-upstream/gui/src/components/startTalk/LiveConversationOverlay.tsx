@@ -2358,6 +2358,11 @@ export function LiveConversationOverlay({
                     cortes <b>{sessionMetrics.interruptions}</b>
                   </Metric>
                 ) : null}
+                {sessionMetrics.backchannels > 0 ? (
+                  <Metric title="Cortes que eran un “ajá” y no una petición: se le pidió seguir por donde iba. Muchos aquí significan que el barge-in salta de más.">
+                    asentimientos <b>{sessionMetrics.backchannels}</b>
+                  </Metric>
+                ) : null}
                 {sessionMetrics.searches > 0 ? (
                   <Metric>
                     búsquedas <b>{sessionMetrics.searches}</b>

@@ -34,7 +34,10 @@ import {
   type LuminaCapability,
 } from "../privacy/permissions.js";
 import { SoundEventDetector } from "./SoundEventDetector.js";
-import { ConversationTurnManager } from "./ConversationTurnManager.js";
+import {
+  ConversationTurnManager,
+  isVoiceBackchannel,
+} from "./ConversationTurnManager.js";
 import { TurnCancellationManager } from "./TurnCancellationManager.js";
 import { TurnMetricsTracker } from "./TurnMetrics.js";
 import { discloseNativeGrounding, searchWebForVoice } from "./webSearch.js";
@@ -526,6 +529,8 @@ const CROWDED_ENTER_NOTE =
   "[Lumina system event, not a user request] Several people are now talking near the microphone at the same time. From now on, most of what you hear is conversation between other people, not a request addressed to you. Apply your group rules: stay quiet by default and only speak when you are actually addressed or when you have something genuinely valuable to add. Never mention this notice.";
 const CROWDED_EXIT_NOTE =
   "[Lumina system event, not a user request] The room is quiet again and you are back to a one-to-one conversation with your user. Never mention this notice.";
+const BACKCHANNEL_NOTE =
+  "[Lumina system event, not a user request] What just cut you off was a backchannel — a short acknowledgement like \"mhm\" or \"got it\" — not a new request. The user is still listening and wants the rest of the answer you were giving. Continue that answer from where it was interrupted. Do not restart it, do not greet, do not ask what they need, and never mention this notice.";
 
 /**
  * Margen en el que su voz todavía puede estar sonando en la habitación después
@@ -589,6 +594,38 @@ export function consumeReplyAuthorization(
   }
   ledger.delete(key);
   return now <= expiresAt;
+}
+
+/**
+ * ¿El corte que acaba de cerrarse era un asentimiento y no una interrupción?
+ *
+ * El gate es DSP puro: mide energía, no palabras, así que un "ajá" de 300 ms
+ * dicho mientras ella habla cumple exactamente el perfil de una orden corta
+ * ("para", "espera") y le corta la respuesta a media frase. La diferencia está
+ * en el contenido, y el contenido solo existe cuando llega la transcripción.
+ *
+ * Se exigen las tres condiciones a la vez:
+ *
+ *  - El turno EMPEZÓ interrumpiéndola. Un "ajá" dicho en silencio sí es un
+ *    turno del usuario —está contestando a algo— y merece respuesta.
+ *  - Lo transcrito es solo la interjección. "Sí, busca eso" no es un
+ *    backchannel por mucho que empiece por "sí".
+ *  - Hay transcripción. El endpoint local no espera al proveedor, así que a
+ *    veces el turno se cierra antes: sin texto no se adivina, se deja pasar.
+ *
+ * Exportada para poder fijar esa frontera con tests; equivocarse aquí es
+ * silencioso en las dos direcciones (o le corta la respuesta a quien asiente,
+ * o ignora una orden de verdad).
+ */
+export function isBackchannelInterruption(
+  startedAsBargeIn: boolean,
+  transcript: string,
+): boolean {
+  if (!startedAsBargeIn) {
+    return false;
+  }
+  const heard = String(transcript ?? "").trim();
+  return heard.length > 0 && isVoiceBackchannel(heard);
 }
 
 function normalizeForEcho(value: string): string {
@@ -788,6 +825,12 @@ type SessionState = {
    * dicho por el usuario (ver `isAssistantEcho`).
    */
   lastAssistantSpeech: string;
+  /**
+   * El turno en curso empezó cortándola a media respuesta. Se anota al abrirlo
+   * porque al cerrarlo ya no se puede saber: para entonces el estado del
+   * runtime es el del turno del usuario.
+   */
+  turnStartedAsBargeIn: boolean;
   // Session behaviour. In "interpreter" mode the model only translates and no
   // persona/memory/tools/grounding are used.
   mode: StartTalkMode;
@@ -858,6 +901,8 @@ export class StartTalkManager {
         streamingOutput: true,
         tools: true,
         vision: true,
+        sessionResumption: false,
+        sessionRotation: false,
       },
       connect: ({ state, liveTools, callbacks }) =>
         connectOpenAIRealtime({
@@ -882,6 +927,10 @@ export class StartTalkManager {
         streamingOutput: true,
         tools: true,
         vision: true,
+        // La Live API cierra la sesión por tiempo y entrega handle para
+        // retomarla; la Realtime API no hace ninguna de las dos cosas.
+        sessionResumption: true,
+        sessionRotation: true,
       },
       connect: ({ state, liveTools, callbacks }) =>
         this.openGeminiLiveSession(state, liveTools, callbacks),
@@ -967,13 +1016,13 @@ export class StartTalkManager {
       // que en modelos incompatibles simplemente no se manda y la sesión
       // conecta igual. Con billing + modelo de audio nativo, funciona.
       enableSearch: isInterpreter ? false : (enableSearch ?? true),
-      // La reanudación con handle es de la Live API. La Realtime API no cierra
-      // la sesión a los 15 minutos ni entrega handles, así que allí se apaga en
-      // vez de fingir que existe.
-      enableSessionResumption:
-        activeProvider === "openai-realtime"
-          ? false
-          : (enableSessionResumption ?? true),
+      // La reanudación con handle no se pide a quien no la tiene: se apaga en
+      // vez de fingir que existe. Lo dice la capability del proveedor, no su
+      // nombre, para que un tercero no tenga que añadir otra rama aquí.
+      enableSessionResumption: this.voiceRouter.capabilities(activeProvider)
+        ?.sessionResumption
+        ? (enableSessionResumption ?? true)
+        : false,
       enableTools: isInterpreter ? false : (enableTools ?? true),
       // Memoria: solo en modo asistente, si el usuario no la bloqueó en
       // Privacidad y hay credenciales de Supabase. El modo intérprete jamás
@@ -1011,6 +1060,7 @@ export class StartTalkManager {
       memoryUserId: resolveVoiceUserId(),
       transcript: [],
       lastAssistantSpeech: "",
+      turnStartedAsBargeIn: false,
       turnAudio: [],
       turnAudioBytes: 0,
       speakerTurnId: 0,
@@ -1284,6 +1334,11 @@ export class StartTalkManager {
         onActivityStart: () => {
           // A new user turn begins: reset the biometric audio buffer.
           state.cancellation.beginTurn("new-user-turn");
+          // Antes de `onUserSpeechStart`, que ya mueve el estado a
+          // USER_SPEAKING: es el único instante en que se sabe si esto la
+          // estaba cortando.
+          state.turnStartedAsBargeIn =
+            state.turnManager.snapshot().state === "ASSISTANT_SPEAKING";
           state.turnManager.onUserSpeechStart();
           state.speakerTurnId += 1;
           state.turnAudio = [];
@@ -1310,6 +1365,11 @@ export class StartTalkManager {
         },
         onActivityEnd: (trailingSilenceMs) => {
           state.metrics.onActivityEnd(trailingSilenceMs);
+          // Antes del `activityEnd` a propósito: es ESE mensaje el que cierra
+          // el turno y dispara la generación, así que la nota tiene que estar
+          // ya en el contexto. Mandada después llegaría cuando el modelo ya
+          // está respondiendo al "ajá", y serían dos respuestas en vez de una.
+          this.noteBackchannel(state);
           state.turnManager.onUserSpeechEnd();
           this.safeRealtimeInput(state, { activityEnd: {} });
           if (captureBiometrics) {
@@ -1392,6 +1452,39 @@ export class StartTalkManager {
    * (`turnComplete: false`), así sabe que está en un grupo y aplica sus reglas
    * de cuándo intervenir sin ponerse a hablar por el simple aviso.
    */
+  /**
+   * El usuario asintió mientras ella hablaba: se le pide que siga por donde
+   * iba en lugar de tratar el "ajá" como una petición nueva.
+   *
+   * El corte ya ocurrió —el audio dejó de sonar en cuanto el gate abrió el
+   * turno—, así que esto no lo evita: lo repara. La nota va como contexto
+   * (`turnComplete: false`) porque el turno del usuario se cierra un
+   * instante después con `activityEnd`, y es ese cierre el que debe generar
+   * la única respuesta.
+   */
+  private noteBackchannel(state: SessionState): void {
+    const startedAsBargeIn = state.turnStartedAsBargeIn;
+    state.turnStartedAsBargeIn = false;
+    // El intérprete traduce todo lo que oye, incluido un "ajá": ahí no hay
+    // respuesta que retomar.
+    if (state.mode === "interpreter") {
+      return;
+    }
+    if (
+      !isBackchannelInterruption(
+        startedAsBargeIn,
+        state.turnManager.currentTranscript(),
+      )
+    ) {
+      return;
+    }
+    state.metrics.onBackchannel();
+    this.safeClientContent(state, {
+      turns: [{ role: "user", parts: [{ text: BACKCHANNEL_NOTE }] }],
+      turnComplete: false,
+    });
+  }
+
   private handleEnvironmentChange(
     sessionId: string,
     state: SessionState,
@@ -2909,9 +3002,9 @@ export class StartTalkManager {
     }
 
     state.session = nextSession;
-    // La rotación existe por el límite de sesión de la Live API; la Realtime
-    // API no lo tiene y rotar allí solo tiraría el contexto de la conversación.
-    if (state.provider === "gemini-live") {
+    // La rotación existe por el límite de sesión del proveedor. Donde no hay
+    // límite, rotar solo tiraría el contexto de la conversación.
+    if (this.voiceRouter.capabilities(state.provider)?.sessionRotation) {
       this.scheduleConnectionRotation(sessionId, state, epoch);
     }
     if (previousSession && previousSession !== nextSession) {
@@ -3145,7 +3238,9 @@ export class StartTalkManager {
     state.apiKey = fallback.apiKey;
     state.model = fallback.model;
     state.voiceName = fallback.voiceName;
-    state.enableSessionResumption = state.provider === "gemini-live";
+    state.enableSessionResumption = Boolean(
+      this.voiceRouter.capabilities(state.provider)?.sessionResumption,
+    );
     state.resumptionHandle = undefined;
     state.fallbackUsed = true;
     state.reconnectAttempts = 0;

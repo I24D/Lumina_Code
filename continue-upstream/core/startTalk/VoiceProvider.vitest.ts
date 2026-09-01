@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   VoiceProviderRouter,
   type LiveSessionHandle,
+  type VoiceProviderCapabilities,
 } from "./VoiceProvider.js";
 
 function session(): LiveSessionHandle {
@@ -14,6 +15,23 @@ function session(): LiveSessionHandle {
   };
 }
 
+/** Capacidades completas; cada prueba cambia solo lo que le importa. */
+function caps(
+  overrides: Partial<VoiceProviderCapabilities> = {},
+): VoiceProviderCapabilities {
+  return {
+    architecture: "native-speech-to-speech",
+    transport: "websocket",
+    streamingInput: true,
+    streamingOutput: true,
+    tools: true,
+    vision: true,
+    sessionResumption: false,
+    sessionRotation: false,
+    ...overrides,
+  };
+}
+
 describe("VoiceProviderRouter", () => {
   it("routes native and modular providers through the same contract", async () => {
     const router = new VoiceProviderRouter<{ token: string }>();
@@ -21,26 +39,16 @@ describe("VoiceProviderRouter", () => {
     const pipeline = session();
     router.register({
       id: "native",
-      capabilities: {
-        architecture: "native-speech-to-speech",
-        transport: "webrtc",
-        streamingInput: true,
-        streamingOutput: true,
-        tools: true,
-        vision: true,
-      },
+      capabilities: caps({ transport: "webrtc" }),
       connect: async () => native,
     });
     router.register({
       id: "pipeline",
-      capabilities: {
+      capabilities: caps({
         architecture: "stt-llm-tts",
         transport: "local",
-        streamingInput: true,
-        streamingOutput: true,
-        tools: true,
         vision: false,
-      },
+      }),
       connect: async () => pipeline,
     });
 
@@ -57,14 +65,7 @@ describe("VoiceProviderRouter", () => {
     let resolve!: (value: LiveSessionHandle) => void;
     router.register({
       id: "slow",
-      capabilities: {
-        architecture: "native-speech-to-speech",
-        transport: "websocket",
-        streamingInput: true,
-        streamingOutput: true,
-        tools: false,
-        vision: false,
-      },
+      capabilities: caps({ tools: false, vision: false }),
       connect: () => new Promise((done) => (resolve = done)),
     });
 
@@ -74,5 +75,29 @@ describe("VoiceProviderRouter", () => {
     resolve(late);
     await new Promise((done) => setTimeout(done, 0));
     expect(late.close).toHaveBeenCalledOnce();
+  });
+
+  it("dice quién sabe retomar la sesión y quién hay que rotar", () => {
+    // El manager pregunta esto en vez de comparar el nombre del proveedor:
+    // pedir un handle a quien no los entrega deja la reconexión esperando algo
+    // que nunca llega, y rotar a quien no caduca tira la conversación entera.
+    const router = new VoiceProviderRouter<void>();
+    router.register({
+      id: "live",
+      capabilities: caps({ sessionResumption: true, sessionRotation: true }),
+      connect: async () => session(),
+    });
+    router.register({
+      id: "realtime",
+      capabilities: caps(),
+      connect: async () => session(),
+    });
+
+    expect(router.capabilities("live")?.sessionResumption).toBe(true);
+    expect(router.capabilities("live")?.sessionRotation).toBe(true);
+    expect(router.capabilities("realtime")?.sessionResumption).toBe(false);
+    expect(router.capabilities("realtime")?.sessionRotation).toBe(false);
+    // Un proveedor desconocido no puede hacer ninguna de las dos cosas.
+    expect(router.capabilities("nope")).toBeUndefined();
   });
 });

@@ -218,6 +218,17 @@ export class ConversationTurnManager {
     }
   }
 
+  /**
+   * Lo último transcrito del turno en curso.
+   *
+   * Puede estar vacío cuando el turno se cierra: el endpoint local no espera a
+   * la transcripción del proveedor. Quien lo lea tiene que tratar la cadena
+   * vacía como "todavía no se sabe", nunca como "no dijo nada".
+   */
+  currentTranscript(): string {
+    return this.partialTranscript;
+  }
+
   observePause(pauseMs: number): void {
     if (!Number.isFinite(pauseMs) || pauseMs < 80 || pauseMs > 2_500) {
       return;

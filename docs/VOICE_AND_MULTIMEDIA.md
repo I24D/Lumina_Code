@@ -102,10 +102,20 @@ una generación monotónica y no vuelven a aparecer como respuestas fantasma.
 
 El modo `keyword` predeterminado detecta el gesto acústico breve de cortar la
 voz, pero no reconoce palabras localmente. `START_TALK_BARGE_IN=energy` habilita
-interrupción por habla sostenida y `off` fuerza half-duplex. El clasificador de
-backchannels está disponible para un futuro STT local paralelo; no se afirma
-que una interjección como «ajá» pueda clasificarse semánticamente antes de que
-el proveedor la transcriba.
+interrupción por habla sostenida y `off` fuerza half-duplex.
+
+Un «ajá» dicho mientras Lumina habla encaja exactamente en el perfil acústico de
+una orden corta, así que el gate lo trata como un corte. Como el gate mide
+energía y no palabras, esto no se puede evitar antes de que exista transcripción:
+lo que se hace es repararlo. Al cerrar el turno, si empezó cortándola y lo
+transcrito hasta ese momento es solo la interjección, se le manda una nota de
+contexto pidiéndole que siga la respuesta por donde iba, justo antes del
+`activityEnd` que dispara la generación —después llegaría cuando ya está
+respondiendo al «ajá», y serían dos respuestas. El corte ya ocurrió y se sigue
+contando como interrupción; los asentimientos se cuentan aparte en
+`backchannels`, y comparar las dos cifras es lo que dice si el barge-in salta de
+más. Cuando el endpoint local se adelanta a la transcripción del proveedor no
+hay texto que juzgar y el turno sigue su curso normal.
 
 ## Respuesta hablada y streaming
 

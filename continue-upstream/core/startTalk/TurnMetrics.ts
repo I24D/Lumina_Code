@@ -75,6 +75,12 @@ export interface StartTalkSessionMetrics {
    * descartaron antes de tratarlas como algo dicho por el usuario.
    */
   echoSuppressed: number;
+  /**
+   * Cortes que resultaron ser un "ajá" y no una interrupción: el usuario
+   * asentía mientras ella hablaba. Comparado con `interruptions` dice cuánto
+   * de lo que parecía impaciencia era en realidad escucha activa.
+   */
+  backchannels: number;
   /** Mediana de latencia de respuesta; la media la distorsiona un solo pico. */
   medianResponseLatencyMs?: number;
   p90ResponseLatencyMs?: number;
@@ -152,6 +158,7 @@ export class TurnMetricsTracker {
     videoRestarts: 0,
     searches: 0,
     echoSuppressed: 0,
+    backchannels: 0,
     inputAudioSeconds: 0,
     assistantAudioSeconds: 0,
     toolCalls: 0,
@@ -196,6 +203,15 @@ export class TurnMetricsTracker {
 
   onCrowded(crowded: boolean): void {
     this.crowded = crowded;
+  }
+
+  /**
+   * El corte era un asentimiento. No deshace el `onInterrupted` que ya se
+   * contó: la interrupción ocurrió de verdad, y saber cuántas de ellas eran
+   * escucha activa es justo lo que dice si el barge-in está mal calibrado.
+   */
+  onBackchannel(): void {
+    this.totals.backchannels += 1;
   }
 
   /** Audio that passed VAD, excluding silence/echo discarded locally. */
