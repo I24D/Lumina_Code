@@ -15,6 +15,7 @@ import type {
 } from "core/channels/ChannelService";
 import type { LuminaRuntimeStatus } from "core/protocol/ideWebview";
 import type { StartTalkConfigStatus } from "core/startTalk/env";
+import { providerLabel, voiceFieldFor } from "core/startTalk/voices";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { IdeMessengerContext } from "../context/IdeMessenger";
@@ -33,9 +34,7 @@ type ConnectionCard = {
 
 /** Cada proveedor tiene su propia voz guardada; solo aplica la del activo. */
 function activeVoiceName(talk: StartTalkConfigStatus): string | undefined {
-  return talk.provider === "openai-realtime"
-    ? talk.openAiVoiceName
-    : talk.voiceName;
+  return talk[voiceFieldFor(talk.provider)];
 }
 
 export default function ConnectionsPage() {
@@ -134,7 +133,7 @@ export default function ConnectionsPage() {
         description:
           "Conversación de voz nativa y delegación autorizada al agente.",
         detail: talk?.configured
-          ? `${talk.provider === "openai-realtime" ? "OpenAI Realtime" : "Gemini Live"} · ${activeVoiceName(talk) || "voz predeterminada"}`
+          ? `${providerLabel(talk.provider)} · ${activeVoiceName(talk) || "voz predeterminada"}`
           : talk?.provider === "gemini-live"
             ? "Gemini API pendiente"
             : "OpenAI API pendiente",

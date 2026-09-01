@@ -2,12 +2,12 @@ import type { LiveServerMessage } from "@google/genai";
 import { describe, expect, it } from "vitest";
 
 import {
-  flattenClientTurns,
   OpenAIRealtimeSession,
   PcmUpsampler,
   toRealtimeTools,
   type RealtimeSocket,
 } from "./OpenAIRealtimeSession.js";
+import { flattenClientTurns } from "./VoiceProvider.js";
 
 function createSession() {
   const sent: Array<Record<string, unknown>> = [];

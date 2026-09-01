@@ -2,7 +2,15 @@
  * Backends de voz en tiempo real. `openai-realtime` usa la Realtime API de
  * OpenAI; `gemini-live`, la Live API de Google. Ver `VoiceProvider.ts`.
  */
-export type StartTalkProvider = "gemini-live" | "openai-realtime";
+/**
+ * Los backends de voz. Los dos primeros son de voz a voz nativa; el tercero es
+ * la tubería STT→LLM→TTS, donde oír, razonar y hablar son tres modelos que se
+ * eligen por separado.
+ */
+export type StartTalkProvider =
+  | "gemini-live"
+  | "openai-realtime"
+  | "voice-pipeline";
 
 export type StartTalkThinkingLevel = "minimal" | "low" | "medium" | "high";
 

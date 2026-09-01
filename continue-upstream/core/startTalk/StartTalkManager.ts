@@ -18,10 +18,13 @@ import {
   VoiceProviderRouter,
 } from "./VoiceProvider.js";
 import {
+  pipelineLlmModel,
   providerForModel,
+  providerLabel,
   resolveModelForProvider,
   resolveVoiceForProvider,
 } from "./voices.js";
+import { connectVoicePipeline } from "./pipeline/index.js";
 
 import {
   FfmpegVideoCapture,
@@ -108,10 +111,6 @@ const DEFAULT_THINKING_LEVEL: StartTalkThinkingLevel = "low";
 /** Auxiliary context must never delay the real-time voice connection for seconds. */
 const STARTUP_CONTEXT_BUDGET_MS = 750;
 
-/** Nombre del proveedor para los mensajes de estado que ve el usuario. */
-function providerLabel(provider: StartTalkProvider): string {
-  return provider === "openai-realtime" ? "OpenAI Realtime" : "Gemini Live";
-}
 const LUMINA_VOICE_SYSTEM_INSTRUCTION = [
   "You are Lumina Code inside VS Code.",
   "Your spoken voice must always sound feminine, sweet, delicate, warm, youthful, and calm.",
@@ -940,6 +939,36 @@ export class StartTalkManager {
       },
       connect: ({ state, liveTools, callbacks }) =>
         this.openGeminiLiveSession(state, liveTools, callbacks),
+    });
+    this.voiceRouter.register({
+      id: "voice-pipeline",
+      capabilities: {
+        architecture: "stt-llm-tts",
+        transport: "http",
+        // La entrada NO es streaming: el turno se transcribe entero cuando el
+        // gate lo cierra. Declararlo es lo que evita que alguien mida la
+        // latencia de esta tubería esperando la de un modelo dúplex.
+        streamingInput: false,
+        streamingOutput: true,
+        tools: true,
+        // El LLM podría ver, pero la etapa de entrada solo lleva audio. Decir
+        // `true` haría creer al manager que Lumina mira la pantalla mientras el
+        // fotograma se descarta.
+        vision: false,
+        sessionResumption: false,
+        sessionRotation: false,
+      },
+      connect: ({ state, liveTools, callbacks }) =>
+        connectVoicePipeline({
+          config: {
+            instructions: this.buildSystemInstruction(state),
+            voice: state.voiceName,
+            tools: liveTools,
+            languageCode: state.languageCode,
+            llmModel: pipelineLlmModel(state.model),
+          },
+          callbacks,
+        }),
     });
   }
 

@@ -1,5 +1,5 @@
 import type { ChatHistoryItem, MessageContent } from "core";
-import { composeVoiceResponse } from "./voiceResponseComposer";
+import { composeVoiceResponse } from "core/startTalk/speechText";
 
 /**
  * Shared helpers for routing a Start Talk voice task into the real Lumina Code

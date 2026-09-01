@@ -19,13 +19,14 @@ el precio consciente fue perder la ventana flotante siempre encima.
 
 ## Proveedores de voz
 
-Hay dos backends de tiempo real y comparten todo lo demás (puerta de voz,
-vídeo, funciones, métricas, reconexión). Se eligen en **Ajustes → Start Talk**:
+Hay tres backends y comparten todo lo demás (puerta de voz, vídeo, funciones,
+métricas, reconexión). Se eligen en **Ajustes → Start Talk**:
 
-| Proveedor | Modelo por defecto | Voz por defecto | Clave |
-| --- | --- | --- | --- |
-| OpenAI Realtime | `gpt-realtime-2.1` | `marin` (mujer joven) | `OPENAI_API_KEY` |
-| Gemini Live | `gemini-3.1-flash-live-preview` | `Leda` (mujer joven) | `GEMINI_API_KEY` |
+| Proveedor | Arquitectura | Modelo por defecto | Voz por defecto | Clave |
+| --- | --- | --- | --- | --- |
+| OpenAI Realtime | voz a voz | `gpt-realtime-2.1` | `marin` (mujer joven) | `OPENAI_API_KEY` |
+| Gemini Live | voz a voz | `gemini-3.1-flash-live-preview` | `Leda` (mujer joven) | `GEMINI_API_KEY` |
+| Voice pipeline | STT→LLM→TTS | `pipeline/gpt-5-mini` | `nova` (mujer joven) | `OPENAI_API_KEY` |
 
 El proveedor se deduce del modelo elegido, así que una voz o una clave no
 pueden acabar en la API del otro. En el orbe, el modelo **Automático** usa el
@@ -36,13 +37,40 @@ Variables de entorno reconocidas, además de las claves:
 `START_TALK_OPENAI_TRANSCRIBE_MODEL`, `START_TALK_GEMINI_MODEL`,
 `START_TALK_GEMINI_VOICE` y `START_TALK_GEMINI_THINKING_LEVEL`.
 
-El runtime ya no depende directamente de una clase concreta de Gemini u
-OpenAI. `VoiceProviderRouter` registra proveedores bajo un contrato común y
-declara si su arquitectura es speech-to-speech (`native-realtime`) o el
-pipeline modular `stt-llm-tts`. Los adaptadores activos hoy son OpenAI
-Realtime y Gemini Live; el contrato modular está listo para conectar STT, LLM
-y TTS intercambiables sin tocar la interfaz, pero no se presenta como proveedor
-seleccionable hasta que exista un adaptador completo.
+`VoiceProviderRouter` registra los tres bajo un mismo contrato y declara sus
+capacidades —arquitectura, transporte, si la entrada es streaming, si hay
+visión, si el proveedor sabe retomar la sesión o hay que rotarla—. El manager
+consulta esas capacidades en vez de comparar el nombre del proveedor, así que
+un cuarto backend no obliga a añadir ramas nuevas.
+
+### La tubería STT→LLM→TTS
+
+Tres modelos en cadena en lugar de uno de voz a voz: uno transcribe, otro
+razona y otro habla. Se elige quién razona desde la interfaz —el identificador
+`pipeline/<modelo>` lleva ese nombre hasta la etapa del LLM— y quién oye y
+quién habla desde el `.env`.
+
+Habla por oraciones, no por respuesta: en cuanto el segmentador cierra una, se
+sintetiza y suena mientras el modelo escribe la siguiente. Esperar a la
+respuesta entera sumaría en serie el tiempo del LLM y el del TTS.
+
+Qué gana y qué pierde frente a la voz a voz nativa:
+
+- Gana en elección. Las peticiones van en el formato de OpenAI, que es el que
+  hablan Ollama Cloud, Kimi, Zhipu y cualquier gateway compatible, así que
+  cambiar de cerebro es cambiar `START_TALK_PIPELINE_LLM_BASE_URL` y el modelo.
+  También deja ver el texto entre etapa y etapa.
+- Pierde en latencia y en prosodia. La entrada **no** es streaming: el turno se
+  transcribe entero cuando el gate lo cierra, y eso se declara en las
+  capacidades (`streamingInput: false`) para que nadie mida esta tubería
+  esperando los tiempos de un modelo dúplex.
+- No ve. La etapa de entrada solo lleva audio, así que declara `vision: false`
+  y el fotograma no se captura en vano.
+
+Variables propias, todas opcionales salvo la clave:
+`START_TALK_PIPELINE_STT_MODEL`, `START_TALK_PIPELINE_LLM_MODEL`,
+`START_TALK_PIPELINE_TTS_MODEL` y, para apuntar cada etapa a otro servidor,
+`START_TALK_PIPELINE_{STT,LLM,TTS}_BASE_URL` y `..._KEY`.
 
 Cuando las dos claves están configuradas, el proveedor no elegido queda como
 respaldo automático. Una conexión tiene un límite de 15 segundos y los fallos
@@ -121,11 +149,13 @@ hay texto que juzgar y el turno sigue su curso normal.
 
 Los proveedores realtime entregan transcripción y audio de forma incremental.
 Las respuestas finales que vienen del agente principal pasan por
-`VoiceResponseComposer`: el texto completo continúa visible en el chat, pero
-la voz omite bloques de código y URLs largas en lugar de leer caracteres sin
-utilidad. El segmentador incremental libera oraciones completas para el
-adaptador `stt-llm-tts`, de modo que un futuro TTS modular podrá comenzar antes
-de que termine toda la respuesta del LLM.
+`composeVoiceResponse`: el texto completo continúa visible en el chat, pero la
+voz omite bloques de código y URLs largas en lugar de leer caracteres sin
+utilidad. El segmentador incremental que vive a su lado es el que usa la
+tubería para empezar a hablar antes de que el LLM termine de escribir.
+
+Los dos están en `core/startTalk/speechText.ts`, que no importa nada de Node a
+propósito: lo cargan tanto el webview del orbe como la tubería dentro de core.
 
 Esta separación es intencional: el proveedor de voz escucha y habla; Lumina
 Code puede delegar el razonamiento y las herramientas a su modelo principal

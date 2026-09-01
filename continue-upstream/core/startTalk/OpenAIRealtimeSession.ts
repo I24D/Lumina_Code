@@ -24,6 +24,7 @@ import type { LiveServerMessage, Tool } from "@google/genai";
 import { WebSocket } from "ws";
 
 import type { StartTalkThinkingLevel } from "./types.js";
+import { flattenClientTurns } from "./VoiceProvider.js";
 import type {
   LiveSessionCallbacks,
   LiveSessionHandle,
@@ -147,33 +148,6 @@ export function toRealtimeTools(tools: Tool[]): RealtimeFunctionTool[] {
         },
       ];
     });
-}
-
-/** Extrae el texto de lo que el manager manda por `sendClientContent`. */
-export function flattenClientTurns(turns: unknown): string {
-  if (typeof turns === "string") {
-    return turns;
-  }
-  if (Array.isArray(turns)) {
-    return turns
-      .map((turn) => flattenClientTurns(turn))
-      .filter(Boolean)
-      .join("\n");
-  }
-  if (turns && typeof turns === "object") {
-    const parts = (turns as { parts?: Array<{ text?: string }> }).parts;
-    if (Array.isArray(parts)) {
-      return parts
-        .map((part) => part?.text ?? "")
-        .filter(Boolean)
-        .join(" ");
-    }
-    const text = (turns as { text?: string }).text;
-    if (typeof text === "string") {
-      return text;
-    }
-  }
-  return "";
 }
 
 /**

@@ -30,6 +30,7 @@ export const DEFAULT_VOICE_PROVIDER: StartTalkProvider = "openai-realtime";
 export const SUPPORTED_VOICE_PROVIDERS: readonly StartTalkProvider[] = [
   "gemini-live",
   "openai-realtime",
+  "voice-pipeline",
 ];
 
 /**
@@ -57,7 +58,7 @@ export type VoiceArchitecture =
   | "native-speech-to-speech"
   | "stt-llm-tts";
 
-export type VoiceTransport = "webrtc" | "websocket" | "local";
+export type VoiceTransport = "webrtc" | "websocket" | "http" | "local";
 
 export interface VoiceProviderCapabilities {
   architecture: VoiceArchitecture;
@@ -145,6 +146,39 @@ export class VoiceProviderRouter<TContext> {
       }
     }
   }
+}
+
+/**
+ * Extrae el texto de lo que el manager manda por `sendClientContent`.
+ *
+ * Vive aquí, con el contrato, porque lo necesita cualquier proveedor que no sea
+ * la Live API: todos reciben la forma de Google y todos tienen que sacarle el
+ * texto. Estuvo duplicado en dos adaptadores.
+ */
+export function flattenClientTurns(turns: unknown): string {
+  if (typeof turns === "string") {
+    return turns;
+  }
+  if (Array.isArray(turns)) {
+    return turns
+      .map((turn) => flattenClientTurns(turn))
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (turns && typeof turns === "object") {
+    const parts = (turns as { parts?: Array<{ text?: string }> }).parts;
+    if (Array.isArray(parts)) {
+      return parts
+        .map((part) => part?.text ?? "")
+        .filter(Boolean)
+        .join(" ");
+    }
+    const text = (turns as { text?: string }).text;
+    if (typeof text === "string") {
+      return text;
+    }
+  }
+  return "";
 }
 
 export function isSupportedVoiceProvider(

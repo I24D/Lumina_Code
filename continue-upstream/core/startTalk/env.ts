@@ -88,6 +88,52 @@ export function hasVoiceCredentials(env: StartTalkVoiceEnv): boolean {
 }
 
 /**
+ * Qué credencial usa cada proveedor.
+ *
+ * Vive en una función y no en un ternario repetido porque estuvo escrito como
+ * `provider === "openai-realtime" ? openAiApiKey : apiKey` en cuatro sitios: con
+ * dos proveedores eso funcionaba, y con el tercero mandaba la clave de Google a
+ * la tubería sin que nada fallara hasta la primera petición.
+ *
+ * La tubería usa la credencial de OpenAI porque sus etapas por defecto son de
+ * OpenAI. Cada etapa puede apuntar a otro sitio con `START_TALK_PIPELINE_*` en
+ * el `.env`, y entonces manda esa.
+ */
+export function credentialFieldFor(
+  provider: StartTalkProvider,
+): "apiKey" | "openAiApiKey" {
+  return provider === "gemini-live" ? "apiKey" : "openAiApiKey";
+}
+
+/** La variable de entorno que falta, para poder decirlo sin adivinar. */
+export function credentialEnvNameFor(provider: StartTalkProvider): string {
+  return provider === "gemini-live" ? "GEMINI_API_KEY" : "OPENAI_API_KEY";
+}
+
+/**
+ * A quién se cae la sesión si el proveedor activo falla.
+ *
+ * Se prefiere la voz a voz nativa antes que la tubería: la tubería responde
+ * más tarde por construcción (transcribe el turno entero antes de pensar), así
+ * que como red de seguridad va la última.
+ */
+const FALLBACK_ORDER: readonly StartTalkProvider[] = [
+  "openai-realtime",
+  "gemini-live",
+  "voice-pipeline",
+];
+
+export function fallbackProviderFor(
+  provider: StartTalkProvider,
+  config: StartTalkVoiceEnv,
+): StartTalkProvider | undefined {
+  return FALLBACK_ORDER.find(
+    (candidate) =>
+      candidate !== provider && Boolean(config[credentialFieldFor(candidate)]),
+  );
+}
+
+/**
  * Proveedor que se va a usar realmente, por orden de autoridad:
  *
  *  1. el modelo elegido en el orbe —su identificador ya dice de quién es—;

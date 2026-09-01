@@ -141,8 +141,47 @@ export const OPENAI_REALTIME_VOICES: readonly StartTalkVoiceOption[] = [
   },
 ];
 
+/**
+ * Voces del TTS de OpenAI, que es el que habla en la tubería. No son las mismas
+ * que las de la Realtime API: mandar una de aquellas a `/audio/speech` se
+ * rechaza, así que el catálogo va separado.
+ */
+export const VOICE_PIPELINE_VOICES: readonly StartTalkVoiceOption[] = [
+  {
+    id: "nova",
+    label: "Nova",
+    description: "Femenina, juvenil y cercana",
+    youngFemale: true,
+  },
+  {
+    id: "shimmer",
+    label: "Shimmer",
+    description: "Femenina, suave y clara",
+    youngFemale: true,
+  },
+  {
+    id: "coral",
+    label: "Coral",
+    description: "Femenina, cálida y expresiva",
+    youngFemale: true,
+  },
+  {
+    id: "sage",
+    label: "Sage",
+    description: "Neutra y serena",
+    youngFemale: false,
+  },
+  {
+    id: "onyx",
+    label: "Onyx",
+    description: "Masculina, grave",
+    youngFemale: false,
+  },
+];
+
 export const DEFAULT_GEMINI_VOICE = "Leda";
 export const DEFAULT_OPENAI_REALTIME_VOICE = "marin";
+export const DEFAULT_VOICE_PIPELINE_VOICE = "nova";
 
 /**
  * Modelo de voz por defecto de cada proveedor.
@@ -187,9 +226,43 @@ export const OPENAI_REALTIME_MODELS: readonly StartTalkModelInfo[] = [
   },
 ];
 
+/**
+ * Modelos de la tubería. El identificador lleva delante `pipeline/` y detrás el
+ * modelo que RAZONA: es lo que hace que elegir aquí signifique algo, porque ese
+ * nombre viaja hasta la etapa del LLM. Quién oye y quién habla se configuran en
+ * el `.env` (`START_TALK_PIPELINE_STT_MODEL`, `START_TALK_PIPELINE_TTS_MODEL`).
+ */
+export const VOICE_PIPELINE_PREFIX = "pipeline/";
+
+export const VOICE_PIPELINE_MODELS: readonly StartTalkModelInfo[] = [
+  {
+    model: `${VOICE_PIPELINE_PREFIX}gpt-5-mini`,
+    label: "Tubería · GPT-5 mini",
+    description: "Oye, razona y habla con tres modelos distintos",
+    provider: "voice-pipeline",
+  },
+  {
+    model: `${VOICE_PIPELINE_PREFIX}gpt-5`,
+    label: "Tubería · GPT-5",
+    description: "La misma tubería razonando con el modelo grande",
+    provider: "voice-pipeline",
+  },
+];
+
+export const DEFAULT_VOICE_PIPELINE_MODEL = VOICE_PIPELINE_MODELS[0].model;
+
+/** El modelo que razona, sin el prefijo del proveedor. */
+export function pipelineLlmModel(model: string | undefined): string | undefined {
+  const value = model?.trim();
+  return value?.startsWith(VOICE_PIPELINE_PREFIX)
+    ? value.slice(VOICE_PIPELINE_PREFIX.length) || undefined
+    : undefined;
+}
+
 export const START_TALK_MODELS: readonly StartTalkModelInfo[] = [
   ...OPENAI_REALTIME_MODELS,
   ...GEMINI_LIVE_MODELS,
+  ...VOICE_PIPELINE_MODELS,
 ];
 
 /**
@@ -200,41 +273,95 @@ export const START_TALK_MODELS: readonly StartTalkModelInfo[] = [
  * Google con `gpt-realtime-2.1`, o la voz `Leda` con OpenAI— llegue a la API.
  */
 export function providerForModel(model: string | undefined): StartTalkProvider {
-  return model?.trim().toLowerCase().startsWith("gpt-")
-    ? "openai-realtime"
-    : "gemini-live";
+  const value = model?.trim().toLowerCase() ?? "";
+  if (value.startsWith(VOICE_PIPELINE_PREFIX)) {
+    return "voice-pipeline";
+  }
+  return value.startsWith("gpt-") ? "openai-realtime" : "gemini-live";
+}
+
+/**
+ * Nombre del proveedor tal y como se le enseña al usuario.
+ *
+ * Vive aquí, con el catálogo, porque lo pintan la interfaz y los mensajes de
+ * estado de core. Estuvo escrito dos veces como un ternario, y con el tercer
+ * proveedor las dos copias mentían llamándolo "Gemini Live".
+ */
+export function providerLabel(provider: StartTalkProvider): string {
+  switch (provider) {
+    case "openai-realtime":
+      return "OpenAI Realtime";
+    case "voice-pipeline":
+      return "Voice pipeline";
+    default:
+      return "Gemini Live";
+  }
+}
+
+/**
+ * Qué voz guardada le corresponde a cada proveedor.
+ *
+ * La tubería comparte campo con la Realtime API a propósito: son catálogos
+ * distintos, pero `resolveVoiceForProvider` sustituye una voz ajena por la del
+ * proveedor, así que un `marin` guardado se convierte en `nova` sin necesidad de
+ * un tercer campo en el almacén de configuración.
+ */
+export function voiceFieldFor(
+  provider: StartTalkProvider,
+): "voiceName" | "openAiVoiceName" {
+  return provider === "gemini-live" ? "voiceName" : "openAiVoiceName";
 }
 
 /** Voces elegibles del proveedor, con las de mujer joven delante. */
 export function voicesForProvider(
   provider: StartTalkProvider,
 ): readonly StartTalkVoiceOption[] {
-  return provider === "openai-realtime"
-    ? OPENAI_REALTIME_VOICES
-    : GEMINI_VOICES;
+  switch (provider) {
+    case "openai-realtime":
+      return OPENAI_REALTIME_VOICES;
+    case "voice-pipeline":
+      return VOICE_PIPELINE_VOICES;
+    default:
+      return GEMINI_VOICES;
+  }
 }
 
 /** Modelos elegibles del proveedor, el más reciente primero. */
 export function modelsForProvider(
   provider: StartTalkProvider,
 ): readonly StartTalkModelInfo[] {
-  return provider === "openai-realtime"
-    ? OPENAI_REALTIME_MODELS
-    : GEMINI_LIVE_MODELS;
+  switch (provider) {
+    case "openai-realtime":
+      return OPENAI_REALTIME_MODELS;
+    case "voice-pipeline":
+      return VOICE_PIPELINE_MODELS;
+    default:
+      return GEMINI_LIVE_MODELS;
+  }
 }
 
 /** Voz por defecto del proveedor: siempre una de mujer joven. */
 export function defaultVoiceForProvider(provider: StartTalkProvider): string {
-  return provider === "openai-realtime"
-    ? DEFAULT_OPENAI_REALTIME_VOICE
-    : DEFAULT_GEMINI_VOICE;
+  switch (provider) {
+    case "openai-realtime":
+      return DEFAULT_OPENAI_REALTIME_VOICE;
+    case "voice-pipeline":
+      return DEFAULT_VOICE_PIPELINE_VOICE;
+    default:
+      return DEFAULT_GEMINI_VOICE;
+  }
 }
 
 /** Modelo por defecto del proveedor. */
 export function defaultModelForProvider(provider: StartTalkProvider): string {
-  return provider === "openai-realtime"
-    ? DEFAULT_OPENAI_REALTIME_MODEL
-    : DEFAULT_GEMINI_LIVE_MODEL;
+  switch (provider) {
+    case "openai-realtime":
+      return DEFAULT_OPENAI_REALTIME_MODEL;
+    case "voice-pipeline":
+      return DEFAULT_VOICE_PIPELINE_MODEL;
+    default:
+      return DEFAULT_GEMINI_LIVE_MODEL;
+  }
 }
 
 /**

@@ -66,6 +66,9 @@ import type { FromCoreProtocol, ToCoreProtocol } from "./protocol";
 import { OnboardingModes, type SkillWithUsage } from "./protocol/core";
 import type { IMessenger, Message } from "./protocol/messenger";
 import {
+  credentialEnvNameFor,
+  credentialFieldFor,
+  fallbackProviderFor,
   hasVoiceCredentials,
   resolveStartTalkProvider,
   resolveStartTalkVoiceEnv,
@@ -77,6 +80,7 @@ import {
 import {
   resolveModelForProvider,
   resolveVoiceForProvider,
+  voiceFieldFor,
 } from "./startTalk/voices.js";
 import type { StartTalkProvider } from "./startTalk/types.js";
 
@@ -486,20 +490,12 @@ export class Core {
     const storedConfig = await this.startTalkConfigStore?.load();
     const selected = selectStartTalkVoiceEnv(workspaceConfig, storedConfig);
     const provider = resolveStartTalkProvider(selected, preferredModel);
-    const apiKey =
-      provider === "openai-realtime" ? selected.openAiApiKey : selected.apiKey;
-    const fallbackProvider: StartTalkProvider =
-      provider === "openai-realtime" ? "gemini-live" : "openai-realtime";
-    const fallbackApiKey =
-      fallbackProvider === "openai-realtime"
-        ? selected.openAiApiKey
-        : selected.apiKey;
+    const apiKey = selected[credentialFieldFor(provider)];
+    const fallbackProvider = fallbackProviderFor(provider, selected);
 
     if (!apiKey) {
       throw new Error(
-        provider === "openai-realtime"
-          ? "Start Talk needs OPENAI_API_KEY in a workspace .env, the global Start Talk env file, or VS Code Secret Storage."
-          : "Start Talk needs GEMINI_API_KEY in a workspace .env, the global Start Talk env file, or VS Code Secret Storage.",
+        `Start Talk needs ${credentialEnvNameFor(provider)} in a workspace .env, the global Start Talk env file, or VS Code Secret Storage.`,
       );
     }
 
@@ -510,21 +506,17 @@ export class Core {
       thinkingLevel: selected.thinkingLevel,
       voiceName: resolveVoiceForProvider(
         provider,
-        provider === "openai-realtime"
-          ? selected.openAiVoiceName
-          : selected.voiceName,
+        selected[voiceFieldFor(provider)],
       ),
-      ...(fallbackApiKey
+      ...(fallbackProvider
         ? {
             fallback: {
               provider: fallbackProvider,
-              apiKey: fallbackApiKey,
+              apiKey: selected[credentialFieldFor(fallbackProvider)]!,
               model: resolveModelForProvider(fallbackProvider, selected.model),
               voiceName: resolveVoiceForProvider(
                 fallbackProvider,
-                fallbackProvider === "openai-realtime"
-                  ? selected.openAiVoiceName
-                  : selected.voiceName,
+                selected[voiceFieldFor(fallbackProvider)],
               ),
             },
           }
@@ -538,8 +530,7 @@ export class Core {
     const storedConfig = await this.startTalkConfigStore?.load();
     const selected = selectStartTalkVoiceEnv(workspaceConfig, storedConfig);
     const provider = resolveStartTalkProvider(selected);
-    const activeKey =
-      provider === "openai-realtime" ? "openAiApiKey" : "apiKey";
+    const activeKey = credentialFieldFor(provider);
     const source = workspaceConfig[activeKey]
       ? "workspace"
       : storedConfig?.[activeKey]

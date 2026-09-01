@@ -4,14 +4,20 @@ import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import {
+  credentialEnvNameFor,
+  credentialFieldFor,
+  fallbackProviderFor,
   readStartTalkVoiceEnvFile,
   resolveStartTalkProvider,
   selectStartTalkVoiceEnv,
 } from "./env.js";
 import {
   defaultVoiceForProvider,
+  pipelineLlmModel,
+  providerForModel,
   resolveModelForProvider,
   resolveVoiceForProvider,
+  voiceFieldFor,
   voicesForProvider,
 } from "./voices.js";
 
@@ -142,6 +148,42 @@ describe("resolveStartTalkProvider", () => {
         openAiApiKey: "k",
       }),
     ).toBe("gemini-live");
+  });
+
+  test("un modelo de la tubería elige la tubería", () => {
+    expect(providerForModel("pipeline/gpt-5-mini")).toBe("voice-pipeline");
+    expect(pipelineLlmModel("pipeline/gpt-5-mini")).toBe("gpt-5-mini");
+    // Un modelo de otro proveedor no aporta cerebro a la tubería.
+    expect(pipelineLlmModel("gpt-realtime-2.1")).toBeUndefined();
+  });
+});
+
+describe("credenciales por proveedor", () => {
+  test("cada proveedor pide la suya", () => {
+    // La tubería usa la de OpenAI: sus etapas por defecto son de OpenAI.
+    expect(credentialFieldFor("voice-pipeline")).toBe("openAiApiKey");
+    expect(credentialFieldFor("openai-realtime")).toBe("openAiApiKey");
+    expect(credentialFieldFor("gemini-live")).toBe("apiKey");
+    expect(voiceFieldFor("gemini-live")).toBe("voiceName");
+    expect(credentialEnvNameFor("voice-pipeline")).toBe("OPENAI_API_KEY");
+  });
+
+  test("la reserva es otro proveedor que sí tenga clave", () => {
+    expect(fallbackProviderFor("gemini-live", { apiKey: "g" })).toBeUndefined();
+    expect(
+      fallbackProviderFor("gemini-live", { apiKey: "g", openAiApiKey: "o" }),
+    ).toBe("openai-realtime");
+    // La voz a voz nativa va antes que la tubería, que responde más tarde por
+    // construcción.
+    expect(
+      fallbackProviderFor("voice-pipeline", { apiKey: "g", openAiApiKey: "o" }),
+    ).toBe("openai-realtime");
+  });
+
+  test("la voz guardada de otro proveedor se sustituye, no se envía", () => {
+    // `marin` es de la Realtime API; `/audio/speech` la rechazaría.
+    expect(resolveVoiceForProvider("voice-pipeline", "marin")).toBe("nova");
+    expect(resolveVoiceForProvider("voice-pipeline", "shimmer")).toBe("shimmer");
   });
 });
 
