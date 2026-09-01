@@ -102,37 +102,46 @@ void (async () => {
     "webview",
   );
 
+  // `webview/` está en el .gitignore de la extensión de JetBrains, así que en un
+  // clon limpio no existe todavía. Empaquetar el VSIX no puede depender de un
+  // artefacto de la extensión hermana: si no está, se salta el volcado.
   const indexHtmlPath = path.join(intellijExtensionWebviewPath, "index.html");
-  fs.copyFileSync(indexHtmlPath, "tmp_index.html");
-  rimrafSync(intellijExtensionWebviewPath);
-  fs.mkdirSync(intellijExtensionWebviewPath, { recursive: true });
+  if (!fs.existsSync(indexHtmlPath)) {
+    console.log(
+      `[info] Skipping JetBrains copy: ${indexHtmlPath} not found (build the JetBrains extension first if you need it)`,
+    );
+  } else {
+    fs.copyFileSync(indexHtmlPath, "tmp_index.html");
+    rimrafSync(intellijExtensionWebviewPath);
+    fs.mkdirSync(intellijExtensionWebviewPath, { recursive: true });
 
-  const jetbrainsCopyStart = Date.now();
-  console.log(`[timer] Starting JetBrains copy at ${new Date().toISOString()}`);
-  await new Promise((resolve, reject) => {
-    ncp("dist", intellijExtensionWebviewPath, (error) => {
-      if (error) {
-        console.warn(
-          "[error] Error copying React app build to JetBrains extension: ",
-          error,
-        );
-        reject(error);
-      }
-      resolve();
+    const jetbrainsCopyStart = Date.now();
+    console.log(
+      `[timer] Starting JetBrains copy at ${new Date().toISOString()}`,
+    );
+    await new Promise((resolve, reject) => {
+      ncp("dist", intellijExtensionWebviewPath, (error) => {
+        if (error) {
+          console.warn(
+            "[error] Error copying React app build to JetBrains extension: ",
+            error,
+          );
+          reject(error);
+        }
+        resolve();
+      });
     });
-  });
-  console.log(
-    `[timer] JetBrains copy completed in ${Date.now() - jetbrainsCopyStart}ms`,
-  );
+    console.log(
+      `[timer] JetBrains copy completed in ${Date.now() - jetbrainsCopyStart}ms`,
+    );
 
-  // Put back index.html
-  if (fs.existsSync(indexHtmlPath)) {
+    // Put back index.html
     rimrafSync(indexHtmlPath);
-  }
-  fs.copyFileSync("tmp_index.html", indexHtmlPath);
-  fs.unlinkSync("tmp_index.html");
+    fs.copyFileSync("tmp_index.html", indexHtmlPath);
+    fs.unlinkSync("tmp_index.html");
 
-  console.log("[info] Copied gui build to JetBrains extension");
+    console.log("[info] Copied gui build to JetBrains extension");
+  }
 
   // Then copy over the dist folder to the VSCode extension //
   const vscodeGuiPath = path.join("../extensions/vscode/gui");
@@ -435,9 +444,6 @@ void (async () => {
     // Code/styling for the sidebar
     "gui/assets/index.js",
     "gui/assets/index.css",
-
-    // Native Start Talk desktop orb
-    `native/start-talk/${orbBinaryName}`,
 
     // Tutorial
     "media/move-chat-panel-right.md",

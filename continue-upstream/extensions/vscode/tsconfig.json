@@ -17,6 +17,9 @@
   "exclude": [
     "../../core/dist/**/*",
     "../../core/**/*.test.ts",
+    // core's vitest suites are ESM and run under vitest; core's own tsc owns
+    // them. Compiling them here as commonjs rejects `import.meta`.
+    "../../core/**/*.vitest.ts",
     "../../core/**/test/**/*",
     "../../core/**/*.skip.ts"
   ]

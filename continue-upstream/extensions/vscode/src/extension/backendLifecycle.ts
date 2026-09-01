@@ -187,6 +187,12 @@ function resolveLuminaPcRoot(
   const candidates = [
     configured,
     process.env.LUMINA_PC_ROOT,
+    // Instalada desde un VSIX la extensión vive en `~/.vscode/extensions`, así
+    // que deducir la raíz de su propia ubicación (más abajo) deja de valer. La
+    // carpeta abierta en el editor sí apunta al repositorio.
+    ...(vscode.workspace.workspaceFolders ?? [])
+      .filter((folder) => folder.uri.scheme === "file")
+      .map((folder) => path.join(folder.uri.fsPath, "Lumina_PC")),
     // Development layout:
     //   <repo>/continue-upstream/extensions/vscode
     //   <repo>/Lumina_PC

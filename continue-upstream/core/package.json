@@ -4,7 +4,8 @@
   "description": "The Continue Core contains functionality that can be shared across web, VS Code, or Node.js",
   "scripts": {
     "prepare:transformers-vendor": "node scripts/copy-transformers-vendor.js",
-    "postinstall": "npm run prepare:transformers-vendor",
+    "prepare:tree-sitter-vendor": "node scripts/copy-tree-sitter-vendor.js",
+    "postinstall": "npm run prepare:transformers-vendor && npm run prepare:tree-sitter-vendor",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "vitest": "vitest run",
     "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage && open ./coverage/lcov-report/index.html",
