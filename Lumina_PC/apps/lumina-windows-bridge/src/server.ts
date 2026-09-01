@@ -72,6 +72,7 @@ const visionClickSidecar = resolve(sidecarDir, "vision_click.py");
 const notificationCenterSidecar = resolve(sidecarDir, "notification_center.py");
 const notificationListenerSidecar = resolve(sidecarDir, "notification_listener.py");
 const phoneLinkSidecar = resolve(sidecarDir, "phone_link.py");
+const msnWeatherSidecar = resolve(sidecarDir, "msn_weather.py");
 const whatsappSidecar = resolve(sidecarDir, "whatsapp.py");
 let perceptionProcess: ChildProcessWithoutNullStreams | undefined;
 let perceptionStartedAt = 0;
@@ -113,6 +114,8 @@ const bridgeEndpoints = [
   "POST /notifications",
   "POST /notifications/dismiss",
   "POST /notifications/live",
+  "POST /weather/msn",
+  "POST /phone_link/notifications",
   "POST /phone_link/reply",
   "POST /whatsapp/contacts",
   "POST /whatsapp/messages",
@@ -1960,6 +1963,47 @@ async function handlePhoneLinkStatus(): Promise<JsonRecord> {
   return result;
 }
 
+// POST /weather/msn — opens the MSN Weather app ("El Tiempo") and reads what it
+// is showing through UI Automation: current conditions, the readings strip, the
+// daily forecast and the written per-metric summaries the app itself composes.
+// Read-only; it never changes the location or a setting.
+async function handleMsnWeather(body: JsonRecord): Promise<JsonRecord> {
+  const days = boundedInt(body.days, 5, 1, 10);
+  const argv = ["--read", "--days", String(days)];
+  if (body.launch !== false) argv.push("--launch");
+  // The app process survives its window, so without a refresh it happily serves
+  // an observation from hours ago.
+  if (body.refresh === false) argv.push("--no-refresh");
+  const result = await runPythonSidecar(msnWeatherSidecar, argv, 90_000);
+  appendAudit("weather_msn", {
+    ok: result.ok === true,
+    location: typeof result.location === "string" ? result.location : null,
+    error: typeof result.error === "string" ? result.error : null,
+  });
+  return result;
+}
+
+// POST /phone_link/notifications — reads the notification feed rendered INSIDE
+// the Phone Link app, which is the phone's own list. It therefore sees what the
+// Windows toast pipeline cannot: apps that are not mirrored to the Action
+// Center, toasts already dismissed, and everything that arrived while Start Talk
+// was closed. Read-only — it never replies to or clears a card.
+async function handlePhoneLinkNotifications(body: JsonRecord): Promise<JsonRecord> {
+  const limit = boundedInt(body.limit, 12, 1, 25);
+  const argv = ["--list", "--limit", String(limit)];
+  // Phone Link usually lives in the tray with no window; opening it is the whole
+  // point of the request, so launching is the default.
+  if (body.launch !== false) argv.push("--launch");
+  const result = await runPythonSidecar(phoneLinkSidecar, argv, 90_000);
+  appendAudit("phone_link_notifications", {
+    ok: result.ok === true,
+    count: typeof result.count === "number" ? result.count : null,
+    empty: result.empty === true,
+    error: typeof result.error === "string" ? result.error : null,
+  });
+  return result;
+}
+
 async function handleNotifications(body: JsonRecord): Promise<JsonRecord> {
   const limit = boundedInt(body.limit, 50, 1, 200);
   const argv = ["--limit", String(limit)];
@@ -2777,6 +2821,32 @@ function handleSchema(): JsonRecord {
         examples: [{}],
       },
       {
+        endpoint: "/weather/msn",
+        method: "POST",
+        body: {
+          days: "number optional (1 to 10, default 5) days of daily forecast",
+          launch:
+            "boolean optional, default true; open the MSN Weather app and wait for it when it is closed",
+          refresh:
+            "boolean optional, default true; press the app's Refresh first, because a resident app serves a stale observation",
+        },
+        description:
+          "Opens the MSN Weather app (Microsoft.BingWeather, 'El Tiempo') and reads what it shows through UI Automation. Returns { location, observedAt, temperature, condition, metrics[], precipitationOutlook, alerts[], forecast: [{ day, label, high, low }], details: [{ label, summary }] } — details are the app's own written per-metric summaries. Read-only.",
+        examples: [{}, { days: 3 }],
+      },
+      {
+        endpoint: "/phone_link/notifications",
+        method: "POST",
+        body: {
+          limit: "number optional (1 to 25, default 12)",
+          launch:
+            "boolean optional, default true; start Phone Link and wait for its window when it is only in the tray",
+        },
+        description:
+          "Reads the notification feed the Phone Link app itself shows, mirrored live from the phone. Sees notifications the Windows toast listener never gets (apps not mirrored to the Action Center, toasts already dismissed, anything that arrived while nothing was listening). Read-only. Returns { notifications: [{ application, sender, message, receivedAt, pinned, hasLink, actions }], phoneName, connected, lastUpdated, someHidden, empty }.",
+        examples: [{}, { limit: 5 }, { launch: false }],
+      },
+      {
         endpoint: "/phone_link/reply",
         method: "POST",
         body: {
@@ -3066,6 +3136,8 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     else if (url.pathname === "/notifications") sendJson(res, 200, await handleNotifications(body));
     else if (url.pathname === "/notifications/dismiss") sendJson(res, 200, await handleNotificationsDismiss(body));
     else if (url.pathname === "/notifications/live") sendJson(res, 200, await handleNotificationsLive());
+    else if (url.pathname === "/weather/msn") sendJson(res, 200, await handleMsnWeather(body));
+    else if (url.pathname === "/phone_link/notifications") sendJson(res, 200, await handlePhoneLinkNotifications(body));
     else if (url.pathname === "/phone_link/reply") sendJson(res, 200, await handlePhoneLinkReply(body));
     else if (url.pathname === "/whatsapp/contacts") sendJson(res, 200, await handleWhatsappContacts(body));
     else if (url.pathname === "/whatsapp/messages") sendJson(res, 200, await handleWhatsappMessages(body));
