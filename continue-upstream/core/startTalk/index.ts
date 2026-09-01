@@ -26,9 +26,7 @@ export type {
   StartTalkTurnMetrics,
   StartTalkVideoFrameInput,
   StartTalkVideoPhase,
-  StartTalkVideoRegion,
   StartTalkVideoSource,
-  StartTalkVideoSourceInfo,
   StartTalkVideoStartRequest,
   VoiceRuntimeState,
 } from "./types.js";

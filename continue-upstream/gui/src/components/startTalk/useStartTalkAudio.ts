@@ -10,7 +10,6 @@ import type {
   StartTalkTurnMetrics,
   StartTalkVideoPhase,
   StartTalkVideoSource,
-  StartTalkVideoSourceInfo,
   VoiceRuntimeState,
 } from "core/startTalk";
 import { getStartTalkRetryDelayMs } from "core/startTalk/resiliencePolicy";
@@ -49,6 +48,10 @@ import {
 import { PcmPlayer } from "./pcmPlayer";
 import { resolveSpeakerUpdate, type SpeakerInfo } from "./speakerState";
 import { buildChatResponseSpeechPrompt } from "./voiceDelegation";
+import {
+  BrowserVideoCapture,
+  formatVideoCaptureError,
+} from "./browserVideoCapture";
 
 // How long, after Start Talk asks "¿quieres que le responda?", a spoken
 // confirmation still triggers the delegated reply. After this the pending
@@ -146,8 +149,6 @@ export interface StartTalkVideoStatus {
   /** Fotogramas que el modelo ha recibido de verdad. 0 ⇒ todavía no ve nada. */
   framesSent: number;
   lastFrameAt?: number;
-  /** Miniatura JPEG (base64) del último fotograma, para la vista previa. */
-  preview?: string;
   message?: string;
 }
 
@@ -203,6 +204,7 @@ export function useStartTalkAudio({
   // Microfono: se abre AQUI, en el WebView, para que Chromium pueda cancelar el
   // eco de la voz de Lumina usando la reproduccion como referencia.
   const micCaptureRef = useRef<MicCapture>();
+  const videoCaptureRef = useRef(new BrowserVideoCapture());
   const micDevicesRef = useRef<Array<{ deviceId: string; label: string }>>([]);
   const selectedMicIdRef = useRef<string | undefined>(undefined);
   const startMicCaptureRef = useRef<(deviceId?: string) => Promise<void>>(
@@ -530,6 +532,7 @@ export function useStartTalkAudio({
     recoverActiveSessionRef.current = false;
     clearSessionRecoveryTimer();
     void micCaptureRef.current?.stop();
+    videoCaptureRef.current.stop();
     if (micRecoveryTimerRef.current) {
       clearTimeout(micRecoveryTimerRef.current);
       micRecoveryTimerRef.current = undefined;
@@ -1251,18 +1254,15 @@ export function useStartTalkAudio({
       if (event.type === "videoState") {
         // A propósito NO toca `status`: que se caiga la captura de pantalla no
         // puede dejar toda la sesión de voz marcada como rota.
-        setVideoState((previous) => ({
+        setVideoState({
           phase: event.phase,
           source: event.source,
           sourceId: event.sourceId,
           label: event.label,
           framesSent: event.framesSent ?? 0,
           lastFrameAt: event.lastFrameAt,
-          // Los fotogramas llegan sin miniatura casi siempre (va limitada);
-          // conservamos la última para que la vista previa no parpadee.
-          preview: event.preview ?? previous.preview,
           message: event.message,
-        }));
+        });
         setVideoSource(
           event.phase === "stopped" || event.phase === "error"
             ? null
@@ -1546,82 +1546,108 @@ export function useStartTalkAudio({
     ],
   );
 
-  /** Monitores y cámaras entre los que el usuario puede elegir. */
-  const listVideoSources = useCallback(async (): Promise<
-    StartTalkVideoSourceInfo[]
-  > => {
-    const res = await ideMessenger.request(
-      "startTalk/listVideoSources",
-      undefined,
-    );
-    return res.status === "error" ? [] : (res.content ?? []);
-  }, [ideMessenger]);
-
-  const startScreenShare = useCallback(
-    async (target?: StartTalkVideoSourceInfo) => {
+  const startBrowserVideo = useCallback(
+    async (source: StartTalkVideoSource) => {
       const sessionId = sessionIdRef.current;
       if (!sessionId) {
         return;
       }
-      // "starting" ya, para que el botón responda al instante; core corrige a
-      // "live" en cuanto el modelo recibe el primer fotograma, o a "error".
+
       setVideoState({
         phase: "starting",
-        source: "screen",
-        sourceId: target?.id,
-        label: target?.label ?? "Pantalla",
+        source,
+        label:
+          source === "camera" ? "Solicitando cámara…" : "Elige qué compartir…",
         framesSent: 0,
       });
-      const res = await ideMessenger.request("startTalk/startVideo", {
-        sessionId,
-        source: "screen",
-        region: target?.region,
-        sourceId: target?.id,
-        label: target?.label,
-      });
-      if (res.status === "error") {
+
+      const capture = videoCaptureRef.current;
+      const fail = (message: string) => {
+        capture.stop();
+        setVideoSource(null);
         setVideoState({
           phase: "error",
-          source: "screen",
+          source,
           framesSent: 0,
-          message: res.error,
+          message,
         });
+      };
+
+      try {
+        const callbacks = {
+          onEnded: () => {
+            if (sessionIdRef.current !== sessionId) return;
+            setVideoSource(null);
+            setVideoState({ phase: "stopped", framesSent: 0 });
+            void ideMessenger.request("startTalk/stopVideo", { sessionId });
+          },
+          onError: (message: string) => {
+            if (sessionIdRef.current !== sessionId) return;
+            fail(message);
+            void ideMessenger.request("startTalk/stopVideo", { sessionId });
+          },
+          onFrame: async (frame: { data: string; mimeType: "image/jpeg" }) => {
+            if (sessionIdRef.current !== sessionId) return;
+            const result = await ideMessenger.request(
+              "startTalk/sendVideoFrame",
+              { sessionId, ...frame },
+            );
+            if (result.status === "error") throw new Error(result.error);
+          },
+        };
+
+        // Estas llamadas abren el selector/permiso nativo antes de cualquier
+        // await, como exige la activación transitoria del navegador.
+        const selection =
+          source === "screen"
+            ? await capture.startScreen(callbacks)
+            : await capture.startCamera(callbacks);
+        if (sessionIdRef.current !== sessionId) {
+          capture.stop();
+          return;
+        }
+
+        const result = await ideMessenger.request("startTalk/startVideo", {
+          sessionId,
+          source,
+          sourceId: selection.sourceId,
+          label: selection.label,
+        });
+        if (result.status === "error") {
+          fail(result.error);
+          return;
+        }
+
+        setVideoSource(source);
+        setVideoState({
+          phase: "starting",
+          source,
+          sourceId: selection.sourceId,
+          label: selection.label,
+          framesSent: 0,
+        });
+        await capture.captureFrame();
+      } catch (error) {
+        fail(formatVideoCaptureError(error, source));
+        void ideMessenger.request("startTalk/stopVideo", { sessionId });
       }
     },
     [ideMessenger],
   );
 
+  const startScreenShare = useCallback(
+    () => startBrowserVideo("screen"),
+    [startBrowserVideo],
+  );
+
   const startCamera = useCallback(
-    async (deviceName?: string) => {
-      const sessionId = sessionIdRef.current;
-      if (!sessionId) {
-        return;
-      }
-      setVideoState({
-        phase: "starting",
-        source: "camera",
-        label: deviceName ?? "Cámara",
-        framesSent: 0,
-      });
-      const res = await ideMessenger.request("startTalk/startVideo", {
-        sessionId,
-        source: "camera",
-        deviceName,
-      });
-      if (res.status === "error") {
-        setVideoState({
-          phase: "error",
-          source: "camera",
-          framesSent: 0,
-          message: res.error,
-        });
-      }
-    },
-    [ideMessenger],
+    () => startBrowserVideo("camera"),
+    [startBrowserVideo],
   );
 
   const stopVideo = useCallback(async () => {
     const sessionId = sessionIdRef.current;
+    videoCaptureRef.current.stop();
     setVideoSource(null);
     setVideoState({ phase: "stopped", framesSent: 0 });
     if (sessionId) {
@@ -1992,6 +2018,7 @@ export function useStartTalkAudio({
       void stopListening();
       void micCaptureRef.current?.stop();
       micCaptureRef.current = undefined;
+      videoCaptureRef.current.stop();
       void pcmPlayerRef.current?.close();
       pcmPlayerRef.current = undefined;
     };
@@ -2021,7 +2048,6 @@ export function useStartTalkAudio({
     startScreenShare,
     startCamera,
     stopVideo,
-    listVideoSources,
     micLevel,
     speaker,
     lastSoundEvent,

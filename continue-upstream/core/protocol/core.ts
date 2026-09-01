@@ -69,7 +69,6 @@ import type {
   StartTalkToolResponseInput,
   StartTalkTranscriptEntry,
   StartTalkVideoFrameInput,
-  StartTalkVideoSourceInfo,
   StartTalkVideoStartRequest,
 } from "../startTalk/index.js";
 import type {
@@ -477,7 +476,6 @@ export type ToCoreFromIdeOrWebviewProtocol = {
   "startTalk/startVideo": [StartTalkVideoStartRequest, void];
   "startTalk/stopVideo": [StartTalkSessionRequest, void];
   "startTalk/sendVideoFrame": [StartTalkVideoFrameInput, void];
-  "startTalk/listVideoSources": [undefined, StartTalkVideoSourceInfo[]];
   "startTalk/reportPlayback": [StartTalkPlaybackReport, void];
   // Privacidad: permisos de las capacidades reales de Lumina.
   "privacy/getPermissions": [

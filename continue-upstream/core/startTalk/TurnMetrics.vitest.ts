@@ -211,12 +211,10 @@ describe("TurnMetricsTracker", () => {
     const { tracker } = makeTracker();
 
     tracker.onReconnect();
-    tracker.onVideoRestart();
     tracker.onSearch();
 
     const session = tracker.sessionMetrics();
     expect(session.reconnects).toBe(1);
-    expect(session.videoRestarts).toBe(1);
     expect(session.searches).toBe(1);
   });
 

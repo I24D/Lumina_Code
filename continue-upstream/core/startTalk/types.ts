@@ -182,49 +182,12 @@ export interface StartTalkToolResponseInput {
 
 export type StartTalkVideoSource = "screen" | "camera";
 
-/**
- * Región de escritorio a capturar, en píxeles del escritorio virtual. Se usa
- * para compartir UN monitor concreto en vez de la unión de todos (que en
- * multi-monitor produce una imagen panorámica ilegible al escalarla).
- */
-export interface StartTalkVideoRegion {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-/** Una fuente de vídeo elegible: un monitor concreto o una cámara. */
-export interface StartTalkVideoSourceInfo {
-  /** Identificador estable usado para volver a seleccionarla. */
-  id: string;
-  kind: StartTalkVideoSource;
-  label: string;
-  /** Solo para monitores: región del escritorio virtual que ocupa. */
-  region?: StartTalkVideoRegion;
-  /** Solo para monitores: true si es el monitor principal de Windows. */
-  primary?: boolean;
-  /**
-   * Solo para cámaras: nombre exacto del dispositivo DirectShow. Va aparte de
-   * `label` a propósito: la etiqueta es texto para el usuario y puede cambiar,
-   * mientras que esto es lo que se le pasa a FFmpeg.
-   */
-  deviceName?: string;
-}
-
 export interface StartTalkVideoStartRequest {
   sessionId: string;
   source: StartTalkVideoSource;
-  /** Nombre del dispositivo de cámara (DirectShow) si source === "camera". */
-  deviceName?: string;
-  /**
-   * Solo pantalla: recorta la captura a esta región. Si se omite, se captura
-   * el escritorio completo (todos los monitores).
-   */
-  region?: StartTalkVideoRegion;
-  /** Identificador de la fuente elegida (para reflejarlo en la UI). */
+  /** Identificador de la pista que autorizó el navegador. */
   sourceId?: string;
-  /** Etiqueta legible de la fuente, para que la UI diga cuál se está viendo. */
+  /** Etiqueta segura de la superficie o cámara autorizada. */
   label?: string;
 }
 
@@ -450,8 +413,6 @@ export type StartTalkCoreEvent =
       framesSent?: number;
       /** Momento (epoch ms) del último fotograma que vio el modelo. */
       lastFrameAt?: number;
-      /** Miniatura JPEG en base64 para la vista previa de la UI (throttled). */
-      preview?: string;
       /** Causa del fallo cuando phase === "error". */
       message?: string;
     }

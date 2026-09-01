@@ -251,8 +251,16 @@ NULL.
 
 ## Multimedia y permisos
 
-La cámara y la pantalla se eligen por fuente, reportan su estado real y pueden
-detenerse sin cerrar la sesión de voz. Micrófono, cámara, pantalla,
+La cámara y la pantalla usan las APIs nativas del navegador. **Compartir
+pantalla** abre el selector protegido de pantalla, ventana o pestaña; **Cámara**
+abre el permiso y el dispositivo predeterminado del navegador. Start Talk no
+imita esos selectores ni muestra una copia de la captura dentro del chat: el
+navegador conserva su indicador de uso y permite detener la pista desde allí.
+
+Solo un JPEG reducido por segundo cruza el puente autenticado hacia el modelo.
+Los fotogramas se descartan mientras el anterior siga en tránsito, la pista se
+cierra al terminar la sesión y el evento nativo `ended` actualiza la interfaz
+si el usuario detiene el uso desde el navegador. Micrófono, cámara, pantalla,
 notificaciones y acciones de escritorio conservan controles de privacidad
 independientes. Una transcripción de voz nunca equivale por sí misma a aprobar
 una tarea o una acción sensible.

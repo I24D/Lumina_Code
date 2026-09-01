@@ -120,10 +120,6 @@ export default defineHandlers("startTalk", (ctx) => {
     ctx.startTalkManager.sendVideoFrame(msg.data);
   });
 
-  on("startTalk/listVideoSources", async () => {
-    return ctx.startTalkManager.listVideoSources();
-  });
-
   on("startTalk/reportPlayback", async (msg) => {
     ctx.startTalkManager.reportPlayback(msg.data);
   });

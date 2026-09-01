@@ -11,7 +11,6 @@ const {
 } = require("../../../scripts/util/index");
 
 const { copySqlite } = require("./download-copy-sqlite");
-const { copyFfmpegBinary } = require("./copy-ffmpeg-binary");
 const { copyJsdomWorker } = require("./copy-jsdom-worker");
 const { copySqliteBinding } = require("./copy-sqlite-binding");
 const { generateAndCopyConfigYamlSchema } = require("./generate-copy-config");
@@ -420,9 +419,6 @@ void (async () => {
   // Copy over any worker files
   copyJsdomWorker();
 
-  // Bundle the microphone capture backend used by Start Talk.
-  copyFfmpegBinary({ validate: true });
-
   // Validate the all of the necessary files are present
   validateFilesPresent([
     // Queries used to create the index for @code context provider
@@ -467,9 +463,6 @@ void (async () => {
     "out/tree-sitter.wasm",
     // Worker required by jsdom
     "out/xhr-sync-worker.js",
-    // Self-contained microphone capture for Start Talk
-    `out/${isWinTarget ? "ffmpeg.exe" : "ffmpeg"}`,
-    `out/${isWinTarget ? "ffmpeg.exe.LICENSE" : "ffmpeg.LICENSE"}`,
     // SQLite3 Node native module
     "out/build/Release/node_sqlite3.node",
 

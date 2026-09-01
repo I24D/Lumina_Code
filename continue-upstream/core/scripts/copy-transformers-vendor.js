@@ -17,7 +17,48 @@ const destinationPath = path.join(
   "@xenova",
   "transformers",
 );
+const lockPath = path.join(
+  coreRoot,
+  "vendor",
+  "modules",
+  "@xenova",
+  ".transformers-vendor.lock",
+);
 const requiredEntryPoint = path.join("src", "transformers.js");
+const LOCK_TIMEOUT_MS = 120_000;
+const STALE_LOCK_MS = 5 * 60_000;
+
+function wait(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function acquireVendorLock() {
+  fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < LOCK_TIMEOUT_MS) {
+    try {
+      return fs.openSync(lockPath, "wx");
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      try {
+        const age = Date.now() - fs.statSync(lockPath).mtimeMs;
+        if (age > STALE_LOCK_MS) {
+          fs.rmSync(lockPath, { force: true });
+          continue;
+        }
+      } catch (statError) {
+        if (statError?.code !== "ENOENT") throw statError;
+        continue;
+      }
+      wait(100);
+    }
+  }
+
+  throw new Error(
+    `Timed out waiting for another Transformers.js vendor preparation at ${lockPath}.`,
+  );
+}
 
 export function copyTransformersVendor() {
   const sourceEntryPoint = path.join(sourcePath, requiredEntryPoint);
@@ -27,24 +68,33 @@ export function copyTransformersVendor() {
     );
   }
 
-  fs.rmSync(destinationPath, { recursive: true, force: true });
-  fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-  fs.cpSync(sourcePath, destinationPath, {
-    recursive: true,
-    force: true,
-    dereference: true,
-  });
+  const lockHandle = acquireVendorLock();
+  const stagingPath = `${destinationPath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    fs.rmSync(stagingPath, { recursive: true, force: true });
+    fs.cpSync(sourcePath, stagingPath, {
+      recursive: true,
+      force: true,
+      dereference: true,
+    });
 
-  const destinationEntryPoint = path.join(destinationPath, requiredEntryPoint);
-  if (!fs.existsSync(destinationEntryPoint)) {
-    throw new Error(
-      `Transformers.js vendor entry point was not created at ${destinationEntryPoint}.`,
+    const stagingEntryPoint = path.join(stagingPath, requiredEntryPoint);
+    if (!fs.existsSync(stagingEntryPoint)) {
+      throw new Error(
+        `Transformers.js vendor entry point was not created at ${stagingEntryPoint}.`,
+      );
+    }
+
+    fs.rmSync(destinationPath, { recursive: true, force: true });
+    fs.renameSync(stagingPath, destinationPath);
+    console.log(
+      `[info] Prepared Transformers.js vendor package at ${destinationPath}`,
     );
+  } finally {
+    fs.rmSync(stagingPath, { recursive: true, force: true });
+    fs.closeSync(lockHandle);
+    fs.rmSync(lockPath, { force: true });
   }
-
-  console.log(
-    `[info] Prepared Transformers.js vendor package at ${destinationPath}`,
-  );
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {

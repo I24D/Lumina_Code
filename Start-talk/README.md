@@ -11,7 +11,8 @@ Start Talk es la interfaz de voz de Lumina Code. Se abre como una pestaña del n
 - núcleo energético animado con tenazas, aura y reacción al micrófono y a la voz;
 - evidencia visible de cada búsqueda web: consulta, proveedor, síntesis y fuentes;
 - lectura en voz alta de respuestas finales de Lumina Code, Claude Code y Codex;
-- selección de micrófono, cámara o monitor;
+- selección nativa y segura del navegador para cámara, pantalla, ventana o
+  pestaña, con indicador del sistema y detención desde cualquiera de los dos;
 - autorización explícita antes de enviar tareas de voz al agente;
 - vista compacta o ampliada, con pantalla completa del navegador.
 

@@ -68,7 +68,6 @@ export interface StartTalkSessionMetrics {
   interruptions: number;
   silentTurns: number;
   reconnects: number;
-  videoRestarts: number;
   searches: number;
   /**
    * Transcripciones que eran su propia voz volviendo por el micrófono y se
@@ -161,7 +160,6 @@ export class TurnMetricsTracker {
     interruptions: 0,
     silentTurns: 0,
     reconnects: 0,
-    videoRestarts: 0,
     searches: 0,
     speculativeHits: 0,
     echoSuppressed: 0,
@@ -287,10 +285,6 @@ export class TurnMetricsTracker {
 
   onReconnect(): void {
     this.totals.reconnects += 1;
-  }
-
-  onVideoRestart(): void {
-    this.totals.videoRestarts += 1;
   }
 
   /**

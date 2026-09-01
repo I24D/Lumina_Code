@@ -1,6 +1,5 @@
 const fs = require("fs");
 
-const { copyFfmpegBinary } = require("./copy-ffmpeg-binary");
 const { copyJsdomWorker } = require("./copy-jsdom-worker");
 const { writeBuildTimestamp } = require("./utils");
 
@@ -55,9 +54,6 @@ const esbuildConfig = {
 void (async () => {
   // Create .buildTimestamp.js before starting the first build
   writeBuildTimestamp();
-  // Start Talk captures audio in the extension host, so FFmpeg must live next
-  // to the bundled extension instead of depending on a global installation.
-  copyFfmpegBinary({ validate: true });
   // jsdom resolves this worker next to the bundled extension at runtime.
   copyJsdomWorker();
   // Bundles the extension into one file

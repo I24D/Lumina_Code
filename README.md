@@ -171,7 +171,10 @@ cancelación de eco aplicada, adapta el gate al ruido y detecta ambientes con
 voces solapadas. La biometría opcional queda vinculada al turno que originó la
 consulta, por lo que una respuesta tardía no puede atribuir a la persona
 equivocada una intervención posterior. Cámara, pantalla y voz conservan
-permisos separados. Consulta [Voz y multimedia](docs/VOICE_AND_MULTIMEDIA.md).
+permisos separados. Pantalla y cámara usan los selectores nativos del navegador
+y su indicador del sistema; Start Talk recibe únicamente fotogramas reducidos,
+sin duplicar la captura dentro de la conversación. Consulta
+[Voz y multimedia](docs/VOICE_AND_MULTIMEDIA.md).
 
 ### Doctor, backup y actualizaciones
 

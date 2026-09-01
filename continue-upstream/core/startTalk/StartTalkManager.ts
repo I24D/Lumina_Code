@@ -27,12 +27,6 @@ import {
 import { connectVoicePipeline } from "./pipeline/index.js";
 
 import {
-  FfmpegVideoCapture,
-  grabSingleFrame,
-  listDisplayMonitors,
-  listVideoInputDevices,
-} from "./FfmpegVideoCapture.js";
-import {
   isCapabilityAvailable,
   type LuminaCapability,
 } from "../privacy/permissions.js";
@@ -99,9 +93,7 @@ import type {
   StartTalkTranslationConfig,
   StartTalkVideoFrameInput,
   StartTalkVideoPhase,
-  StartTalkVideoRegion,
   StartTalkVideoSource,
-  StartTalkVideoSourceInfo,
   StartTalkVideoStartRequest,
 } from "./types.js";
 
@@ -671,17 +663,6 @@ export function isAssistantEcho(
   return shared / words.length >= ECHO_WORD_RATIO;
 }
 
-/** Cada cuánto se refresca como mucho la miniatura que ve el usuario en la UI. */
-const VIDEO_PREVIEW_INTERVAL_MS = 2000;
-/**
- * Si el modelo no ha recibido un fotograma en este tiempo cuando el usuario
- * empieza a hablar, se le manda uno recién capturado. Sin esto una pregunta
- * como "¿qué ves aquí?" se respondería sobre una vista vieja.
- */
-const VIDEO_STALE_MS = 3000;
-/** Reintentos de la captura de vídeo si FFmpeg muere solo. */
-const VIDEO_MAX_RESTARTS = 3;
-
 /** Normalises an s16 RMS value to a perceptual [0, 1] level for the visualizer. */
 function normalizeLevel(rms: number): number {
   // ~50 (near-silence) → 0, ~8000 (loud speech) → ~1, with a soft curve.
@@ -860,21 +841,13 @@ type SessionState = {
   resumptionHandle?: string;
   session?: LiveSessionHandle;
   thinkingLevel: StartTalkThinkingLevel;
-  video?: FfmpegVideoCapture;
   videoSource?: StartTalkVideoSource;
-  videoDeviceName?: string;
-  videoRegion?: StartTalkVideoRegion;
   videoSourceId?: string;
   videoLabel?: string;
   /** Fotogramas realmente entregados al modelo en este stream. */
   videoFramesSent: number;
   /** Epoch ms del último fotograma que vio el modelo. */
   videoLastFrameAt?: number;
-  /** Última vez que se mandó miniatura a la UI (para no saturar el puente). */
-  videoLastPreviewAt: number;
-  videoRestarts: number;
-  /** Evita lanzar dos capturas puntuales solapadas. */
-  videoRefreshInFlight: boolean;
   voiceName: string;
 };
 
@@ -1106,9 +1079,6 @@ export class StartTalkManager {
       voiceStyle: isInterpreter ? undefined : voiceStyle,
       lastLevelEmit: 0,
       videoFramesSent: 0,
-      videoLastPreviewAt: 0,
-      videoRestarts: 0,
-      videoRefreshInFlight: false,
       mode: isInterpreter ? "interpreter" : "assistant",
       translation: isInterpreter ? translation : undefined,
       // En Gemini el modo intérprete usa el modelo live-translate dedicado. En
@@ -1392,9 +1362,6 @@ export class StartTalkManager {
           state.turnAudioBytes = 0;
           state.metrics.onActivityStart();
           this.safeRealtimeInput(state, { activityStart: {} });
-          // El usuario va a preguntar algo: si la última vista de la pantalla
-          // ya es vieja, se refresca para que responda sobre lo de ahora.
-          this.refreshVideoIfStale(sessionId, state);
         },
         onAudio: (pcm) => {
           // Buffer the turn's audio (capped at ~12 s) for speaker identification.
@@ -1706,9 +1673,6 @@ export class StartTalkManager {
     state.turnManager.onStopped();
     state.gate?.reset(false);
     state.gate = undefined;
-    state.video?.stop();
-    state.video = undefined;
-    // Impide que una captura puntual en vuelo relance el stream tras el cierre.
     state.videoSource = undefined;
     this.stopNotificationMonitor(state);
     this.stopWeatherAlertMonitor(state);
@@ -1767,64 +1731,10 @@ export class StartTalkManager {
     });
   }
 
-  /**
-   * Enumera lo que Lumina puede mirar: cada monitor por separado (compartir la
-   * unión de todos produce una panorámica ilegible al escalarla) más las
-   * cámaras DirectShow disponibles.
-   */
-  listVideoSources(): StartTalkVideoSourceInfo[] {
-    const sources: StartTalkVideoSourceInfo[] = [];
-
-    try {
-      const monitors = listDisplayMonitors();
-      if (monitors.length > 1) {
-        // Con varios monitores el escritorio completo sigue siendo útil como
-        // opción, pero deja de ser la primera.
-        sources.push({
-          id: "screen:all",
-          kind: "screen",
-          label: "Todas las pantallas",
-        });
-      }
-      for (const monitor of monitors) {
-        sources.push({
-          id: `screen:${monitor.id}`,
-          kind: "screen",
-          label: monitor.label,
-          region: monitor.region,
-          primary: monitor.primary,
-        });
-      }
-    } catch {
-      // Enumerar monitores es best-effort: si falla, queda el escritorio entero.
-    }
-
-    if (sources.length === 0) {
-      sources.push({ id: "screen:all", kind: "screen", label: "Pantalla" });
-    }
-
-    try {
-      for (const camera of listVideoInputDevices()) {
-        sources.push({
-          id: `camera:${camera}`,
-          kind: "camera",
-          label: camera,
-          deviceName: camera,
-        });
-      }
-    } catch {
-      // Sin cámaras enumerables se queda solo la pantalla.
-    }
-
-    return sources;
-  }
-
-  /** Inicia captura de vídeo (pantalla o cámara) en core y la envía a Gemini. */
+  /** Registra una captura que el usuario ya autorizó en el navegador. */
   startVideo({
     sessionId,
     source,
-    deviceName,
-    region,
     sourceId,
     label,
   }: StartTalkVideoStartRequest): void {
@@ -1833,245 +1743,32 @@ export class StartTalkManager {
       throw new Error("Start Talk session is reconnecting.");
     }
 
-    // Cámara y pantalla son sensores: si el usuario los bloqueó, no se abren
-    // aunque la UI lo pida. El fallo va por `videoState` para que se vea el
-    // motivo en la tarjeta de visión en vez de morir en silencio.
+    // El navegador ya pidió su permiso propio. Esta política adicional permite
+    // al usuario bloquear la capacidad completa desde los ajustes de Lumina.
     if (!isCapabilityAvailable(source === "camera" ? "camera" : "screen")) {
-      this.emitVideoState(
-        sessionId,
-        state,
-        "error",
+      throw new Error(
         source === "camera"
           ? "La cámara está bloqueada en Privacidad, búsqueda y servicios."
           : "Compartir pantalla está bloqueado en Privacidad, búsqueda y servicios.",
       );
-      return;
     }
 
-    state.video?.stop();
     state.videoSource = source;
-    state.videoDeviceName = deviceName;
-    state.videoRegion = region;
     state.videoSourceId = sourceId;
     state.videoLabel =
-      label ?? (source === "camera" ? (deviceName ?? "Cámara") : "Pantalla");
+      label ?? (source === "camera" ? "Cámara activa" : "Pantalla compartida");
     state.videoFramesSent = 0;
     state.videoLastFrameAt = undefined;
-    state.videoLastPreviewAt = 0;
-    state.videoRestarts = 0;
 
     this.emitVideoState(sessionId, state, "starting");
-    this.spawnVideoCapture(sessionId, state);
-
-    // El stream de pantalla descarta fotogramas repetidos, así que con la
-    // pantalla quieta no emitiría ni el primero: sembramos uno de inmediato
-    // para que el modelo tenga vista desde el segundo cero.
-    //
-    // La cámara NO se siembra: su stream no se decima (emite 1 fps siempre) y,
-    // sobre todo, DirectShow da acceso exclusivo al dispositivo — una segunda
-    // captura simultánea fallaría y tumbaría el compartir recién iniciado.
-    if (source === "screen") {
-      void this.refreshVideoFrame(sessionId, state, "initial");
-    }
-  }
-
-  private spawnVideoCapture(sessionId: string, state: SessionState): void {
-    const source = state.videoSource;
-    if (!source) {
-      return;
-    }
-
-    const video = new FfmpegVideoCapture();
-    state.video = video;
-
-    // Guardamos el último stderr de FFmpeg para que, si el proceso se cierra
-    // solo, el mensaje al usuario incluya la causa real y no uno genérico.
-    let lastVideoError = "";
-    let framesSeen = 0;
-
-    try {
-      video.start(
-        source,
-        state.videoDeviceName,
-        {
-          onFrame: (jpegBase64) => {
-            framesSeen += 1;
-            if (!this.sessions.has(sessionId) || state.video !== video) {
-              return;
-            }
-            state.videoRestarts = 0;
-            this.deliverVideoFrame(sessionId, state, jpegBase64);
-          },
-          onError: (message) => {
-            lastVideoError = message;
-          },
-          onStop: (reason) => {
-            if (state.video === video) {
-              state.video = undefined;
-            }
-            if (reason === "requested" || !this.sessions.has(sessionId)) {
-              return;
-            }
-
-            // FFmpeg se cayó solo. Reintentamos un número acotado de veces
-            // antes de rendirnos: un corte puntual (cambio de resolución,
-            // bloqueo de sesión de Windows) no debe apagar el compartir.
-            if (state.videoRestarts < VIDEO_MAX_RESTARTS) {
-              state.videoRestarts += 1;
-              this.emitVideoState(sessionId, state, "starting");
-              setTimeout(() => {
-                if (this.sessions.has(sessionId) && state.videoSource) {
-                  this.spawnVideoCapture(sessionId, state);
-                }
-              }, 500 * state.videoRestarts);
-              return;
-            }
-
-            // Si ya llegaron fotogramas y luego paró, fue un corte; si nunca
-            // llegó ninguno, es un fallo de arranque (dispositivo, permisos).
-            const detail =
-              lastVideoError ||
-              (framesSeen === 0
-                ? "no se pudo iniciar la captura de vídeo (dispositivo o permisos)."
-                : "la captura de vídeo se detuvo.");
-            this.failVideo(sessionId, state, detail);
-          },
-        },
-        { region: state.videoRegion },
-      );
-    } catch (error) {
-      this.failVideo(
-        sessionId,
-        state,
-        error instanceof Error ? error.message : String(error),
-      );
-    }
   }
 
   /** Entrega un fotograma al modelo y refresca el estado visible en la UI. */
-  private deliverVideoFrame(
-    sessionId: string,
-    state: SessionState,
-    jpegBase64: string,
-  ): void {
-    this.safeRealtimeInput(state, {
-      video: { data: jpegBase64, mimeType: "image/jpeg" },
-    });
-
-    const first = state.videoFramesSent === 0;
-    state.videoFramesSent += 1;
-    state.videoLastFrameAt = Date.now();
-
-    // La miniatura para la UI va limitada: el puente hacia el orbe es un
-    // WebSocket local, pero no hace falta mandar 70 KB cada segundo.
-    const now = Date.now();
-    const withPreview =
-      first || now - state.videoLastPreviewAt >= VIDEO_PREVIEW_INTERVAL_MS;
-    if (withPreview) {
-      state.videoLastPreviewAt = now;
-    }
-
-    this.emitVideoState(
-      sessionId,
-      state,
-      "live",
-      undefined,
-      withPreview ? jpegBase64 : undefined,
-    );
-  }
-
-  /**
-   * Captura un fotograma puntual y se lo entrega al modelo. Cubre los dos casos
-   * en los que el stream continuo no basta: el arranque (con la pantalla quieta
-   * la decimación descarta hasta el primero) y una pregunta del usuario cuando
-   * la última vista ya es vieja.
-   */
-  private async refreshVideoFrame(
-    sessionId: string,
-    state: SessionState,
-    reason: "initial" | "stale",
-  ): Promise<void> {
-    const source = state.videoSource;
-    if (state.videoRefreshInFlight || !source) {
-      return;
-    }
-    state.videoRefreshInFlight = true;
-
-    try {
-      const frame = await grabSingleFrame(
-        source,
-        state.videoDeviceName,
-        state.videoRegion,
-      );
-      // La sesión pudo cerrarse, pararse el compartir, o el usuario pudo
-      // cambiar de fuente mientras se capturaba: en todos esos casos este
-      // fotograma ya no representa lo que se está compartiendo.
-      if (!this.sessions.has(sessionId) || state.videoSource !== source) {
-        return;
-      }
-      this.deliverVideoFrame(sessionId, state, frame);
-    } catch (error) {
-      if (reason === "initial" && this.sessions.has(sessionId)) {
-        // Si ni siquiera la captura puntual funciona, compartir no va a
-        // funcionar: es un fallo de permisos o de dispositivo, no un hipo.
-        this.failVideo(
-          sessionId,
-          state,
-          error instanceof Error ? error.message : String(error),
-        );
-      }
-    } finally {
-      state.videoRefreshInFlight = false;
-    }
-  }
-
-  /**
-   * Si el usuario empieza a hablar y el modelo lleva rato sin fotograma nuevo,
-   * le mandamos uno recién capturado para que responda sobre lo que hay en
-   * pantalla AHORA.
-   */
-  private refreshVideoIfStale(sessionId: string, state: SessionState): void {
-    // Solo pantalla: la cámara tiene acceso exclusivo en DirectShow, así que no
-    // se le puede abrir una segunda captura mientras el stream la está usando.
-    if (state.videoSource !== "screen" || state.videoRefreshInFlight) {
-      return;
-    }
-    const last = state.videoLastFrameAt ?? 0;
-    if (Date.now() - last < VIDEO_STALE_MS) {
-      return;
-    }
-    void this.refreshVideoFrame(sessionId, state, "stale");
-  }
-
-  /** Marca el vídeo como caído SIN ensuciar el estado de la sesión de voz. */
-  private failVideo(
-    sessionId: string,
-    state: SessionState,
-    message: string,
-  ): void {
-    const source = state.videoSource;
-    state.video?.stop();
-    state.video = undefined;
-    state.videoSource = undefined;
-    this.emit({
-      type: "videoState",
-      sessionId,
-      phase: "error",
-      source,
-      sourceId: state.videoSourceId,
-      label: state.videoLabel,
-      framesSent: state.videoFramesSent,
-      lastFrameAt: state.videoLastFrameAt,
-      message,
-    });
-  }
-
   private emitVideoState(
     sessionId: string,
     state: SessionState,
     phase: StartTalkVideoPhase,
     message?: string,
-    preview?: string,
   ): void {
     this.emit({
       type: "videoState",
@@ -2082,17 +1779,13 @@ export class StartTalkManager {
       label: state.videoLabel,
       framesSent: state.videoFramesSent,
       lastFrameAt: state.videoLastFrameAt,
-      preview,
       message,
     });
   }
 
   stopVideo({ sessionId }: StartTalkSessionRequest): void {
     const state = this.requireSession(sessionId);
-    state.video?.stop();
-    state.video = undefined;
     state.videoSource = undefined;
-    state.videoRegion = undefined;
     this.emit({
       type: "videoState",
       sessionId,
@@ -2104,14 +1797,26 @@ export class StartTalkManager {
     });
   }
 
-  /** Reenvía un fotograma provisto por el cliente (ruta alternativa a FFmpeg). */
+  /** Entrega al modelo un fotograma autorizado y reducido por el navegador. */
   sendVideoFrame({
     sessionId,
     data,
     mimeType,
   }: StartTalkVideoFrameInput): void {
     const state = this.requireSession(sessionId);
+    if (!state.videoSource) return;
+    if (!/^image\/(jpeg|png|webp)$/u.test(mimeType)) {
+      throw new Error(`Unsupported Start Talk video frame type: ${mimeType}`);
+    }
+    // 5 MiB base64 deja margen para una imagen HD sin permitir que un cliente
+    // defectuoso sature el puente o la sesión de tiempo real.
+    if (!data || data.length > 5 * 1024 * 1024) {
+      throw new Error("Invalid or oversized Start Talk video frame.");
+    }
     this.safeRealtimeInput(state, { video: { data, mimeType } });
+    state.videoFramesSent += 1;
+    state.videoLastFrameAt = Date.now();
+    this.emitVideoState(sessionId, state, "live");
   }
 
   /**
