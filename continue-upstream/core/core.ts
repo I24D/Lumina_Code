@@ -1,47 +1,27 @@
 import { fetchwithRequestOptions } from "@continuedev/fetch";
-import { evaluateSurfaceAuthorization } from "@continuedev/terminal-security";
-import { spawn } from "node:child_process";
-import { existsSync, readdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join as joinPath } from "node:path";
-import { pathToFileURL } from "node:url";
+
 import * as URI from "uri-js";
 import { v4 as uuidv4 } from "uuid";
 
 import { CompletionProvider } from "./autocomplete/CompletionProvider";
-import {
-  openedFilesLruCache,
-  prevFilepaths,
-} from "./autocomplete/util/openedFilesLruCache";
+
 import { ConfigHandler } from "./config/ConfigHandler";
-import { addModel, deleteModel } from "./config/util";
-import { DevDataSqliteDb } from "./data/devdataSqlite";
+
 import { DataLogger } from "./data/log";
-import { GitHubWorkItemService } from "./integrations/GitHubWorkItemService.js";
+
 import { getChannelService } from "./channels/ChannelService.js";
 import { CodebaseIndexer } from "./indexing/CodebaseIndexer";
 import DocsService from "./indexing/docs/DocsService";
 import { countTokens } from "./llm/countTokens";
 import Lemonade from "./llm/llms/Lemonade";
-import { fetchModels } from "./llm/fetchModels";
-import Ollama from "./llm/llms/Ollama";
-import { EditAggregator } from "./nextEdit/context/aggregateEdits";
-import { createNewPromptFileV2 } from "./promptFiles/createNewPromptFile";
-import { callTool } from "./tools/callTool";
-import { BuiltInToolNames } from "./tools/builtIn";
-import { ChatDescriber } from "./util/chatDescriber";
-import { compactConversation } from "./util/conversationCompaction";
-import { GlobalContext } from "./util/GlobalContext";
-import { resolveWorkspaceEnvValue } from "./util/workspaceEnv.js";
-import historyManager from "./util/history";
-import { editConfigFile, migrateV1DevDataFiles } from "./util/paths";
 
-import {
-  isProcessBackgrounded,
-  killTerminalProcess,
-  markProcessAsBackgrounded,
-} from "./util/processTerminalStates";
-import { getSymbolsForManyFiles } from "./util/treeSitter";
+import Ollama from "./llm/llms/Ollama";
+
+import { callTool } from "./tools/callTool";
+
+import { GlobalContext } from "./util/GlobalContext";
+
+import { editConfigFile, migrateV1DevDataFiles } from "./util/paths";
 
 import {
   CompleteOnboardingPayload,
@@ -49,7 +29,6 @@ import {
   ContextItemWithId,
   IdeSettings,
   ModelDescription,
-  Position,
   RangeInFile,
   ToolCall,
   type ContextItem,
@@ -58,53 +37,33 @@ import {
 
 import { ConfigYaml } from "@continuedev/config-yaml";
 import { getDiffFn, GitDiffCache } from "./autocomplete/snippets/gitDiffCache";
-import { stringifyMcpPrompt } from "./commands/slash/mcpSlashCommand";
-import { createNewAssistantFile } from "./config/createNewAssistantFile";
+
 import {
   isColocatedRulesFile,
-  isContinueAgentConfigFile,
   isContinueConfigRelatedUri,
 } from "./config/loadLocalAssistants";
 import { CodebaseRulesCache } from "./config/markdown/loadCodebaseRules";
 import { loadMarkdownSkills } from "./config/markdown/loadMarkdownSkills";
-import { getSessionSearchIndex } from "./learning/SessionSearchIndex.js";
+
 import { getSkillUsageStore } from "./learning/SkillUsageStore.js";
-import { SkillWorkshopService } from "./learning/SkillWorkshopService.js";
-import { PluginCatalogService } from "./config/PluginCatalogService.js";
-import { getTodoStore } from "./planner/TodoStore.js";
-import { detectRecipe } from "./verify/detectRecipe.js";
-import { workspaceFiles } from "./verify/workspaceFiles.js";
-import { WorktreeService } from "./worktrees/WorktreeService.js";
+
 import { WorkboardService } from "./workboard/WorkboardService.js";
 import {
   setupLocalConfig,
   setupProviderConfig,
   setupQuickstartConfig,
 } from "./config/onboarding";
-import {
-  createNewGlobalRuleFile,
-  createNewWorkspaceBlockFile,
-} from "./config/workspace/workspaceBlocks";
+
 import { MCPManagerSingleton } from "./context/mcp/MCPManagerSingleton";
-import { performAuth, removeMCPAuth } from "./context/mcp/MCPOauth";
-import { myersDiff } from "./diff/myers";
-import { ApplyAbortManager } from "./edit/applyAbortManager";
-import { streamDiffLines } from "./edit/streamDiffLines";
+
 import { shouldIgnore } from "./indexing/shouldIgnore";
 import { walkDirCache } from "./indexing/walkDir";
 import { LLMLogger } from "./llm/logger";
-import { llmStreamChat } from "./llm/streamChat";
-import { BeforeAfterDiff } from "./nextEdit/context/diffFormatting";
-import { processSmallEdit } from "./nextEdit/context/processSmallEdit";
-import { PrefetchQueue } from "./nextEdit/NextEditPrefetchQueue";
+
 import { NextEditProvider } from "./nextEdit/NextEditProvider";
 import { luminaAgentRuntime } from "./orchestrator/index.js";
 import type { FromCoreProtocol, ToCoreProtocol } from "./protocol";
-import {
-  OnboardingModes,
-  type MemoryOverview,
-  type SkillWithUsage,
-} from "./protocol/core";
+import { OnboardingModes, type SkillWithUsage } from "./protocol/core";
 import type { IMessenger, Message } from "./protocol/messenger";
 import {
   hasVoiceCredentials,
@@ -115,34 +74,29 @@ import {
   type StartTalkConfigUpdate,
   type StartTalkVoiceConfigStore,
 } from "./startTalk/env.js";
-import { resolveVoiceForProvider } from "./startTalk/voices.js";
-import { clearGoal, getGoal, listGoals, setGoal } from "./goals/goalStore.js";
 import {
-  applyVerdict,
-  createGoal,
-  parseGoalVerdict,
-} from "./goals/sessionGoal.js";
-import {
-  CAPABILITIES,
-  getPermissions,
-  resetPermissions,
-  setPermission,
-} from "./privacy/permissions.js";
+  resolveModelForProvider,
+  resolveVoiceForProvider,
+} from "./startTalk/voices.js";
+import type { StartTalkProvider } from "./startTalk/types.js";
+
 import { SecurityAuditService } from "./privacy/SecurityAuditService.js";
 import { StartTalkManager } from "./startTalk/index.js";
 import { ScheduledTaskService } from "./scheduler/ScheduledTaskService.js";
 import {
   getMemorySyncStatus,
-  SupabaseMemorySync,
   type MemorySyncStatus,
-  type SupabaseMemoryConfig,
 } from "./memory/SupabaseMemorySync.js";
+import { ClaudeCodeCliClient } from "./startTalk/ClaudeCodeCliClient.js";
 import {
   WhatsAppAutoResponder,
   type AutoReplyAuditEntry,
 } from "./startTalk/WhatsAppAutoResponder.js";
-import { ContinueError, ContinueErrorReason } from "./util/errors";
-import { shareSession } from "./util/historyUtils";
+import {
+  CORE_HANDLER_MODULES,
+  type CoreHandlerContext,
+} from "./handlers/index.js";
+
 import { Logger } from "./util/Logger.js";
 
 export class Core {
@@ -158,6 +112,7 @@ export class Core {
   private workboardService: WorkboardService;
   private securityAudit = new SecurityAuditService();
   private channelService = getChannelService();
+  private claudeCli = new ClaudeCodeCliClient();
   private memorySyncStatus: MemorySyncStatus = {
     configured: false,
     provider: "local",
@@ -344,57 +299,22 @@ export class Core {
         "fineTuned",
       );
 
-      this.registerMessageHandlers(ideSettingsPromise);
+      this.registerMessageHandlers();
     } catch (error) {
       Logger.error(error);
       throw error; // Re-throw to prevent partially initialized core
     }
   }
 
-  /* eslint-disable max-lines-per-function, max-statements */
-  private registerMessageHandlers(ideSettingsPromise: Promise<IdeSettings>) {
-    const on = this.messenger.on.bind(this.messenger);
-    const worktreeService = new WorktreeService(this.ide);
-    const skillWorkshop = new SkillWorkshopService(this.ide);
-    const pluginCatalog = new PluginCatalogService(this.ide);
-    const resolveMemoryConfig = async (): Promise<SupabaseMemoryConfig> => {
-      const dirs = await this.ide.getWorkspaceDirs();
-      return {
-        url: resolveWorkspaceEnvValue(dirs, ["LUMINA_SUPABASE_URL"]),
-        publishableKey: resolveWorkspaceEnvValue(dirs, [
-          "LUMINA_SUPABASE_PUBLISHABLE_KEY",
-          "SUPABASE_PUBLISHABLE_KEY",
-          "SUPABASE_ANON_KEY",
-        ]),
-        accessToken: resolveWorkspaceEnvValue(dirs, [
-          "LUMINA_SUPABASE_ACCESS_TOKEN",
-        ]),
-        table: resolveWorkspaceEnvValue(dirs, ["LUMINA_SUPABASE_MEMORY_TABLE"]),
-        namespace: resolveWorkspaceEnvValue(dirs, [
-          "LUMINA_SUPABASE_MEMORY_NAMESPACE",
-        ]),
-      };
-    };
-    const memoryOverview = async (
-      query?: string,
-      limit?: number,
-    ): Promise<MemoryOverview> => {
-      const configuredStatus = getMemorySyncStatus(await resolveMemoryConfig());
-      if (
-        configuredStatus.provider !== this.memorySyncStatus.provider ||
-        configuredStatus.configured !== this.memorySyncStatus.configured
-      ) {
-        this.memorySyncStatus = configuredStatus;
-      }
-      return {
-        snapshot: luminaAgentRuntime.getMemorySnapshot(),
-        matches: query?.trim()
-          ? luminaAgentRuntime.searchMemory(query, limit)
-          : [],
-        sync: this.memorySyncStatus,
-      };
-    };
-
+  /**
+   * Wires the webview/IDE protocol to core.
+   *
+   * The handlers themselves live in `./handlers/*`, one file per feature area.
+   * This method's only job is to build the context they share and hand it to
+   * each module in turn; it used to be a single 1,350-line function carrying an
+   * eslint exemption for its own size.
+   */
+  private registerMessageHandlers() {
     // Note, VsCode's in-process messenger doesn't do anything with this
     // It will only show for jetbrains
     this.messenger.onError((message, err) => {
@@ -410,1296 +330,53 @@ export class Core {
       }
     });
 
-    on("abort", (msg) => {
-      this.abortById(msg.data ?? msg.messageId);
-    });
-
-    on("ping", (msg) => {
-      if (msg.data !== "ping") {
-        throw new Error("ping message incorrect");
-      }
-      return "pong";
-    });
-
-    // History
-    on("history/list", async (msg) => {
-      const sessions = historyManager.list(msg.data);
-      const limit = msg.data?.limit ?? 100;
-      return sessions.slice(0, limit);
-    });
-
-    on("history/delete", (msg) => {
-      historyManager.delete(msg.data.id);
-    });
-
-    on("history/load", (msg) => {
-      // The working task list belongs to one conversation. These two handlers
-      // are the only place core learns which conversation is in front of the
-      // user, so they are where the list follows along.
-      getTodoStore().setActiveSession(msg.data.id);
-      return historyManager.load(msg.data.id);
-    });
-
-    on("history/save", (msg) => {
-      getTodoStore().setActiveSession(msg.data.sessionId);
-      historyManager.save(msg.data);
-    });
-
-    on("history/share", async (msg) => {
-      const session = historyManager.load(msg.data.id);
-      const outputDir = msg.data.outputDir;
-      const history = session.history.map((msg) => msg.message);
-      await shareSession(this.ide, history, outputDir);
-    });
-
-    on("history/clear", (msg) => {
-      historyManager.clearAll();
-    });
-
-    on("sessions/fork", (msg) => {
-      const forked = historyManager.fork(msg.data.sessionId, {
-        historyIndex: msg.data.historyIndex,
-        title: msg.data.title,
-      });
-      getTodoStore().setActiveSession(forked.sessionId);
-      return forked;
-    });
-
-    on("sessions/forkToWorktree", async (msg) => {
-      const worktree = await worktreeService.getRegistered(
-        msg.data.worktreePath,
-      );
-      const forked = historyManager.fork(msg.data.sessionId, {
-        historyIndex: msg.data.historyIndex,
-        title: msg.data.title,
-        workspaceDirectory: pathToFileURL(worktree.path).toString(),
-        worktreePath: worktree.path,
-      });
-      return forked;
-    });
-
-    on("worktrees/list", (msg) =>
-      worktreeService.list(msg.data?.workspaceDirectory),
-    );
-
-    on("worktrees/create", (msg) => worktreeService.create(msg.data));
-
-    on("worktrees/remove", (msg) => worktreeService.remove(msg.data));
-
-    // Memory — procedural (skills) and episodic (past sessions)
-    on("skills/list", async () => {
-      return await this.listSkillsWithUsage();
-    });
-
-    on("skills/curate", async (msg) => {
-      const store = getSkillUsageStore();
-      const { name, action } = msg.data;
-      switch (action) {
-        case "archive":
-          store.setArchived(name, true);
-          break;
-        case "unarchive":
-          store.setArchived(name, false);
-          break;
-        case "pin":
-          store.setPinned(name, true);
-          break;
-        case "unpin":
-          store.setPinned(name, false);
-          break;
-      }
-      // Returning the fresh list saves the settings page a second round trip
-      // and guarantees it renders what was actually persisted.
-      return await this.listSkillsWithUsage();
-    });
-
-    on("skills/workshop/lint", async (msg) => skillWorkshop.lint(msg.data));
-
-    on("skills/workshop/save", async (msg) => {
-      const saved = await skillWorkshop.save(msg.data.draft, {
-        overwrite: msg.data.overwrite,
-        provenance: "user",
-      });
-      await this.configHandler.reloadConfig("Skill saved from workshop");
-      return { saved, skills: await this.listSkillsWithUsage() };
-    });
-
-    on("plugins/list", async () => pluginCatalog.list());
-
-    on("plugins/setEnabled", async (msg) => {
-      const plugins = await pluginCatalog.setEnabled(
-        msg.data.id,
-        msg.data.enabled,
-      );
-      await this.configHandler.reloadConfig("Plugin catalog changed");
-      return plugins;
-    });
-
-    on("todos/list", async () => {
-      return getTodoStore().read();
-    });
-
-    on("memory/get", async (msg) =>
-      memoryOverview(msg.data?.query, msg.data?.limit),
-    );
-
-    on("memory/delete", async (msg) => {
-      luminaAgentRuntime.deleteMemory(msg.data.id);
-      return memoryOverview();
-    });
-
-    on("memory/clear", async () => {
-      luminaAgentRuntime.clearMemory();
-      return memoryOverview();
-    });
-
-    on("memory/sync", async () => {
-      const config = await resolveMemoryConfig();
-      const status = getMemorySyncStatus(config);
-      if (!status.configured) {
-        this.memorySyncStatus = status;
-        return memoryOverview();
-      }
-      this.memorySyncStatus = { ...status, state: "syncing" };
-      try {
-        const snapshot = await new SupabaseMemorySync(config).sync(
-          luminaAgentRuntime.getMemorySnapshot(),
-        );
-        luminaAgentRuntime.replaceMemory(snapshot);
-        this.memorySyncStatus = {
-          ...status,
-          state: "synced",
-          lastSyncAt: new Date().toISOString(),
-        };
-      } catch (error) {
-        this.memorySyncStatus = {
-          ...status,
-          state: "error",
-          lastError: error instanceof Error ? error.message : String(error),
-        };
-      }
-      return memoryOverview();
-    });
-
-    on("workboard/get", async () => this.workboardService.snapshot());
-
-    on("workboard/create", async (msg) =>
-      this.workboardService.create(msg.data),
-    );
-
-    on("workboard/update", async (msg) =>
-      this.workboardService.update(msg.data.id, msg.data.patch),
-    );
-
-    on("workboard/delete", async (msg) => {
-      this.workboardService.remove(msg.data.id);
-    });
-
-    on("verify/recipe", async () => {
-      const dirs = await this.ide.getWorkspaceDirs();
-      if (dirs.length === 0) {
-        return undefined;
-      }
-      return await detectRecipe(workspaceFiles(this.ide, dirs[0]));
-    });
-
-    on("sessions/search", async (msg) => {
-      const index = getSessionSearchIndex();
-      const { query, limit, currentWorkspaceOnly } = msg.data;
-
-      let workspaceDirectory: string | undefined;
-      if (currentWorkspaceOnly) {
-        workspaceDirectory = (await this.ide.getWorkspaceDirs())[0];
-      }
-
-      try {
-        await index.refresh();
-      } catch {
-        // Stale results beat no results; the index is still queryable.
-      }
-
-      if (!query || query.trim() === "") {
-        return {
-          hits: [],
-          recent: await index.browse(limit ?? 20, workspaceDirectory),
-        };
-      }
-      return {
-        hits: await index.search({
-          query: query.trim(),
-          limit,
-          workspaceDirectory,
-        }),
-        recent: [],
-      };
-    });
-
-    on("devdata/log", async (msg) => {
-      void DataLogger.getInstance().logDevData(msg.data);
-    });
-
-    on("config/addModel", async (msg) => {
-      const model = msg.data.model;
-      const { config } = await this.configHandler.loadConfig();
-      const allModels = Object.values(config?.modelsByRole ?? {}).flat();
-      const existing = allModels.find(
-        (m) => m.providerName === model.provider && m.model === model.model,
-      );
-      if (existing) {
-        void this.ide.showToast(
-          "warning",
-          "Model already exists in config. Update the API key in the config file.",
-        );
-        await this.configHandler.openConfigProfile();
-        return;
-      }
-      addModel(model, msg.data.role);
-      void this.configHandler.reloadConfig(
-        "Model added (config/addModel message)",
-      );
-    });
-
-    on("config/deleteModel", (msg) => {
-      deleteModel(msg.data.title);
-      void this.configHandler.reloadConfig(
-        "Model removed (config/deleteModel message)",
-      );
-    });
-
-    on("config/newPromptFile", async (msg) => {
-      const { config } = await this.configHandler.loadConfig();
-      await createNewPromptFileV2(this.ide, config?.experimental?.promptPath);
-      await this.configHandler.reloadConfig(
-        "Prompt file created (config/newPromptFile message)",
-      );
-    });
-
-    on("config/newAssistantFile", async (msg) => {
-      await createNewAssistantFile(this.ide, undefined);
-      await this.configHandler.refreshAll(
-        "Assistant file created (config/newAssistantFile message)",
-      );
-    });
-
-    on("config/addLocalWorkspaceBlock", async (msg) => {
-      await createNewWorkspaceBlockFile(
-        this.ide,
-        msg.data.blockType,
-        msg.data.baseFilename,
-      );
-      walkDirCache.invalidate();
-      await this.configHandler.reloadConfig(
-        "Local block created (config/addLocalWorkspaceBlock message)",
-      );
-    });
-
-    on("config/addGlobalRule", async (msg) => {
-      try {
-        await createNewGlobalRuleFile(this.ide, msg.data?.baseFilename);
-        walkDirCache.invalidate();
-        await this.configHandler.reloadConfig(
-          "Global rule created (config/addGlobalRule message)",
-        );
-      } catch (error) {
-        throw error;
-      }
-    });
-
-    on("config/deleteRule", async (msg) => {
-      try {
-        const filepath = msg.data.filepath;
-        if (
-          !isColocatedRulesFile(filepath) &&
-          !isContinueConfigRelatedUri(filepath)
-        ) {
-          throw new Error("Only rule files can be deleted");
-        }
-        const fileExists = await this.ide.fileExists(filepath);
-        if (fileExists) {
-          await this.ide.removeFile(filepath);
-          walkDirCache.invalidate();
-          await this.configHandler.reloadConfig(
-            "Rule file deleted (config/deleteRule message)",
-          );
-        }
-      } catch (error) {
-        console.error("Failed to delete rule file:", error);
-        throw error;
-      }
-    });
-
-    on("config/openProfile", async (msg) => {
-      await this.configHandler.openConfigProfile(msg.data.profileId);
-    });
-
-    on("config/ideSettingsUpdate", async (msg) => {
-      await this.configHandler.updateIdeSettings(msg.data);
-    });
-
-    on("config/refreshProfiles", async (msg) => {
-      // User force reloading will retrigger colocated rules
-      const codebaseRulesCache = CodebaseRulesCache.getInstance();
-      await codebaseRulesCache.refresh(this.ide);
-
-      const { selectProfileId, reason } = msg.data ?? {};
-      await this.configHandler.refreshAll(reason);
-      if (selectProfileId) {
-        await this.configHandler.setSelectedProfileId(selectProfileId);
-      }
-    });
-
-    on("config/updateSharedConfig", async (msg) => {
-      const newSharedConfig = this.globalContext.updateSharedConfig(msg.data);
-      await this.configHandler.reloadConfig(
-        "Shared config update (config/updateSharedConfig message)",
-      );
-      return newSharedConfig;
-    });
-
-    on("config/updateSelectedModel", async (msg) => {
-      const newSelectedModels = this.globalContext.updateSelectedModel(
-        msg.data.profileId,
-        msg.data.role,
-        msg.data.title,
-      );
-      await this.configHandler.reloadConfig(
-        "Selected model update (config/updateSelectedModel message)",
-      );
-      return newSelectedModels;
-    });
-
-    on("mcp/reloadServer", async (msg) => {
-      await MCPManagerSingleton.getInstance().refreshConnection(msg.data.id);
-    });
-    on("mcp/setServerEnabled", async (msg) => {
-      const { id, enabled } = msg.data;
-      await MCPManagerSingleton.getInstance().setEnabled(id, enabled);
-    });
-    on("mcp/getPrompt", async (msg) => {
-      const { serverName, promptName, args } = msg.data;
-      const prompt = await MCPManagerSingleton.getInstance().getPrompt(
-        serverName,
-        promptName,
-        args,
-      );
-      const stringifiedPrompt = stringifyMcpPrompt(prompt);
-      return {
-        prompt: stringifiedPrompt,
-        description: prompt.description,
-      };
-    });
-    on("mcp/startAuthentication", async (msg) => {
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      MCPManagerSingleton.getInstance().setStatus(
-        msg.data.serverId,
-        "authenticating",
-      );
-      const status = await performAuth(
-        msg.data.serverId,
-        msg.data.serverUrl,
-        this.ide,
-      );
-      if (status === "AUTHORIZED") {
-        await MCPManagerSingleton.getInstance().refreshConnection(
-          msg.data.serverId,
-        );
-      }
-    });
-    on("mcp/removeAuthentication", async (msg) => {
-      removeMCPAuth(msg.data.serverUrl, this.ide);
-      await MCPManagerSingleton.getInstance().refreshConnection(
-        msg.data.serverId,
-      );
-    });
-
-    // Context providers
-    on("context/addDocs", async (msg) => {
-      void this.docsService.indexAndAdd(msg.data);
-    });
-
-    on("context/removeDocs", async (msg) => {
-      await this.docsService.delete(msg.data.startUrl);
-    });
-
-    on("context/indexDocs", async (msg) => {
-      await this.docsService.syncDocsWithPrompt(msg.data.reIndex);
-    });
-
-    on("context/loadSubmenuItems", async (msg) => {
-      const { config } = await this.configHandler.loadConfig();
-      if (!config) {
-        return [];
-      }
-
-      try {
-        const items = await config.contextProviders
-          ?.find((provider) => provider.description.title === msg.data.title)
-          ?.loadSubmenuItems({
-            config,
-            ide: this.ide,
-            fetch: (url, init) =>
-              fetchwithRequestOptions(url, init, config.requestOptions),
-          });
-        return items || [];
-      } catch (e) {
-        Logger.error(e);
-        return [];
-      }
-    });
-
-    on("context/getContextItems", this.getContextItems.bind(this));
-
-    on("context/getSymbolsForFiles", async (msg) => {
-      const { uris } = msg.data;
-      return await getSymbolsForManyFiles(uris, this.ide);
-    });
-
-    on("config/getSerializedProfileInfo", async (msg) => {
-      return {
-        result: await this.configHandler.getSerializedConfig(),
-        profileId:
-          this.configHandler.currentProfile?.profileDescription.id ?? null,
-        profiles: this.configHandler.profileDescriptions,
-      };
-    });
-
-    on("llm/streamChat", (msg) => {
-      const abortController = this.addMessageAbortController(msg.messageId);
-      return llmStreamChat(
-        this.configHandler,
-        abortController,
-        msg,
-        this.ide,
-        this.messenger,
-      );
-    });
-
-    on("llm/complete", async (msg) => {
-      const { config } = await this.configHandler.loadConfig();
-      const model = config?.selectedModelByRole.chat;
-      if (!model) {
-        throw new Error("No chat model selected");
-      }
-      const abortController = this.addMessageAbortController(msg.messageId);
-
-      const completion = await model.complete(
-        msg.data.prompt,
-        abortController.signal,
-        msg.data.completionOptions,
-      );
-      return completion;
-    });
-    on("llm/listModels", this.handleListModels.bind(this));
-
-    on("llm/compileChat", async (msg) => {
-      const { messages, options } = msg.data;
-      const model = (await this.configHandler.loadConfig()).config
-        ?.selectedModelByRole.chat;
-
-      if (!model) {
-        throw new Error("No chat model selected");
-      }
-
-      return model.compileChatMessages(messages, options);
-    });
-
-    // Provide messenger to utils so they can interact with GUI + state
-    ChatDescriber.messenger = this.messenger;
-
-    on("chatDescriber/describe", async (msg) => {
-      const currentModel = (await this.configHandler.loadConfig()).config
-        ?.selectedModelByRole.chat;
-
-      if (!currentModel) {
-        throw new Error("No chat model selected");
-      }
-
-      return await ChatDescriber.describe(currentModel, {}, msg.data.text);
-    });
-
-    on("conversation/compact", async (msg) => {
-      const currentModel = (await this.configHandler.loadConfig()).config
-        ?.selectedModelByRole.chat;
-
-      if (!currentModel) {
-        throw new Error("No chat model selected");
-      }
-
-      // Let protocol errors propagate to the GUI. Swallowing them made
-      // `/compact` reload an unchanged conversation and look successful.
-      await compactConversation({
-        sessionId: msg.data.sessionId,
-        index: msg.data.index,
-        historyManager,
-        currentModel,
-      });
-      return undefined;
-    });
-
-    // Autocomplete
-    on("autocomplete/complete", async (msg) => {
-      const outcome =
-        await this.completionProvider.provideInlineCompletionItems(
-          msg.data,
-          undefined,
-        );
-      return outcome ? [outcome.completion] : [];
-    });
-    on("autocomplete/accept", async (msg) => {
-      this.completionProvider.accept(msg.data.completionId);
-    });
-    on("autocomplete/cancel", async (msg) => {
-      this.completionProvider.cancel();
-    });
-
-    // Next Edit
-    on("nextEdit/predict", async (msg) => {
-      const outcome = await this.nextEditProvider.provideInlineCompletionItems(
-        msg.data.input,
-        undefined,
-        {
-          withChain: msg.data.options?.withChain ?? false,
-          usingFullFileDiff: msg.data.options?.usingFullFileDiff ?? true,
+    const ctx: CoreHandlerContext = {
+      on: this.messenger.on.bind(this.messenger),
+      ide: this.ide,
+      messenger: this.messenger,
+
+      configHandler: this.configHandler,
+      globalContext: this.globalContext,
+      codeBaseIndexer: this.codeBaseIndexer,
+      completionProvider: this.completionProvider,
+      nextEditProvider: this.nextEditProvider,
+      docsService: this.docsService,
+      startTalkManager: this.startTalkManager,
+      scheduledTaskService: this.scheduledTaskService,
+      workboardService: this.workboardService,
+      securityAudit: this.securityAudit,
+      channelService: this.channelService,
+
+      // Bound rather than handed the instance: modules get exactly these, and
+      // core's members stay private.
+      core: {
+        abortById: (messageId) => this.abortById(messageId),
+        addMessageAbortController: (id) => this.addMessageAbortController(id),
+        listSkillsWithUsage: () => this.listSkillsWithUsage(),
+        isItemTooBig: (item) => this.isItemTooBig(item),
+        handleToolCall: (toolCall) => this.handleToolCall(toolCall),
+        handleFilesChanged: (msg) => this.handleFilesChanged(msg),
+        handleAddAutocompleteModel: (msg) =>
+          this.handleAddAutocompleteModel(msg),
+        handleCompleteOnboarding: (msg) => this.handleCompleteOnboarding(msg),
+        handleListModels: (msg) => this.handleListModels(msg),
+        getContextItems: (msg) => this.getContextItems(msg),
+        getStartTalkVoiceConfig: (preferredModel) =>
+          this.getStartTalkVoiceConfig(preferredModel),
+        getStartTalkConfigStatus: () => this.getStartTalkConfigStatus(),
+        configureStartTalk: (update) => this.configureStartTalk(update),
+        refreshWhatsAppSuggestionMonitor: () =>
+          this.refreshWhatsAppSuggestionMonitor(),
+        getMemorySyncStatus: () => this.memorySyncStatus,
+        setMemorySyncStatus: (status) => {
+          this.memorySyncStatus = status;
         },
-      );
-      return outcome;
-      // ? [outcome.completion, outcome.originalEditableRange]
-    });
-    on("nextEdit/accept", async (msg) => {
-      console.log("nextEdit/accept");
-      this.nextEditProvider.accept(msg.data.completionId);
-    });
-    on("nextEdit/reject", async (msg) => {
-      console.log("nextEdit/reject");
-      this.nextEditProvider.reject(msg.data.completionId);
-    });
-    on("nextEdit/startChain", async (msg) => {
-      console.log("nextEdit/startChain");
-      NextEditProvider.getInstance().startChain();
-      return;
-    });
-
-    on("nextEdit/deleteChain", async (msg) => {
-      console.log("nextEdit/deleteChain");
-      await NextEditProvider.getInstance().deleteChain();
-      return;
-    });
-
-    on("nextEdit/isChainAlive", async (msg) => {
-      console.log("nextEdit/isChainAlive");
-      return NextEditProvider.getInstance().chainExists();
-    });
-
-    on("nextEdit/queue/getProcessedCount", async (msg) => {
-      console.log("nextEdit/queue/getProcessedCount");
-      const queue = PrefetchQueue.getInstance();
-      console.log(queue.processedCount);
-      return queue.processedCount;
-    });
-
-    on("nextEdit/queue/dequeueProcessed", async (msg) => {
-      console.log("nextEdit/queue/dequeueProcessed");
-      const queue = PrefetchQueue.getInstance();
-      return queue.dequeueProcessed() || null;
-    });
-
-    // NOTE: This is not used unless prefetch is used.
-    // At this point this is not used because I opted to rely on the model to return multiple diffs than to use prefetching.
-    on("nextEdit/queue/processOne", async (msg) => {
-      console.log("nextEdit/queue/processOne");
-      const { ctx, recentlyVisitedRanges, recentlyEditedRanges } = msg.data;
-      const queue = PrefetchQueue.getInstance();
-
-      await queue.process({
-        ...ctx,
-        recentlyVisitedRanges,
-        recentlyEditedRanges,
-      });
-      return;
-    });
-
-    on("nextEdit/queue/clear", async (msg) => {
-      console.log("nextEdit/queue/clear");
-      const queue = PrefetchQueue.getInstance();
-      queue.clear();
-      return;
-    });
-
-    on("nextEdit/queue/abort", async (msg) => {
-      console.log("nextEdit/queue/abort");
-      const queue = PrefetchQueue.getInstance();
-      queue.abort();
-      return;
-    });
-
-    on("streamDiffLines", async (msg) => {
-      const { config } = await this.configHandler.loadConfig();
-      if (!config) {
-        throw new Error("Failed to load config");
-      }
-
-      const { data } = msg;
-
-      // Title can be an edit, chat, or apply model
-      // Fall back to chat
-      const llm =
-        config.modelsByRole.edit.find((m) => m.title === data.modelTitle) ??
-        config.modelsByRole.apply.find((m) => m.title === data.modelTitle) ??
-        config.modelsByRole.chat.find((m) => m.title === data.modelTitle) ??
-        config.selectedModelByRole.chat;
-
-      if (!llm) {
-        throw new Error("No model selected");
-      }
-
-      const abortManager = ApplyAbortManager.getInstance();
-      const abortController = abortManager.get(
-        data.fileUri ?? "current-file-stream",
-      ); // not super important since currently cancelling apply will cancel all streams it's one file at a time
-
-      return streamDiffLines(
-        data,
-        llm,
-        abortController,
-        undefined,
-        data.includeRulesInSystemMessage ? config.rules : undefined,
-      );
-    });
-
-    on("getDiffLines", (msg) => {
-      return myersDiff(msg.data.oldContent, msg.data.newContent);
-    });
-
-    on("cancelApply", async (msg) => {
-      const abortManager = ApplyAbortManager.getInstance();
-      abortManager.clear(); // for now abort all streams
-    });
-
-    on("onboarding/complete", this.handleCompleteOnboarding.bind(this));
-
-    on("addAutocompleteModel", this.handleAddAutocompleteModel.bind(this));
-
-    on("stats/getTokensPerDay", async (msg) => {
-      const rows = await DevDataSqliteDb.getTokensPerDay();
-      return rows;
-    });
-    on("stats/getTokensPerModel", async (msg) => {
-      const rows = await DevDataSqliteDb.getTokensPerModel();
-      return rows;
-    });
-
-    on("lumina/assistantState", async () =>
-      luminaAgentRuntime.getAssistantState(),
-    );
-
-    on(
-      "lumina/reportToolResult",
-      async ({ data: { toolCall, result, durationMs } }) => {
-        luminaAgentRuntime.startToolCall(toolCall);
-        luminaAgentRuntime.finishToolCall(toolCall, result, durationMs ?? 0);
       },
-    );
-
-    on("startTalk/connect", async (msg) => {
-      const { provider, apiKey, model, thinkingLevel, voiceName } =
-        await this.getStartTalkVoiceConfig(msg.data.preferredModel);
-      return this.startTalkManager.connect({
-        provider,
-        apiKey,
-        model,
-        thinkingLevel: msg.data.thinkingLevel ?? thinkingLevel,
-        voiceName,
-        languageCode: msg.data.languageCode,
-        enableSearch: msg.data.enableSearch,
-        enableTools: msg.data.enableTools,
-        enableSessionResumption: msg.data.enableSessionResumption,
-        mode: msg.data.mode,
-        translation: msg.data.translation,
-        voiceStyle: msg.data.voiceStyle,
-        announceNotifications: msg.data.announceNotifications,
-      });
-    });
-
-    on("startTalk/getConfigStatus", async () =>
-      this.getStartTalkConfigStatus(),
-    );
-
-    on("startTalk/configure", async (msg) => {
-      await this.configureStartTalk(msg.data);
-      return this.getStartTalkConfigStatus();
-    });
-
-    on("startTalk/sendAudio", async (msg) => {
-      this.startTalkManager.sendAudio(msg.data);
-    });
-
-    on("startTalk/sendText", async (msg) => {
-      this.startTalkManager.sendText(msg.data);
-    });
-
-    on("startTalk/startCapture", async (msg) => {
-      this.startTalkManager.startCapture(msg.data);
-    });
-
-    on("startTalk/setMuted", async (msg) => {
-      this.startTalkManager.setMuted(msg.data);
-    });
-
-    on("startTalk/setNotificationAnnouncements", async (msg) => {
-      this.startTalkManager.setNotificationAnnouncements(msg.data);
-    });
-
-    on("startTalk/authorizeReply", async (msg) => {
-      this.startTalkManager.authorizeReply(msg.data);
-    });
-
-    on("startTalk/getTranscript", async (msg) => {
-      return this.startTalkManager.getTranscript(msg.data);
-    });
-
-    // Voice delegation relays: forward the orb's task to the sidebar chat, and
-    // the sidebar's final answer back to the orb. Core is a pure relay here;
-    // the orb and sidebar coordinate by requestId.
-    on("startTalk/delegateToMain", async (msg) => {
-      const authorization = evaluateSurfaceAuthorization({
-        surface: "start-talk",
-        capability: "delegate-agent",
-        userApproved: msg.data.userApproved === true,
-        policy: "allow",
-      });
-      if (!authorization.authorized) {
-        this.messenger.send("startTalk/mainResultReady", {
-          requestId: msg.data.requestId,
-          text: "Solicitud cancelada: se requiere autorizacion explicita del usuario.",
-          error: true,
-        });
-        return;
-      }
-      this.messenger.send("startTalk/runInMain", {
-        requestId: msg.data.requestId,
-        task: msg.data.task,
-        context: msg.data.context,
-        userApproved: true,
-      });
-    });
-
-    on("startTalk/mainResult", async (msg) => {
-      this.messenger.send("startTalk/mainResultReady", msg.data);
-    });
-
-    on("startTalk/endAudio", async (msg) => {
-      this.startTalkManager.endAudio(msg.data);
-    });
-
-    on("startTalk/stop", async (msg) => {
-      this.startTalkManager.stop(msg.data);
-    });
-
-    on("startTalk/sendToolResponse", async (msg) => {
-      this.startTalkManager.sendToolResponse(msg.data);
-    });
-
-    on("startTalk/startVideo", async (msg) => {
-      this.startTalkManager.startVideo(msg.data);
-    });
-
-    on("startTalk/stopVideo", async (msg) => {
-      this.startTalkManager.stopVideo(msg.data);
-    });
-
-    on("startTalk/sendVideoFrame", async (msg) => {
-      this.startTalkManager.sendVideoFrame(msg.data);
-    });
-
-    on("startTalk/listVideoSources", async () => {
-      return this.startTalkManager.listVideoSources();
-    });
-
-    on("startTalk/reportPlayback", async (msg) => {
-      this.startTalkManager.reportPlayback(msg.data);
-    });
-
-    on("privacy/getPermissions", async () => ({
-      capabilities: CAPABILITIES,
-      permissions: getPermissions(),
-    }));
-
-    on("privacy/setPermission", async (msg) => {
-      const permissions = setPermission(msg.data.capability, msg.data.policy);
-      this.securityAudit.record({
-        category: "permissions",
-        action: "permission_changed",
-        actor: "user",
-        outcome: "changed",
-        summary: `${msg.data.capability} cambió a ${permissions[msg.data.capability] ?? "ask"}.`,
-        details: {
-          capability: msg.data.capability,
-          policy: permissions[msg.data.capability] ?? "ask",
-        },
-      });
-      return permissions;
-    });
-
-    on("privacy/resetPermissions", async () => {
-      const permissions = resetPermissions();
-      this.securityAudit.record({
-        category: "permissions",
-        action: "permissions_reset",
-        actor: "user",
-        outcome: "changed",
-        summary: "Se restablecieron los permisos predeterminados.",
-      });
-      return permissions;
-    });
-
-    on("security/audit/list", async (msg) => this.securityAudit.list(msg.data));
-    on("security/audit/record", async (msg) => {
-      this.securityAudit.record(msg.data);
-    });
-    on("security/audit/clear", async () => ({
-      removed: this.securityAudit.clear(),
-    }));
-
-    on("channels/get", async () => this.channelService.get());
-    on("channels/update", async (msg) => {
-      const snapshot = this.channelService.update(msg.data.id, msg.data.patch);
-      this.securityAudit.record({
-        category: "channels",
-        action: "channel_policy_changed",
-        actor: "user",
-        outcome: "changed",
-        summary: `Cambió la política de ${msg.data.id}.`,
-        details: {
-          channel: msg.data.id,
-          enabled:
-            snapshot.channels.find((item) => item.id === msg.data.id)
-              ?.enabled ?? false,
-          mode:
-            snapshot.channels.find((item) => item.id === msg.data.id)?.mode ??
-            "manual",
-        },
-      });
-      this.refreshWhatsAppSuggestionMonitor();
-      return snapshot;
-    });
-
-    on("goals/get", async (msg) => getGoal(msg.data.sessionId));
-
-    on("goals/list", async () => listGoals());
-
-    on("goals/set", async (msg) =>
-      setGoal(createGoal(msg.data.sessionId, msg.data.text, msg.data.maxTurns)),
-    );
-
-    // El juicio del turno lo hace el cliente con el modelo de chat; aquí solo
-    // se parsea de forma defensiva y se aplica el techo de turnos, que es la
-    // parte que no puede quedar en manos de la respuesta de un modelo.
-    on("goals/applyVerdict", async (msg) => {
-      const goal = getGoal(msg.data.sessionId);
-      if (!goal) {
-        return undefined;
-      }
-      return setGoal(applyVerdict(goal, parseGoalVerdict(msg.data.raw)));
-    });
-
-    on("goals/clear", async (msg) => {
-      clearGoal(msg.data.sessionId);
-    });
-
-    on("github/getWorkItem", async (msg) => {
-      const workspaceDirs = await this.ide.getWorkspaceDirs();
-      const token = resolveWorkspaceEnvValue(workspaceDirs, [
-        "GITHUB_TOKEN",
-        "I24D_GITHUB",
-        "LUMINA_PC_GITHUB_TOKEN",
-      ]);
-      return new GitHubWorkItemService(token).get(msg.data.reference);
-    });
-
-    on("scheduler/list", async () => this.scheduledTaskService.list());
-    on("scheduler/create", async (msg) =>
-      this.scheduledTaskService.create(msg.data),
-    );
-    on("scheduler/update", async (msg) =>
-      this.scheduledTaskService.update(msg.data.id, msg.data.patch),
-    );
-    on("scheduler/delete", async (msg) => {
-      this.scheduledTaskService.remove(msg.data.id);
-    });
-    on("scheduler/runNow", async (msg) =>
-      this.scheduledTaskService.runNow(msg.data.id),
-    );
-    on("scheduler/claimDue", async () => this.scheduledTaskService.claimDue());
-    on("scheduler/reportRun", async (msg) => {
-      this.scheduledTaskService.reportRun(msg.data);
-    });
-
-    on("index/forceReIndex", async ({ data }) => {
-      const { config } = await this.configHandler.loadConfig();
-      if (!config || config.disableIndexing) {
-        return; // TODO silent in case of commands?
-      }
-      walkDirCache.invalidate();
-      if (data?.shouldClearIndexes) {
-        await this.codeBaseIndexer.clearIndexes();
-      }
-      const dirs = data?.dirs ?? (await this.ide.getWorkspaceDirs());
-      await this.codeBaseIndexer.refreshCodebaseIndex(dirs);
-    });
-    on("index/setPaused", (msg) => {
-      this.globalContext.update("indexingPaused", msg.data);
-      // Update using the new setter instead of token
-      this.codeBaseIndexer.paused = msg.data;
-    });
-    on("index/indexingProgressBarInitialized", async (msg) => {
-      // Triggered when progress bar is initialized.
-      // If a non-default state has been stored, update the indexing display to that state
-      const currentState = this.codeBaseIndexer.currentIndexingState;
-
-      if (currentState.status !== "loading") {
-        void this.messenger.request("indexProgress", currentState);
-      }
-    });
-
-    // File changes - TODO - remove remaining logic for these from IDEs where possible
-    on("files/changed", this.handleFilesChanged.bind(this));
-    const refreshIfNotIgnored = async (uris: string[]) => {
-      const toRefresh: string[] = [];
-      for (const uri of uris) {
-        const ignore = await shouldIgnore(uri, this.ide);
-        if (!ignore) {
-          toRefresh.push(uri);
-        }
-      }
-      if (toRefresh.length > 0) {
-        this.messenger.send("refreshSubmenuItems", {
-          providers: ["file"],
-        });
-        const { config } = await this.configHandler.loadConfig();
-        if (config && !config.disableIndexing) {
-          await this.codeBaseIndexer.refreshCodebaseIndexFiles(toRefresh);
-        }
-      }
     };
 
-    on("files/created", async ({ data }) => {
-      if (!data?.uris?.length) {
-        return;
-      }
-
-      walkDirCache.invalidate();
-      void refreshIfNotIgnored(data.uris);
-
-      const colocatedRulesUris = data.uris.filter(isColocatedRulesFile);
-      const nonColocatedRuleUris = data.uris.filter(
-        (uri) => !isColocatedRulesFile(uri),
-      );
-      if (colocatedRulesUris) {
-        const rulesCache = CodebaseRulesCache.getInstance();
-        void Promise.all(
-          colocatedRulesUris.map((uri) => rulesCache.update(this.ide, uri)),
-        ).then(() => {
-          void this.configHandler.reloadConfig("Codebase rule file created");
-        });
-      }
-
-      // If it's a local config being created, we want to reload all configs so it shows up in the list
-      if (nonColocatedRuleUris.some(isContinueAgentConfigFile)) {
-        await this.configHandler.refreshAll("Local config file created");
-      } else if (nonColocatedRuleUris.some(isContinueConfigRelatedUri)) {
-        await this.configHandler.reloadConfig(
-          ".continue config-related file created",
-        );
-      }
-    });
-
-    on("files/deleted", async ({ data }) => {
-      if (!data?.uris?.length) {
-        return;
-      }
-
-      walkDirCache.invalidate();
-      void refreshIfNotIgnored(data.uris);
-
-      const colocatedRulesUris = data.uris.filter(isColocatedRulesFile);
-      const nonColocatedRuleUris = data.uris.filter(
-        (uri) => !isColocatedRulesFile(uri),
-      );
-
-      if (colocatedRulesUris) {
-        const rulesCache = CodebaseRulesCache.getInstance();
-        void Promise.all(
-          colocatedRulesUris.map((uri) => rulesCache.remove(uri)),
-        ).then(() => {
-          void this.configHandler.reloadConfig("Codebase rule file deleted");
-        });
-      }
-
-      // If it's a local config being deleted, we want to reload all configs so it disappears from the list
-      if (nonColocatedRuleUris.some(isContinueAgentConfigFile)) {
-        await this.configHandler.refreshAll("Local config file deleted");
-      } else if (nonColocatedRuleUris.some(isContinueConfigRelatedUri)) {
-        await this.configHandler.reloadConfig(
-          ".continue config-related file deleted",
-        );
-      }
-    });
-
-    on("files/closed", async ({ data }) => {
-      console.debug("deleteChain called from files/closed");
-      await NextEditProvider.getInstance().deleteChain();
-
-      try {
-        const fileUris = await this.ide.getOpenFiles();
-        if (fileUris) {
-          const filepaths = fileUris.map((uri) => uri.toString());
-
-          if (!prevFilepaths.filepaths.length) {
-            prevFilepaths.filepaths = filepaths;
-          }
-
-          // If there is a removal, including if the number of tabs is the same (which can happen with temp tabs)
-          if (filepaths.length <= prevFilepaths.filepaths.length) {
-            // Remove files from cache that are no longer open (i.e. in the cache but not in the list of opened tabs)
-            for (const [key, _] of openedFilesLruCache.entriesDescending()) {
-              if (!filepaths.includes(key)) {
-                openedFilesLruCache.delete(key);
-              }
-            }
-          }
-          prevFilepaths.filepaths = filepaths;
-        }
-      } catch (e) {
-        Logger.error(
-          `didChangeVisibleTextEditors: failed to update openedFilesLruCache`,
-        );
-      }
-
-      if (data.uris) {
-        this.messenger.send("didCloseFiles", {
-          uris: data.uris,
-        });
-      }
-    });
-
-    on("files/opened", async ({ data: { uris } }) => {
-      if (uris) {
-        for (const filepath of uris) {
-          try {
-            const ignore = await shouldIgnore(filepath, this.ide);
-            if (!ignore) {
-              // Set the active file as most recently used (need to force recency update by deleting and re-adding)
-              if (openedFilesLruCache.has(filepath)) {
-                openedFilesLruCache.delete(filepath);
-              }
-              openedFilesLruCache.set(filepath, filepath);
-            }
-          } catch (e) {
-            Logger.error(
-              `files/opened: failed to update openedFiles cache for ${filepath}`,
-            );
-          }
-        }
-      }
-    });
-
-    on("files/smallEdit", async ({ data }) => {
-      const EDIT_AGGREGATION_OPTIONS = {
-        deltaT: 1.0,
-        deltaL: 5,
-        maxEdits: 500,
-        maxDuration: 120.0,
-        contextSize: 5,
-      };
-
-      EditAggregator.getInstance(
-        EDIT_AGGREGATION_OPTIONS,
-        (
-          beforeAfterdiff: BeforeAfterDiff,
-          cursorPosBeforeEdit: Position,
-          cursorPosAfterPrevEdit: Position,
-        ) => {
-          void processSmallEdit(
-            beforeAfterdiff,
-            cursorPosBeforeEdit,
-            cursorPosAfterPrevEdit,
-            data.configHandler,
-            data.getDefsFromLspFunction,
-            this.ide,
-          );
-        },
-      );
-
-      const workspaceDir =
-        data.actions.length > 0 ? data.actions[0].workspaceDir : undefined;
-
-      // Store the latest context data
-      const instance = EditAggregator.getInstance();
-      (instance as any).latestContextData = {
-        configHandler: data.configHandler,
-        getDefsFromLspFunction: data.getDefsFromLspFunction,
-        recentlyEditedRanges: data.recentlyEditedRanges,
-        recentlyVisitedRanges: data.recentlyVisitedRanges,
-        workspaceDir: workspaceDir,
-      };
-
-      // queueMicrotask prevents blocking the UI thread during typing
-      queueMicrotask(() => {
-        void EditAggregator.getInstance().processEdits(data.actions);
-      });
-    });
-
-    // Docs, etc. indexing
-    on("indexing/reindex", async (msg) => {
-      if (msg.data.type === "docs") {
-        void this.docsService.reindexDoc(msg.data.id);
-      }
-    });
-    on("indexing/abort", async (msg) => {
-      if (msg.data.type === "docs") {
-        this.docsService.abort(msg.data.id);
-      }
-    });
-    on("indexing/setPaused", async (msg) => {
-      if (msg.data.type === "docs") {
-      }
-    });
-    on("docs/initStatuses", async (msg) => {
-      void this.docsService.initStatuses();
-    });
-    on("docs/getDetails", async (msg) => {
-      return await this.docsService.getDetails(msg.data.startUrl);
-    });
-    on("docs/getIndexedPages", async (msg) => {
-      const pages = await this.docsService.getIndexedPages(msg.data.startUrl);
-      return Array.from(pages);
-    });
-
-    on("didChangeSelectedProfile", async (msg) => {
-      if (msg.data.id) {
-        await this.configHandler.setSelectedProfileId(msg.data.id);
-      }
-    });
-
-    on("auth/getAuthUrl", async (_msg) => {
-      return { url: "" };
-    });
-
-    on("tools/call", async ({ data: { toolCall } }) =>
-      this.handleToolCall(toolCall),
-    );
-
-    on(
-      "tools/evaluatePolicy",
-      async ({ data: { toolName, basePolicy, parsedArgs, processedArgs } }) => {
-        const { config } = await this.configHandler.loadConfig();
-        if (!config) {
-          throw new Error("Config not loaded");
-        }
-
-        const tool = config.tools.find((t) => t.function.name === toolName);
-        if (!tool) {
-          return { policy: basePolicy };
-        }
-
-        const action =
-          typeof parsedArgs.action === "string" ? parsedArgs.action.trim() : "";
-        const requiresExplicitApproval =
-          processedArgs?.dryRun !== true &&
-          parsedArgs.dryRun !== true &&
-          ((toolName === BuiltInToolNames.LuminaWhatsApp &&
-            (action === "reply" || action === "publish_status")) ||
-            (toolName === BuiltInToolNames.LuminaPhoneLink &&
-              action === "reply"));
-
-        // Extract display value for specific tools
-        let displayValue: string | undefined;
-        if (toolName === "runTerminalCommand" && parsedArgs.command) {
-          displayValue = parsedArgs.command as string;
-        }
-
-        if (tool.evaluateToolCallPolicy) {
-          const evaluatedPolicy = tool.evaluateToolCallPolicy(
-            basePolicy,
-            parsedArgs,
-            processedArgs,
-          );
-          return {
-            policy: evaluatedPolicy,
-            displayValue,
-            requiresExplicitApproval,
-          };
-        }
-        return { policy: basePolicy, displayValue, requiresExplicitApproval };
-      },
-    );
-
-    on("tools/preprocessArgs", async ({ data: { toolName, args } }) => {
-      const { config } = await this.configHandler.loadConfig();
-      if (!config) {
-        throw new Error("Config not loaded");
-      }
-
-      const tool = config?.tools.find((t) => t.function.name === toolName);
-      if (!tool) {
-        throw new Error(`Tool ${toolName} not found`);
-      }
-
-      try {
-        const preprocessedArgs = await tool.preprocessArgs?.(args, {
-          ide: this.ide,
-        });
-        return {
-          preprocessedArgs,
-        };
-      } catch (e) {
-        let errorReason =
-          e instanceof ContinueError ? e.reason : ContinueErrorReason.Unknown;
-        let errorMessage =
-          e instanceof Error
-            ? e.message
-            : `Error preprocessing tool call args for ${toolName}\n${JSON.stringify(args)}`;
-        return {
-          preprocessedArgs: undefined,
-          errorReason,
-          errorMessage,
-        };
-      }
-    });
-
-    on("isItemTooBig", async ({ data: { item } }) => {
-      return this.isItemTooBig(item);
-    });
-
-    // Process state handlers
-    on("process/markAsBackgrounded", async ({ data: { toolCallId } }) => {
-      markProcessAsBackgrounded(toolCallId);
-    });
-
-    on(
-      "process/isBackgrounded",
-      async ({ data: { toolCallId }, messageId }) => {
-        const isBackgrounded = isProcessBackgrounded(toolCallId);
-        return isBackgrounded; // Return true to indicate the message was handled successfully
-      },
-    );
-
-    on("process/killTerminalProcess", async ({ data: { toolCallId } }) => {
-      await killTerminalProcess(toolCallId);
-    });
-
-    on("models/fetch", async (msg) => {
-      try {
-        return await fetchModels(
-          msg.data.provider,
-          msg.data.apiKey,
-          msg.data.apiBase,
-        );
-      } catch (error: any) {
-        void this.ide.showToast("error", error.message);
-        return [];
-      }
-    });
+    for (const handlerModule of CORE_HANDLER_MODULES) {
+      handlerModule.register(ctx);
+    }
   }
 
   private async handleToolCall(toolCall: ToolCall) {
@@ -1811,6 +488,12 @@ export class Core {
     const provider = resolveStartTalkProvider(selected, preferredModel);
     const apiKey =
       provider === "openai-realtime" ? selected.openAiApiKey : selected.apiKey;
+    const fallbackProvider: StartTalkProvider =
+      provider === "openai-realtime" ? "gemini-live" : "openai-realtime";
+    const fallbackApiKey =
+      fallbackProvider === "openai-realtime"
+        ? selected.openAiApiKey
+        : selected.apiKey;
 
     if (!apiKey) {
       throw new Error(
@@ -1831,6 +514,21 @@ export class Core {
           ? selected.openAiVoiceName
           : selected.voiceName,
       ),
+      ...(fallbackApiKey
+        ? {
+            fallback: {
+              provider: fallbackProvider,
+              apiKey: fallbackApiKey,
+              model: resolveModelForProvider(fallbackProvider, selected.model),
+              voiceName: resolveVoiceForProvider(
+                fallbackProvider,
+                fallbackProvider === "openai-realtime"
+                  ? selected.openAiVoiceName
+                  : selected.voiceName,
+              ),
+            },
+          }
+        : {}),
     };
   }
 
@@ -1964,8 +662,7 @@ export class Core {
       return undefined;
     }
     return new WhatsAppAutoResponder({
-      generateReply: (prompt) =>
-        this.composeWhatsAppReplyWithClaudeCode(prompt),
+      generateReply: (prompt) => this.claudeCli.generateReply(prompt),
       authorizeCandidate: (candidate) =>
         this.channelService.authorizeIngress(candidate.source, candidate.sender)
           .allowed,
@@ -1978,121 +675,6 @@ export class Core {
     this.whatsappAutoResponder?.stop();
     this.whatsappAutoResponder = this.createWhatsAppAutoResponder();
     this.whatsappAutoResponder?.start();
-  }
-
-  /** Locates the Claude Code CLI (claude.cmd) so the responder can invoke it. */
-  private resolveClaudeCli(): string {
-    const explicit = process.env.LUMINA_CLAUDE_CLI?.trim();
-    if (explicit) {
-      return explicit;
-    }
-    const appdata = process.env.APPDATA;
-    if (appdata) {
-      const npmCmd = joinPath(appdata, "npm", "claude.cmd");
-      if (existsSync(npmCmd)) {
-        return npmCmd;
-      }
-    }
-    const local = process.env.LOCALAPPDATA;
-    if (local) {
-      const nvmRoot = joinPath(local, "nvm");
-      try {
-        const found = readdirSync(nvmRoot)
-          .map((version) => joinPath(nvmRoot, version, "claude.cmd"))
-          .filter((candidate) => existsSync(candidate))
-          .sort();
-        if (found.length > 0) {
-          return found[found.length - 1];
-        }
-      } catch {
-        // nvm not present; fall through to PATH.
-      }
-    }
-    return "claude"; // rely on PATH
-  }
-
-  /**
-   * Drafts a WhatsApp reply by invoking Claude Code headlessly (one turn, text
-   * out). The full prompt is piped over stdin so no message text ever lands in
-   * argv. Returns the reply text, or null on any failure (the caller audits it).
-   */
-  private composeWhatsAppReplyWithClaudeCode(prompt: {
-    system: string;
-    user: string;
-  }): Promise<string | null> {
-    return new Promise((resolve) => {
-      const cli = this.resolveClaudeCli();
-      // Persona/rules go in as a real system prompt via a file (no escaping of
-      // accents/quotes in argv); only the incoming message is piped over stdin.
-      const sysFile = joinPath(tmpdir(), "lumina-whatsapp-persona.txt");
-      try {
-        writeFileSync(sysFile, prompt.system, "utf8");
-      } catch {
-        resolve(null);
-        return;
-      }
-      let child;
-      try {
-        child = spawn(
-          cli,
-          [
-            "-p",
-            "--append-system-prompt-file",
-            sysFile,
-            "--output-format",
-            "text",
-            "--max-turns",
-            "1",
-          ],
-          {
-            cwd: tmpdir(), // neutral cwd: don't load this repo's CLAUDE.md/context
-            windowsHide: true,
-            shell: true,
-            env: process.env,
-          },
-        );
-      } catch {
-        resolve(null);
-        return;
-      }
-      let out = "";
-      let err = "";
-      const timer = setTimeout(() => {
-        try {
-          child.kill();
-        } catch {
-          // already gone
-        }
-        resolve(null);
-      }, 90_000);
-      child.stdout?.on("data", (chunk) => {
-        out += chunk.toString();
-      });
-      child.stderr?.on("data", (chunk) => {
-        err += chunk.toString();
-      });
-      child.on("error", () => {
-        clearTimeout(timer);
-        resolve(null);
-      });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        if (code === 0) {
-          resolve(out.trim() || null);
-        } else {
-          console.warn(
-            `[whatsapp-autoreply] claude exited ${code}: ${err.slice(0, 200)}`,
-          );
-          resolve(null);
-        }
-      });
-      try {
-        child.stdin?.write(prompt.user);
-        child.stdin?.end();
-      } catch {
-        // stdin closed early; the close handler resolves.
-      }
-    });
   }
 
   private handleAutoReplyAudit(entry: AutoReplyAuditEntry): void {
