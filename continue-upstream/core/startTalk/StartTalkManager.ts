@@ -38,6 +38,7 @@ import {
 } from "../privacy/permissions.js";
 import { SoundEventDetector } from "./SoundEventDetector.js";
 import { SpeculativeSearch } from "./SpeculativeSearch.js";
+import { describePlanForAgent, planSpokenTask } from "./TaskPlanner.js";
 import {
   ConversationTurnManager,
   isVoiceBackchannel,
@@ -1498,6 +1499,29 @@ export class StartTalkManager {
    * (`turnComplete: false`), así sabe que está en un grupo y aplica sus reglas
    * de cuándo intervenir sin ponerse a hablar por el simple aviso.
    */
+  /**
+   * Enumera los pasos de una orden hablada antes de delegarla.
+   *
+   * "Revisa el repositorio, encuentra por qué falla Start Talk, corrígelo y
+   * ejecuta las pruebas" llegaba al agente como una sola frase, y volvía con el
+   * primer paso hecho y los otros tres olvidados. La orden literal sigue yendo
+   * primero; la lista va debajo para que ninguno se pierda.
+   *
+   * Solo toca la delegación, y solo cuando la orden tiene de verdad varias
+   * partes: `planSpokenTask` devuelve `undefined` ante la duda y la tarea viaja
+   * exactamente como antes.
+   */
+  private planDelegatedTask(
+    name: string,
+    args: Record<string, unknown>,
+  ): Record<string, unknown> {
+    if (name !== DELEGATE_FUNCTION_NAME || typeof args.task !== "string") {
+      return args;
+    }
+    const plan = planSpokenTask(args.task);
+    return plan ? { ...args, task: describePlanForAgent(plan) } : args;
+  }
+
   /**
    * El usuario asintió mientras ella hablaba: se le pide que siga por donde
    * iba en lugar de tratar el "ajá" como una petición nueva.
@@ -3486,7 +3510,10 @@ export class StartTalkManager {
           call: {
             id,
             name: call.name,
-            args: (call.args as Record<string, unknown>) ?? {},
+            args: this.planDelegatedTask(
+              call.name,
+              (call.args as Record<string, unknown>) ?? {},
+            ),
             connectionEpoch: state?.connectionEpoch,
           },
         });

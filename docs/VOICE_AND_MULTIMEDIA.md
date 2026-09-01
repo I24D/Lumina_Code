@@ -163,6 +163,30 @@ Code puede delegar el razonamiento y las herramientas a su modelo principal
 autorización explícita. Así Start Talk no fuerza que el modelo de voz sea
 también el modelo que modifica código.
 
+### Órdenes habladas de varias partes
+
+«Revisa el repositorio, encuentra por qué falla Start Talk, corrígelo y ejecuta
+las pruebas» llegaba al agente como una sola frase, y volvía con el primer paso
+hecho y los otros tres olvidados. Antes de delegar, la orden se descompone en
+los pasos que contiene y se entregan numerados debajo de la frase literal.
+
+No interviene ningún modelo: una orden hablada de varias partes ya contiene sus
+partes como oraciones, y pedirle la descomposición a un LLM añadiría segundos y
+coste en mitad de una conversación. El agente replanifica por su cuenta de todas
+formas; esto solo se asegura de que reciba entera la lista de lo que se le pidió.
+
+El reparto es conservador a propósito y ante la duda no parte nada:
+
+- Hace falta que los fragmentos empiecen dando una orden, con una lista cerrada
+  de verbos. Reconocer un imperativo por la terminación se equivoca en español
+  —«el corrector corrige» no es una orden—, y un verbo que falte solo significa
+  no partir ahí, que es el comportamiento de siempre.
+- La coma y la «y» solo separan cuando lo que sigue es otra orden. Sin esa
+  condición, «busca el informe de ventas, ingresos y gastos» se convertiría en
+  tres tareas que nadie pidió.
+- Un solo paso no es un plan, y más de ocho ya no es una orden hablada: en
+  ambos casos la tarea viaja tal cual.
+
 ## Varias voces e identificación opcional
 
 Cuando hay voces solapadas, la interfaz informa **Varias voces detectadas** y
