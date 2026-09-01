@@ -3,9 +3,11 @@
  */
 
 import { setupCa } from "core/util/ca";
+import path from "node:path";
 import * as vscode from "vscode";
 
 import { stopLuminaRuntime } from "./extension/backendLifecycle";
+import { exportLuminaRoot } from "./extension/luminaRoot";
 
 export { default as buildTimestamp } from "./.buildTimestamp";
 
@@ -30,6 +32,30 @@ export async function activate(context: vscode.ExtensionContext) {
   const activationLogUri = vscode.Uri.joinPath(
     context.logUri,
     "activation.log",
+  );
+
+  // Instalada desde un VSIX, la extensión ya no vive dentro del repositorio, así
+  // que `core` no puede encontrar el `.env` de la raíz por su cuenta. Hay que
+  // fijarlo ANTES de importar nada de `core`, porque las claves se cachean en la
+  // primera lectura.
+  const luminaRoot = exportLuminaRoot(
+    (vscode.workspace.workspaceFolders ?? [])
+      .filter((folder) => folder.uri.scheme === "file")
+      .map((folder) => folder.uri.fsPath),
+  );
+  activationOutput.appendLine(
+    luminaRoot
+      ? `Lumina root: ${luminaRoot}`
+      : "Lumina root: sin .env en las carpetas abiertas; las capacidades con clave quedarán inactivas.",
+  );
+
+  // La biblioteca de skills viaja dentro del VSIX, en `skills/`. `core` no puede
+  // deducir esta ruta por su cuenta: instalada, la extensión vive en
+  // `~/.vscode/extensions`. En el árbol del repositorio la carpeta está en ese
+  // mismo sitio relativo, así que el desarrollo y la instalación coinciden.
+  process.env.LUMINA_BUNDLED_SKILLS_DIR = path.join(
+    context.extensionUri.fsPath,
+    "skills",
   );
 
   try {

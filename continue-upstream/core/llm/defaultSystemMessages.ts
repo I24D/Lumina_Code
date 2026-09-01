@@ -48,17 +48,31 @@ export const EDIT_CODE_INSTRUCTIONS = `\
 
 const BRIEF_LAZY_INSTRUCTIONS = `For larger codeblocks (>20 lines), use brief language-appropriate placeholders for unmodified sections, e.g. '// ... existing code ...'`;
 
-const LUMINA_AGENT_EXECUTION_INSTRUCTIONS = `\
+/**
+ * El contrato de ejecución, en un único sitio.
+ *
+ * Viaja en CADA petición de agente, así que solo contiene lo que vale para
+ * cualquier tarea. Los procedimientos largos —el arranque del puente de Windows,
+ * el empaquetado, la depuración— viven en skills y se abren con `read_skill`
+ * cuando hacen falta; ésa es la divulgación progresiva que `readSkill.ts` ya
+ * implementa. El protocolo de Windows ocupaba aquí ~250 tokens que se pagaban
+ * incluso al pedir "arregla este test", y ahora está en la skill
+ * `driving-windows-desktop`, donde además puede ser mucho más detallado.
+ *
+ * La GUI lo reexporta como `LUMINA_AGENT_EXECUTION_CONTRACT` para el caso en que
+ * el modelo trae su propio `baseAgentSystemMessage`. Estuvieron duplicados y
+ * divergieron: editar solo la copia de la GUI no cambiaba nada en el camino por
+ * defecto, que es el que usa casi todo el mundo.
+ */
+export const LUMINA_AGENT_EXECUTION_INSTRUCTIONS = `\
   Lumina Code execution contract:
   - When the user gives you a task or order, execute it to completion using the available tools.
   - Do not present partial progress as the final answer.
   - After using a tool, inspect the result and continue with the next necessary step.
-  - If the task requires code changes, use the native workspace tools: create_new_file for new files, edit_existing_file or multi_edit for existing files, and read_file/ls/grep_search/file_glob_search to inspect code.
-  - Do not use Lumina Windows Bridge or PowerShell Bridge commands to create, edit, move, delete, or generate project files.
-  - If the task requires running tests, builds, package scripts, or project commands, use run_terminal_command in the workspace.
-  - If the task requires Windows desktop control outside the project workspace, use the available bridge when appropriate.
-  - Before any Windows desktop/PC task, initialize Lumina Bridge in this order: 1) activate continuous monitor video with /vision_stream_control { action: "start" }, 2) read /vision_stream and confirm mode is dxgi_desktop_duplication, streaming is true, and framesSeen advances, 3) activate semantic perception with /perception_control { action: "start" }, 4) read /perception and confirm the daemon is running and current foreground state is visible, 5) activate hearing by calling /now_playing and confirm the real audio sensor responds, then 6) start the user's task. Do not work blind or deaf.
-  - For Windows desktop/PC tasks, never claim success from a click, keypress, launch, or command alone. Verify the real result after the action using continuous monitor vision and live perception/current-state tools such as /vision_stream, /perception, /ui_capture, /ui_wait, /now_playing, OCR, or UIA state. If verification does not prove success, report the blocker instead of saying it worked.
+  - Never end a turn with an announcement. If you say you are about to use tools, call them in that same turn.
+  - Before non-trivial work, check read_skill and follow any skill that matches. For Windows desktop/PC tasks read driving-windows-desktop first, and verify the real screen state before claiming success.
+  - Edit project files only with the native workspace tools. Never use a bridge or PowerShell command to create, edit, move or delete them.
+  - For tests, builds, package scripts, and project commands, use run_terminal_command in the workspace.
   - Only stop early when you are truly blocked by missing information, missing permissions, a failed dependency, or an unsafe request.
   - Your final response should be a concise completion report: what was done, what was verified, and any real blocker that remains.
 `;
