@@ -43,6 +43,8 @@ const OUTPUT_MIME = `audio/pcm;rate=${WIRE_SAMPLE_RATE}`;
  * degenerado (un clic, un corte justo al abrir) y evita un error inútil.
  */
 const MIN_COMMIT_MS = 120;
+const HEARTBEAT_INTERVAL_MS = 10_000;
+const HEARTBEAT_TIMEOUT_MS = 30_000;
 
 /** Devolver su resultado sin pedir respuesta es, literalmente, callarse. */
 const STAY_SILENT_FUNCTION_NAME = "stay_silent";
@@ -637,12 +639,32 @@ export function connectOpenAIRealtime({
     );
     const session = new OpenAIRealtimeSession(socket, model, config, callbacks);
     let settled = false;
+    let lastPongAt = Date.now();
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+
+    const stopHeartbeat = () => {
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = undefined;
+      }
+    };
 
     socket.on("open", () => {
       settled = true;
       session.configure();
       callbacks.onopen();
+      heartbeat = setInterval(() => {
+        if (Date.now() - lastPongAt > HEARTBEAT_TIMEOUT_MS) {
+          socket.terminate();
+          return;
+        }
+        socket.ping();
+      }, HEARTBEAT_INTERVAL_MS);
       resolve(session);
+    });
+
+    socket.on("pong", () => {
+      lastPongAt = Date.now();
     });
 
     socket.on("message", (data) => {
@@ -665,6 +687,7 @@ export function connectOpenAIRealtime({
     });
 
     socket.on("close", (code: number, reason: Buffer) => {
+      stopHeartbeat();
       if (!settled) {
         settled = true;
         reject(

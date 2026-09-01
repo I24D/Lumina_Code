@@ -124,6 +124,48 @@ describe("VoiceActivityGate", () => {
     expect(onActivityEnd).toHaveBeenCalledWith(700);
   });
 
+  it("permite que el gestor semántico extienda una pausa incompleta", () => {
+    const clock = { t: 0 };
+    const onActivityEnd = vi.fn();
+    const gate = new VoiceActivityGate(
+      {
+        onActivityStart: vi.fn(),
+        onAudio: vi.fn(),
+        onActivityEnd,
+        resolveEndpointSilenceMs: () => 940,
+      },
+      undefined,
+      () => clock.t,
+    );
+
+    feed(gate, clock, 300, 6000);
+    feed(gate, clock, 920, 0);
+    expect(onActivityEnd).not.toHaveBeenCalled();
+    feed(gate, clock, 20, 0);
+    expect(onActivityEnd).toHaveBeenCalledWith(940);
+  });
+
+  it("informa pausas internas para aprender el ritmo del usuario", () => {
+    const clock = { t: 0 };
+    const onSpeechPause = vi.fn();
+    const gate = new VoiceActivityGate(
+      {
+        onActivityStart: vi.fn(),
+        onAudio: vi.fn(),
+        onActivityEnd: vi.fn(),
+        onSpeechPause,
+      },
+      undefined,
+      () => clock.t,
+    );
+
+    feed(gate, clock, 300, 6000);
+    feed(gate, clock, 260, 0);
+    feed(gate, clock, 100, 6000);
+
+    expect(onSpeechPause).toHaveBeenCalledWith(260);
+  });
+
   it("detecta voz suave con huecos breves entre silabas", () => {
     const clock = { t: 0 };
     const { gate, onActivityStart, onAudio } = makeGate(clock);

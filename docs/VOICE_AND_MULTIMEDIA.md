@@ -36,6 +36,22 @@ Variables de entorno reconocidas, además de las claves:
 `START_TALK_OPENAI_TRANSCRIBE_MODEL`, `START_TALK_GEMINI_MODEL`,
 `START_TALK_GEMINI_VOICE` y `START_TALK_GEMINI_THINKING_LEVEL`.
 
+El runtime ya no depende directamente de una clase concreta de Gemini u
+OpenAI. `VoiceProviderRouter` registra proveedores bajo un contrato común y
+declara si su arquitectura es speech-to-speech (`native-realtime`) o el
+pipeline modular `stt-llm-tts`. Los adaptadores activos hoy son OpenAI
+Realtime y Gemini Live; el contrato modular está listo para conectar STT, LLM
+y TTS intercambiables sin tocar la interfaz, pero no se presenta como proveedor
+seleccionable hasta que exista un adaptador completo.
+
+Cuando las dos claves están configuradas, el proveedor no elegido queda como
+respaldo automático. Una conexión tiene un límite de 15 segundos y los fallos
+se clasifican (credenciales, configuración/modelo, cuota, rate limit, red o
+servidor). Los errores transitorios usan backoff exponencial con un máximo de
+ocho intentos; un error terminal o el agotamiento de reintentos cambia al
+proveedor secundario una sola vez. Si tampoco conecta, la UI pasa a **Error**
+con una causa concreta: nunca permanece indefinidamente en **Conectando**.
+
 Diferencias reales entre los dos, no cosméticas:
 
 - el grounding nativo de Búsqueda de Google solo existe en Gemini; en OpenAI la
@@ -47,19 +63,65 @@ Diferencias reales entre los dos, no cosméticas:
 
 ## Audio
 
-- El micrófono se abre dentro de WebView2 para usar la cancelación de eco,
+- El micrófono se abre dentro del navegador para usar la cancelación de eco,
   supresión de ruido y ganancia automática de WebRTC.
 - La selección de entrada usa el `deviceId` real. Dos micrófonos con la misma
   etiqueta visible siguen siendo seleccionables de forma independiente.
 - El audio se convierte a PCM mono de 16 kHz antes de entrar al gate de voz.
 - El gate adapta su piso de ruido, conserva límites máximos de turno y distingue
   voz, ruido no vocal y solapamiento sostenido de varias voces.
+- El cierre de turno combina VAD, la transcripción parcial, el estado de la
+  conversación y el ritmo aprendido. Respeta conectores o frases incompletas y
+  aprende la mediana de las pausas internas del hablante, siempre dentro de un
+  límite de 420 a 1600 ms para no dejar un turno colgado.
 - La cola de reproducción reporta su duración real a core. Esto evita que el
   micrófono vuelva a abrir el turno mientras la voz de Lumina aún está sonando.
+- Si desaparece el micrófono seleccionado o muere su pista, la GUI vuelve a
+  enumerar dispositivos y recupera la captura. Un cambio de lista que no afecta
+  al dispositivo activo no reinicia el audio.
 
 La pantalla avanzada muestra lo que Chromium aplicó realmente. Si aparece
 `sin AEC`, el dispositivo o el controlador no concedió cancelación de eco,
 aunque se haya solicitado.
+
+## Runtime de conversación, interrupción y cancelación
+
+`ConversationTurnManager` mantiene una máquina de estados observable:
+`IDLE`, `LISTENING`, `USER_SPEAKING`, `THINKING`, `ASSISTANT_SPEAKING`,
+`INTERRUPTED`, `TOOL_EXECUTION`, `RECONNECTING` y `ERROR`. La zona central de
+Lumina Live muestra ese estado aunque todavía no haya una tarjeta de
+herramienta, evitando que una espera parezca una congelación.
+
+El barge-in mantiene el micrófono activo y usa AEC más un gate dúplex para no
+confundir los altavoces con el usuario. Al confirmar una interrupción se vacía
+el reproductor, se invalida la generación del turno y se abortan búsquedas,
+recuperación de memoria y la tarea delegada al chat principal. La cancelación
+de esa tarea viaja con su `requestId`, por lo que no puede detener por accidente
+un chat escrito por el usuario. Los resultados tardíos se descartan mediante
+una generación monotónica y no vuelven a aparecer como respuestas fantasma.
+
+El modo `keyword` predeterminado detecta el gesto acústico breve de cortar la
+voz, pero no reconoce palabras localmente. `START_TALK_BARGE_IN=energy` habilita
+interrupción por habla sostenida y `off` fuerza half-duplex. El clasificador de
+backchannels está disponible para un futuro STT local paralelo; no se afirma
+que una interjección como «ajá» pueda clasificarse semánticamente antes de que
+el proveedor la transcriba.
+
+## Respuesta hablada y streaming
+
+Los proveedores realtime entregan transcripción y audio de forma incremental.
+Las respuestas finales que vienen del agente principal pasan por
+`VoiceResponseComposer`: el texto completo continúa visible en el chat, pero
+la voz omite bloques de código y URLs largas en lugar de leer caracteres sin
+utilidad. El segmentador incremental libera oraciones completas para el
+adaptador `stt-llm-tts`, de modo que un futuro TTS modular podrá comenzar antes
+de que termine toda la respuesta del LLM.
+
+Esta separación es intencional: el proveedor de voz escucha y habla; Lumina
+Code puede delegar el razonamiento y las herramientas a su modelo principal
+(Ollama Cloud, OpenAI, Anthropic u otro proveedor compatible) tras una
+autorización explícita. Así Start Talk no fuerza que el modelo de voz sea
+también el modelo que modifica código.
 
 ## Varias voces e identificación opcional
 
@@ -150,6 +212,33 @@ enviada, el proveedor, el resumen recibido y las fuentes citadas.
 La actividad conserva las 50 operaciones más recientes de la sesión para que
 una conversación larga no aumente la memoria sin límite.
 
+Los extractos y páginas recuperados se etiquetan internamente como
+`UNTRUSTED_EXTERNAL_DATA`. El prompt del sistema prohíbe tratarlos como órdenes
+o elevarlos por encima de las instrucciones del usuario. Mostrar una fuente no
+autoriza ejecutar acciones, y toda herramienta sensible conserva su política
+de permisos y confirmación.
+
+## Conexión, observabilidad y costo
+
+El puente local envía heartbeat cada cinco segundos, exige confirmación en un
+máximo de quince y reconecta con backoff limitado. La sesión del proveedor
+mantiene su propia recuperación; OpenAI añade ping/pong de transporte y Gemini
+conserva sus handles de reanudación cuando la API los ofrece.
+
+Por turno se miden duración de voz de entrada, primer parcial STT, primer token
+de texto, endpointing, red/modelo hasta el primer audio, tiempo de herramientas,
+audio de salida, delivery rate, interrupción y falso positivo. La sesión agrega
+mediana/p90, reconexiones, búsquedas, llamadas de herramientas y segundos de
+audio. El costo solo se estima si el operador configura tarifas explícitas:
+
+- `START_TALK_COST_INPUT_AUDIO_USD_PER_MINUTE`
+- `START_TALK_COST_OUTPUT_AUDIO_USD_PER_MINUTE`
+- `START_TALK_COST_TOOL_CALL_USD`
+
+No se inventan precios ni costos de tokens que el proveedor no haya reportado.
+La telemetría queda en memoria para diagnóstico de la sesión y no contiene el
+audio ni las claves.
+
 ## Diagnóstico rápido
 
 1. Abre **Ajustes de conversación → Entrada de audio** y actualiza la lista.
@@ -159,3 +248,5 @@ una conversación larga no aumente la memoria sin límite.
 4. Comprueba que la clave del proveedor activo (`OPENAI_API_KEY` o
    `GEMINI_API_KEY`) esté puesta y que el modelo sea de ese mismo proveedor.
 5. Mantén la biometría apagada si no has instalado su backend opcional.
+6. Si hubo una interrupción, comprueba que la tarea delegada aparezca cancelada
+   en el chat y no continúe ejecutando herramientas en segundo plano.

@@ -11,6 +11,7 @@ import type {
   StartTalkVideoPhase,
   StartTalkVideoSource,
   StartTalkVideoSourceInfo,
+  VoiceRuntimeState,
 } from "core/startTalk";
 import { getStartTalkRetryDelayMs } from "core/startTalk/resiliencePolicy";
 import { evaluateSurfaceAuthorization } from "@continuedev/terminal-security";
@@ -181,6 +182,15 @@ export function useStartTalkAudio({
   const ideMessenger = useContext(IdeMessengerContext);
   const isStreaming = useAppSelector((store) => store.session.isStreaming);
   const sessionIdRef = useRef<string | null>(null);
+  // Pending agent tasks delegated from Start Talk. Keeping the request ids here
+  // lets interruption and shutdown cancel the exact main-chat generation that
+  // belongs to this voice surface.
+  const pendingMainRef = useRef(
+    new Map<
+      string,
+      { resolve: (text: string) => void; reject: (error: Error) => void }
+    >(),
+  );
   const assistantTurnActiveRef = useRef(false);
   const assistantTranscriptRef = useRef("");
   const isStreamingRef = useRef(isStreaming);
@@ -198,6 +208,10 @@ export function useStartTalkAudio({
   const startMicCaptureRef = useRef<(deviceId?: string) => Promise<void>>(
     async () => undefined,
   );
+  const recoverMicrophoneRef = useRef<() => Promise<void>>(
+    async () => undefined,
+  );
+  const micRecoveryTimerRef = useRef<ReturnType<typeof setTimeout>>();
   // Para detectar el instante en que la cola se vacia: el worklet no emite un
   // evento tipo `source.onended`, asi que el flanco se detecta por sondeo.
   const wasPlayingRef = useRef(false);
@@ -264,6 +278,8 @@ export function useStartTalkAudio({
   // initial configuration/device failure must remain visible to the user.
   const recoverActiveSessionRef = useRef(false);
   const [status, setStatus] = useState<StartTalkStatus>("idle");
+  const [runtimeState, setRuntimeState] =
+    useState<VoiceRuntimeState>("IDLE");
   // Modelo y proveedor que core resolvió de verdad. Con "Automático" el orbe no
   // sabe cuál va a ser hasta conectar, y decir un modelo distinto del que suena
   // sería mentir sobre lo que el usuario está oyendo.
@@ -394,6 +410,15 @@ export function useStartTalkAudio({
 
   const resetNotificationQueue = useCallback(() => {
     clearNotificationTimers();
+    // Lo que seguía en cola sin haberse leído vuelve a contar como NO visto.
+    // Sin esto se perdía para siempre: la sesión se cierra, la cola se vacía,
+    // el monitor nuevo reemite las mismas notificaciones al reconectar y esta
+    // misma cola las descarta por repetidas, así que jamás llegaban a sonar.
+    for (const pending of notificationQueueRef.current.concat(
+      notificationBatchInFlightRef.current,
+    )) {
+      seenNotificationIdsRef.current.delete(pending.id);
+    }
     notificationQueueRef.current = [];
     notificationBatchInFlightRef.current = [];
     notificationInFlightRef.current = false;
@@ -488,18 +513,35 @@ export function useStartTalkAudio({
     handlePlaybackIdleRef.current();
   }, [reportPlayback]);
 
+  const cancelPendingMainTasks = useCallback(
+    (reason: string) => {
+      for (const [requestId, pending] of pendingMainRef.current) {
+        pendingMainRef.current.delete(requestId);
+        pending.reject(new Error(reason));
+        ideMessenger.post("startTalk/cancelMain", { requestId, reason });
+      }
+    },
+    [ideMessenger],
+  );
+
   const stopListening = useCallback(async () => {
     const sessionId = sessionIdRef.current;
 
     recoverActiveSessionRef.current = false;
     clearSessionRecoveryTimer();
     void micCaptureRef.current?.stop();
+    if (micRecoveryTimerRef.current) {
+      clearTimeout(micRecoveryTimerRef.current);
+      micRecoveryTimerRef.current = undefined;
+    }
     stopPlayback();
     resetNotificationQueue();
     resetChatResponseQueue();
+    cancelPendingMainTasks("La sesión de Start Talk se cerró.");
     settleDelegationApproval(false);
     sessionIdRef.current = null;
     setStatus("idle");
+    setRuntimeState("IDLE");
     setActiveSession(null);
     setIsCrowded(false);
     setMicSettings(null);
@@ -520,6 +562,7 @@ export function useStartTalkAudio({
     ideMessenger,
     resetChatResponseQueue,
     resetNotificationQueue,
+    cancelPendingMainTasks,
     clearSessionRecoveryTimer,
     settleDelegationApproval,
     stopPlayback,
@@ -904,15 +947,6 @@ export function useStartTalkAudio({
   ]);
   handlePlaybackIdleRef.current = handlePlaybackIdle;
 
-  // Pending voice-delegation requests routed to the main chat, keyed by
-  // requestId, resolved when the sidebar posts its final answer.
-  const pendingMainRef = useRef(
-    new Map<
-      string,
-      { resolve: (text: string) => void; reject: (error: Error) => void }
-    >(),
-  );
-
   const enqueueChatResponse = useCallback(
     (response: ChatResponseAnnouncement) => {
       const text = response.text.trim();
@@ -957,6 +991,13 @@ export function useStartTalkAudio({
         } else {
           pending.resolve(data.text ?? "");
         }
+        return;
+      }
+
+      // A cancellation acknowledgement can arrive after the orb already
+      // rejected and removed its local promise. It is status, not an assistant
+      // answer, so never enqueue it for speech as an unmatched chat response.
+      if (data.error) {
         return;
       }
 
@@ -1248,6 +1289,11 @@ export function useStartTalkAudio({
         return;
       }
 
+      if (event.type === "runtimeState") {
+        setRuntimeState(event.state);
+        return;
+      }
+
       if (event.type === "audio") {
         serverTurnCompleteRef.current = false;
         if (!assistantTurnActiveRef.current) {
@@ -1360,6 +1406,9 @@ export function useStartTalkAudio({
       }
 
       if (event.type === "interrupted") {
+        cancelPendingMainTasks(
+          "La tarea se canceló porque el usuario interrumpió el turno de voz.",
+        );
         requeueCurrentChatResponse();
         stopPlayback();
         finishCurrentNotificationBatch();
@@ -1387,6 +1436,41 @@ export function useStartTalkAudio({
         }
         notificationQueueRef.current = notificationQueueRef.current
           .concat(event.notification)
+          .slice(-MAX_QUEUED_NOTIFICATIONS);
+        setPendingNotificationCount(notificationQueueRef.current.length);
+        scheduleNotificationFlush();
+        return;
+      }
+
+      if (event.type === "weatherAlert") {
+        // Un aviso meteorológico entra por la MISMA cola que las
+        // notificaciones: así respeta el turno de Lumina en vez de pisarla, y
+        // hereda la deduplicación por id. Para el usuario es una notificación
+        // más, solo que la origina el tiempo y no una app.
+        if (!announceNotificationsRef.current) {
+          return;
+        }
+        if (
+          !rememberNotificationOnce(
+            seenNotificationIdsRef.current,
+            event.alertId,
+          )
+        ) {
+          return;
+        }
+        const detail = [event.areas, event.expires ? `hasta ${event.expires}` : ""]
+          .filter(Boolean)
+          .join(" · ");
+        notificationQueueRef.current = notificationQueueRef.current
+          .concat({
+            id: event.alertId,
+            appName: "Aviso meteorológico",
+            title: event.headline,
+            body: detail || undefined,
+            createdAt: new Date().toISOString(),
+            textElements: [],
+            sourceKind: "windows",
+          })
           .slice(-MAX_QUEUED_NOTIFICATIONS);
         setPendingNotificationCount(notificationQueueRef.current.length);
         scheduleNotificationFlush();
@@ -1444,6 +1528,7 @@ export function useStartTalkAudio({
       }
     },
     [
+      cancelPendingMainTasks,
       handleToolCall,
       finishCurrentNotificationBatch,
       ideMessenger,
@@ -1647,6 +1732,15 @@ export function useStartTalkAudio({
         onError: (message) => {
           setErrorMessage(message);
         },
+        onDeviceLost: () => {
+          if (micRecoveryTimerRef.current) {
+            clearTimeout(micRecoveryTimerRef.current);
+          }
+          micRecoveryTimerRef.current = setTimeout(() => {
+            micRecoveryTimerRef.current = undefined;
+            void recoverMicrophoneRef.current();
+          }, 500);
+        },
       });
 
       setMicSettings(applied);
@@ -1655,6 +1749,56 @@ export function useStartTalkAudio({
     [ideMessenger],
   );
   startMicCaptureRef.current = startMicCapture;
+
+  const recoverMicrophone = useCallback(async () => {
+    if (!sessionIdRef.current || !shouldStayActiveRef.current) {
+      return;
+    }
+    const devices = await listAudioDevices();
+    const selected = selectedMicIdRef.current;
+    const target = devices.some((device) => device.deviceId === selected)
+      ? selected
+      : undefined;
+    try {
+      await startMicCaptureRef.current(target);
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo recuperar el micrófono.",
+      );
+    }
+  }, [listAudioDevices]);
+  recoverMicrophoneRef.current = recoverMicrophone;
+
+  // Chromium emits `devicechange` when the default input changes, a USB/Bluetooth
+  // microphone disconnects, or a new one appears. Keep the live session and
+  // reopen only when the selected track is gone; adding a device must not cause
+  // an audible interruption.
+  useEffect(() => {
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.addEventListener) {
+      return;
+    }
+    const onDeviceChange = () => {
+      void listAudioDevices().then((devices) => {
+        const selected = selectedMicIdRef.current;
+        const selectedStillExists =
+          !selected || devices.some((device) => device.deviceId === selected);
+        if (
+          sessionIdRef.current &&
+          (!micCaptureRef.current?.isActive() || !selectedStillExists)
+        ) {
+          void recoverMicrophoneRef.current();
+        }
+      });
+    };
+    mediaDevices.addEventListener("devicechange", onDeviceChange);
+    return () => {
+      mediaDevices.removeEventListener("devicechange", onDeviceChange);
+    };
+  }, [listAudioDevices]);
 
   const exportTranscript = useCallback(async (): Promise<
     StartTalkTranscriptEntry[]
@@ -1837,6 +1981,10 @@ export function useStartTalkAudio({
         clearTimeout(turnStuckTimerRef.current);
         turnStuckTimerRef.current = undefined;
       }
+      if (micRecoveryTimerRef.current) {
+        clearTimeout(micRecoveryTimerRef.current);
+        micRecoveryTimerRef.current = undefined;
+      }
       if (chatResponseWatchdogRef.current) {
         clearTimeout(chatResponseWatchdogRef.current);
         chatResponseWatchdogRef.current = undefined;
@@ -1857,6 +2005,7 @@ export function useStartTalkAudio({
     isActive: Boolean(sessionIdRef.current),
     startListening,
     status,
+    runtimeState,
     stopListening,
     stopSpeaking: stopPlayback,
     restartListening,

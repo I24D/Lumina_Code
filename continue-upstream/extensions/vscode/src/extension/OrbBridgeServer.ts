@@ -311,6 +311,19 @@ export class OrbBridgeServer {
         return; // mensaje malformado: ignorar
       }
 
+      if (String(msg.messageType) === "__lumina/heartbeat") {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              messageType: "__lumina/heartbeatAck",
+              messageId: String(msg.messageId),
+              data: { at: Date.now() },
+            }),
+          );
+        }
+        return;
+      }
+
       if (msg.messageType === "startTalk/connect") {
         pendingConnectMessageIds.add(String(msg.messageId));
       } else if (msg.messageType === "startTalk/stop") {

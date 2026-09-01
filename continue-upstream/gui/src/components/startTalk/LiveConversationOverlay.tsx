@@ -1559,6 +1559,7 @@ export function LiveConversationOverlay({
     restartListening,
     startListening,
     status,
+    runtimeState,
     stopSpeaking,
     toolActivities,
     transcriptEntries,
@@ -2378,6 +2379,7 @@ export function LiveConversationOverlay({
             micLevel={micLevel}
             onOpenUrl={(url) => ideMessenger.post("openUrl", url)}
             status={visualStatus}
+            runtimeState={designPreview ? "LISTENING" : runtimeState}
             toolActivities={toolActivities}
             transcriptEntries={transcriptEntries}
             userTranscript={userTranscript}

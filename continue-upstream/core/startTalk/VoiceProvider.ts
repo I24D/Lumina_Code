@@ -53,6 +53,89 @@ export interface LiveSessionCallbacks {
   onclose: (event: { code: number; reason?: string }) => void;
 }
 
+export type VoiceArchitecture =
+  | "native-speech-to-speech"
+  | "stt-llm-tts";
+
+export type VoiceTransport = "webrtc" | "websocket" | "local";
+
+export interface VoiceProviderCapabilities {
+  architecture: VoiceArchitecture;
+  transport: VoiceTransport;
+  streamingInput: boolean;
+  streamingOutput: boolean;
+  tools: boolean;
+  vision: boolean;
+}
+
+export interface VoiceProviderAdapter<TContext> {
+  id: string;
+  capabilities: VoiceProviderCapabilities;
+  connect(context: TContext): Promise<LiveSessionHandle>;
+}
+
+/**
+ * Architecture-neutral provider registry. Start Talk's UI/runtime only asks
+ * for a provider id; native realtime and future STT→LLM→TTS/local adapters can
+ * implement the same lifecycle without adding another branch to the manager.
+ */
+export class VoiceProviderRouter<TContext> {
+  private readonly adapters = new Map<string, VoiceProviderAdapter<TContext>>();
+
+  register(adapter: VoiceProviderAdapter<TContext>): void {
+    if (this.adapters.has(adapter.id)) {
+      throw new Error(`Voice provider '${adapter.id}' is already registered.`);
+    }
+    this.adapters.set(adapter.id, adapter);
+  }
+
+  capabilities(provider: string): VoiceProviderCapabilities | undefined {
+    return this.adapters.get(provider)?.capabilities;
+  }
+
+  async connect(
+    provider: string,
+    context: TContext,
+    timeoutMs = 15_000,
+  ): Promise<LiveSessionHandle> {
+    const adapter = this.adapters.get(provider);
+    if (!adapter) {
+      throw new Error(`Voice provider '${provider}' is not registered.`);
+    }
+    const pending = adapter.connect(context);
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+      return pending;
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+    try {
+      return await Promise.race([
+        pending,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => {
+            timedOut = true;
+            reject(
+              new Error(
+                `Voice provider '${provider}' did not connect within ${timeoutMs} ms.`,
+              ),
+            );
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      if (timedOut) {
+        // If the SDK eventually resolves after the timeout, close that orphan
+        // socket instead of leaving a paid realtime session running invisibly.
+        void pending.then((session) => session.close()).catch(() => undefined);
+      }
+    }
+  }
+}
+
 export function isSupportedVoiceProvider(
   value: string | undefined,
 ): value is StartTalkProvider {

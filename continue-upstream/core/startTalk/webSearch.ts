@@ -182,9 +182,16 @@ export function resolveProviderOrder(): string[] {
 async function fetchJson(
   url: string,
   init: RequestInit,
+  externalSignal?: AbortSignal,
 ): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
+  const abortFromCaller = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) {
+    abortFromCaller();
+  } else {
+    externalSignal?.addEventListener("abort", abortFromCaller, { once: true });
+  }
   try {
     const response = await fetch(url, { ...init, signal: controller.signal });
     if (!response.ok) {
@@ -195,6 +202,7 @@ async function fetchJson(
     return null;
   } finally {
     clearTimeout(timer);
+    externalSignal?.removeEventListener("abort", abortFromCaller);
   }
 }
 
@@ -205,25 +213,30 @@ async function fetchJson(
 async function searchTavily(
   query: string,
   limits: VoiceSearchLimits,
+  signal?: AbortSignal,
 ): Promise<VoiceSearchPayload | null> {
   const apiKey = readLuminaEnv("TAVILY_API_KEY");
   if (!apiKey) {
     return null;
   }
 
-  const data = await fetchJson("https://api.tavily.com/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+  const data = await fetchJson(
+    "https://api.tavily.com/search",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        query,
+        max_results: Math.max(1, limits.maxSources),
+        search_depth: "basic", // "advanced" duplica la latencia; en voz no compensa
+        include_answer: true,
+      }),
     },
-    body: JSON.stringify({
-      query,
-      max_results: Math.max(1, limits.maxSources),
-      search_depth: "basic", // "advanced" duplica la latencia; en voz no compensa
-      include_answer: true,
-    }),
-  });
+    signal,
+  );
   if (!data) {
     return null;
   }
@@ -248,6 +261,7 @@ async function searchTavily(
 async function searchBrave(
   query: string,
   limits: VoiceSearchLimits,
+  signal?: AbortSignal,
 ): Promise<VoiceSearchPayload | null> {
   const apiKey = readLuminaEnv("BRAVE_API_KEY");
   if (!apiKey) {
@@ -257,13 +271,17 @@ async function searchBrave(
   const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(
     query,
   )}&count=${Math.max(1, limits.maxSources)}`;
-  const data = await fetchJson(url, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      "X-Subscription-Token": apiKey,
+  const data = await fetchJson(
+    url,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "X-Subscription-Token": apiKey,
+      },
     },
-  });
+    signal,
+  );
   if (!data) {
     return null;
   }
@@ -292,6 +310,7 @@ async function searchBrave(
 export async function searchWebForVoice(
   query: string,
   limits: VoiceSearchLimits = DEFAULT_VOICE_SEARCH_LIMITS,
+  signal?: AbortSignal,
 ): Promise<VoiceSearchOutcome> {
   const clean = String(query ?? "").trim();
   if (!clean) {
@@ -304,6 +323,7 @@ export async function searchWebForVoice(
       run: (
         q: string,
         l: VoiceSearchLimits,
+        signal?: AbortSignal,
       ) => Promise<VoiceSearchPayload | null>;
       keyName: string;
     }
@@ -318,6 +338,9 @@ export async function searchWebForVoice(
   // `search_unavailable`, que apunta al proveedor y no al sitio real del fallo.
   let anyKeyPresent = false;
   for (const name of order) {
+    if (signal?.aborted) {
+      return { error: "cancelled" };
+    }
     const provider = providers[name];
     if (!provider) {
       continue;
@@ -326,7 +349,7 @@ export async function searchWebForVoice(
       continue;
     }
     anyKeyPresent = true;
-    const result = await provider.run(clean, limits);
+    const result = await provider.run(clean, limits, signal);
     if (result) {
       return result;
     }

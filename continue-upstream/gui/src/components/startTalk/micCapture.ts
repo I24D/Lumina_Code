@@ -85,6 +85,8 @@ export interface MicCaptureHandlers {
   /** PCM s16le mono a 16 kHz, listo para Gemini Live. */
   onAudio: (pcm: Int16Array) => void;
   onError: (message: string) => void;
+  /** The active input vanished and the caller should select/reopen a device. */
+  onDeviceLost?: () => void;
 }
 
 /** Lo que Chromium acabó aplicando de verdad, según `track.getSettings()`. */
@@ -122,6 +124,7 @@ export class MicCapture {
   private node?: AudioWorkletNode;
   private source?: MediaStreamAudioSourceNode;
   private settings?: MicCaptureSettings;
+  private generation = 0;
 
   /**
    * Abre el micrófono con el procesamiento de Chromium activado y empieza a
@@ -132,6 +135,7 @@ export class MicCapture {
     handlers: MicCaptureHandlers,
   ): Promise<MicCaptureSettings> {
     await this.stop();
+    const generation = ++this.generation;
 
     // Estas tres restricciones son el motivo de existir de este módulo. Sin
     // `echoCancellation` no hay full-duplex: el micro recaptura la voz de
@@ -201,7 +205,11 @@ export class MicCapture {
 
     // Si el usuario desconecta el micro, la pista muere y hay que avisar.
     track.addEventListener("ended", () => {
+      if (generation !== this.generation) {
+        return;
+      }
       handlers.onError("El micrófono se desconectó.");
+      handlers.onDeviceLost?.();
     });
 
     if (context.state === "suspended") {
@@ -231,6 +239,8 @@ export class MicCapture {
   }
 
   async stop(): Promise<void> {
+    // Invalidates the old track's `ended` callback before calling track.stop().
+    this.generation += 1;
     this.node?.port.close();
     this.source?.disconnect();
     this.node?.disconnect();

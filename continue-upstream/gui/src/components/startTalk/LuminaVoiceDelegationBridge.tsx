@@ -6,6 +6,7 @@ import { useWebviewListener } from "../../hooks/useWebviewListener";
 import { useAppDispatch } from "../../redux/hooks";
 import { setMode } from "../../redux/slices/sessionSlice";
 import type { RootState } from "../../redux/store";
+import { cancelStream } from "../../redux/thunks/cancelStream";
 import { streamResponseThunk } from "../../redux/thunks/streamResponse";
 import {
   buildDelegatedPrompt,
@@ -35,9 +36,11 @@ export function LuminaVoiceDelegationBridge() {
   const store = useStore<RootState>();
 
   // The delegation currently running in the sidebar (if any).
-  const pendingRef = useRef<{ requestId: string; started: boolean } | null>(
-    null,
-  );
+  const pendingRef = useRef<{
+    requestId: string;
+    started: boolean;
+    cancelled: boolean;
+  } | null>(null);
   const turnStartedRef = useRef(false);
   const initialSession = store.getState().session;
   const trackedSessionIdRef = useRef(initialSession.id);
@@ -72,6 +75,13 @@ export function LuminaVoiceDelegationBridge() {
       }
 
       const pending = pendingRef.current;
+      // A cancellation dispatch changes several Redux fields synchronously.
+      // Keep the ownership marker until the cancellation listener has finished
+      // so a partial assistant message is never misreported as an ordinary
+      // typed-chat answer and spoken after the user interrupted it.
+      if (pending?.cancelled) {
+        return;
+      }
       if (!turnStartedRef.current && !pending?.started) {
         return;
       }
@@ -135,7 +145,7 @@ export function LuminaVoiceDelegationBridge() {
         return;
       }
 
-      pendingRef.current = { requestId, started: false };
+      pendingRef.current = { requestId, started: false, cancelled: false };
 
       try {
         if (store.getState().session.mode === "chat") {
@@ -160,6 +170,40 @@ export function LuminaVoiceDelegationBridge() {
             true,
           );
         }
+      }
+    },
+    [dispatch, ideMessenger, store],
+  );
+
+  useWebviewListener(
+    "startTalk/cancelRunInMain",
+    async ({ requestId, reason }) => {
+      if (isOrbWindow()) {
+        return;
+      }
+
+      const pending = pendingRef.current;
+      if (!pending || pending.requestId !== requestId || pending.cancelled) {
+        return;
+      }
+
+      pending.cancelled = true;
+      console.log(`[VoiceDelegation] cancelling delegated turn: ${requestId}`);
+      await dispatch(cancelStream());
+
+      if (pendingRef.current?.requestId === requestId) {
+        const session = store.getState().session;
+        lastReportedResponseKeyRef.current = getLatestAssistantResponse(
+          session.history,
+          session.id,
+        )?.key;
+        pendingRef.current = null;
+        turnStartedRef.current = false;
+        ideMessenger.post("startTalk/mainResult", {
+          requestId,
+          text: reason || "La tarea se canceló al interrumpir el turno de voz.",
+          error: true,
+        });
       }
     },
     [dispatch, ideMessenger, store],

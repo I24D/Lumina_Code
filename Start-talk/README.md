@@ -74,10 +74,23 @@ flags experimentales del navegador:
   arranque, de modo que un servicio opcional caído no bloquee Lumina Live;
 - diagnóstico visible que separa la latencia total percibida de la latencia de
   red/modelo del último turno.
+- máquina de estados de conversación visible, endpointing semántico/adaptativo
+  y recuperación automática si desaparece el micrófono activo;
+- router multiproveedor con timeout, backoff limitado y fallback automático
+  entre OpenAI Realtime y Gemini Live cuando ambas claves están configuradas;
+- cancelación real por turno: una interrupción aborta audio, búsquedas y la
+  tarea delegada exacta del agente, sin detener chats manuales no relacionados.
 
 El VAD manual es deliberado: evita que el eco o una voz de fondo interrumpan a
 Lumina, permite conservar el barge-in autorizado y mantiene límites especiales
 para conversaciones con varias personas.
+
+Las respuestas finales delegadas al agente conservan código, URLs y detalles
+en pantalla, pero un compositor de voz evita leer bloques de código o enlaces
+largos literalmente. Las métricas incluyen primer parcial STT, primer token,
+tiempo de herramientas, primer audio, percentiles de latencia y duración real
+de audio. Las tarifas opcionales para estimar costo están documentadas en la
+[guía de voz y multimedia](../docs/VOICE_AND_MULTIMEDIA.md).
 
 ## Desarrollo
 

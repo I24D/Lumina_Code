@@ -67,6 +67,30 @@ describe("TurnMetricsTracker", () => {
     expect(metrics.responseLatencyMs).toBe(1_120);
   });
 
+  it("separa STT, primer token, herramienta y primer audio", () => {
+    const { clock, tracker } = makeTracker();
+    clock.t = 1_000;
+    tracker.onActivityStart();
+    clock.t = 1_180;
+    tracker.onUserTranscript("busca esto");
+    clock.t = 2_000;
+    tracker.onActivityEnd(520);
+    tracker.onToolCall("search");
+    clock.t = 2_350;
+    tracker.onToolResult("search");
+    clock.t = 2_420;
+    tracker.onAssistantTranscript("Encontré");
+    clock.t = 2_600;
+    tracker.onAssistantAudio(secondsOfAudio(0.2), 24_000);
+
+    expect(tracker.onTurnComplete()).toMatchObject({
+      sttFirstPartialMs: 180,
+      llmFirstTokenMs: 420,
+      toolLatencyMs: 350,
+      serverResponseLatencyMs: 600,
+    });
+  });
+
   it("mide la velocidad de entrega, que es lo que llena la cola", () => {
     const { clock, tracker } = makeTracker();
 
@@ -194,5 +218,34 @@ describe("TurnMetricsTracker", () => {
     expect(session.reconnects).toBe(1);
     expect(session.videoRestarts).toBe(1);
     expect(session.searches).toBe(1);
+  });
+
+  it("accounts only for audio that crossed the VAD and actual tool calls", () => {
+    const { tracker } = makeTracker();
+    tracker.onActivityStart();
+    tracker.onUserAudio(16_000 * 2 * 2, 16_000);
+    tracker.onActivityEnd();
+    tracker.onAssistantAudio(secondsOfAudio(3), 24_000);
+    tracker.onToolCall();
+
+    const turn = tracker.onTurnComplete()!;
+    const session = tracker.sessionMetrics();
+    expect(turn.inputAudioSeconds).toBe(2);
+    expect(session.inputAudioSeconds).toBe(2);
+    expect(session.assistantAudioSeconds).toBe(3);
+    expect(session.toolCalls).toBe(1);
+  });
+
+  it("only reports a cost when explicit rates were configured", () => {
+    const tracker = new TurnMetricsTracker(() => 0, {
+      inputAudioUsdPerMinute: 0.06,
+      outputAudioUsdPerMinute: 0.12,
+      toolCallUsd: 0.01,
+    });
+    tracker.onUserAudio(16_000 * 2 * 60, 16_000);
+    tracker.onAssistantAudio(24_000 * 2 * 60, 24_000);
+    tracker.onToolCall();
+
+    expect(tracker.sessionMetrics().estimatedCostUsd).toBe(0.19);
   });
 });

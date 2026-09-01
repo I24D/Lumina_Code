@@ -96,6 +96,7 @@ export const WEBVIEW_TO_CORE_PASS_THROUGH: (keyof ToCoreFromWebviewProtocol)[] =
     "startTalk/authorizeReply",
     "startTalk/getTranscript",
     "startTalk/delegateToMain",
+    "startTalk/cancelMain",
     "startTalk/mainResult",
     "startTalk/endAudio",
     "startTalk/stop",
@@ -169,5 +170,6 @@ export const CORE_TO_WEBVIEW_PASS_THROUGH: (keyof ToWebviewFromCoreProtocol)[] =
     "toolCallPartialOutput",
     "startTalk/event",
     "startTalk/runInMain",
+    "startTalk/cancelRunInMain",
     "startTalk/mainResultReady",
   ];

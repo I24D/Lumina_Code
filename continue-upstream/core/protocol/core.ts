@@ -460,6 +460,13 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     },
     void,
   ];
+  "startTalk/cancelMain": [
+    {
+      requestId: string;
+      reason?: string;
+    },
+    void,
+  ];
   "startTalk/mainResult": [
     { requestId: string; text: string; error?: boolean },
     void,

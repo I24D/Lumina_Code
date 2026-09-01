@@ -6,6 +6,7 @@ export type {
   StartTalkCoreEvent,
   StartTalkCaptureRequest,
   StartTalkFunctionCall,
+  StartTalkFallbackConfig,
   StartTalkMode,
   StartTalkMuteRequest,
   StartTalkNotification,
@@ -29,4 +30,5 @@ export type {
   StartTalkVideoSource,
   StartTalkVideoSourceInfo,
   StartTalkVideoStartRequest,
+  VoiceRuntimeState,
 } from "./types.js";

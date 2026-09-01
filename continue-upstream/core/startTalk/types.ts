@@ -104,6 +104,14 @@ export interface StartTalkConnectResponse {
   provider: StartTalkProvider;
 }
 
+/** Fully resolved secondary realtime provider; secrets never cross the webview. */
+export interface StartTalkFallbackConfig {
+  provider: StartTalkProvider;
+  apiKey: string;
+  model?: string;
+  voiceName?: string;
+}
+
 export interface StartTalkAudioChunk {
   sessionId: string;
   data: string;
@@ -216,8 +224,13 @@ import type {
   StartTalkSessionMetrics,
   StartTalkTurnMetrics,
 } from "./TurnMetrics.js";
+import type { VoiceRuntimeState } from "./ConversationTurnManager.js";
 
-export type { StartTalkSessionMetrics, StartTalkTurnMetrics };
+export type {
+  StartTalkSessionMetrics,
+  StartTalkTurnMetrics,
+  VoiceRuntimeState,
+};
 
 /** Fase del stream de vídeo, para que la UI no mienta sobre lo que Lumina ve. */
 export type StartTalkVideoPhase = "starting" | "live" | "stopped" | "error";
@@ -279,6 +292,15 @@ export type StartTalkCoreEvent =
       status: StartTalkConnectionStatus;
       message?: string;
       model?: string;
+    }
+  | {
+      /** Precise state of the continuous voice runtime, independent of socket status. */
+      type: "runtimeState";
+      sessionId: string;
+      state: VoiceRuntimeState;
+      turnId: number;
+      changedAt: number;
+      reason?: string;
     }
   | {
       type: "audio";
@@ -376,6 +398,17 @@ export type StartTalkCoreEvent =
       sessionId: string;
       status: StartTalkNotificationAccess;
       message?: string;
+    }
+  | {
+      // Un aviso meteorológico oficial recién aparecido. Va por la misma cola
+      // de anuncios que las notificaciones para no pisar a Lumina hablando.
+      type: "weatherAlert";
+      sessionId: string;
+      alertId: string;
+      headline: string;
+      severity?: string;
+      areas?: string;
+      expires?: string;
     }
   | {
       // Real-time microphone input level for the audio-reactive visualizer.

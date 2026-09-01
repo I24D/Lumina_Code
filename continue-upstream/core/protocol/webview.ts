@@ -53,6 +53,10 @@ export type ToWebviewFromIdeOrCoreProtocol = {
     },
     void,
   ];
+  "startTalk/cancelRunInMain": [
+    { requestId: string; reason?: string },
+    void,
+  ];
   "startTalk/mainResultReady": [
     { requestId: string; text: string; error?: boolean },
     void,

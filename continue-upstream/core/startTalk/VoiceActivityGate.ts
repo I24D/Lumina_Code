@@ -41,6 +41,17 @@ export interface VoiceActivityGateCallbacks {
    * grupo y aplique sus reglas de cuándo intervenir. Opcional.
    */
   onEnvironmentChange?: (crowded: boolean) => void;
+  /** A natural intra-turn pause ended because speech resumed. */
+  onSpeechPause?: (pauseMs: number) => void;
+  /**
+   * Lets the semantic/adaptive turn manager tune the endpoint while the DSP
+   * gate remains responsible for measuring silence.
+   */
+  resolveEndpointSilenceMs?: (context: {
+    baseSilenceMs: number;
+    crowded: boolean;
+    turnMs: number;
+  }) => number;
 }
 
 /** Qué puede interrumpir a Lumina mientras habla. */
@@ -359,13 +370,24 @@ export class VoiceActivityGate {
     this.turnPeakRms = Math.max(this.turnPeakRms, rms);
 
     if (voiced) {
+      if (this.silenceMs > 0) {
+        this.callbacks.onSpeechPause?.(this.silenceMs);
+      }
       this.silenceMs = 0;
     } else {
       this.silenceMs += this.opts.frameMs;
       this.adaptNoiseFloor(rms);
-      const requiredSilenceMs = this.turnWasCrowded
+      const baseSilenceMs = this.turnWasCrowded
         ? Math.max(this.opts.endSilenceMs, this.opts.crowdedEndSilenceMs)
         : this.opts.endSilenceMs;
+      const resolvedSilenceMs = this.callbacks.resolveEndpointSilenceMs?.({
+        baseSilenceMs,
+        crowded: this.turnWasCrowded,
+        turnMs: this.turnMs,
+      });
+      const requiredSilenceMs = Number.isFinite(resolvedSilenceMs)
+        ? Math.max(this.opts.frameMs, resolvedSilenceMs as number)
+        : baseSilenceMs;
       if (this.silenceMs >= requiredSilenceMs) {
         this.closeTurn(this.silenceMs);
         return;

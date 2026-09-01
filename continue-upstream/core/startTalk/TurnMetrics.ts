@@ -51,6 +51,14 @@ export interface StartTalkTurnMetrics {
   stayedSilent: boolean;
   /** Había varias voces solapadas cuando ocurrió. */
   crowded: boolean;
+  /** Audio real del usuario enviado al proveedor durante este turno. */
+  inputAudioSeconds: number;
+  /** From local speech start until the provider emitted its first partial STT. */
+  sttFirstPartialMs?: number;
+  /** From endpoint until the first assistant text/transcript token. */
+  llmFirstTokenMs?: number;
+  /** Sum of measured tool execution spans in this turn. */
+  toolLatencyMs?: number;
 }
 
 /** Acumulado de la sesión, para un vistazo rápido. */
@@ -72,6 +80,20 @@ export interface StartTalkSessionMetrics {
   p90ResponseLatencyMs?: number;
   /** Velocidad media de entrega observada en la sesión. */
   meanDeliveryRate?: number;
+  /** Audio total que atravesó el VAD y llegó al proveedor. */
+  inputAudioSeconds: number;
+  /** Audio hablado que entregó el proveedor. */
+  assistantAudioSeconds: number;
+  /** Function calls propuestas por el modelo durante la sesión. */
+  toolCalls: number;
+  /** Estimación solo cuando el usuario configuró tarifas explícitas. */
+  estimatedCostUsd?: number;
+}
+
+export interface StartTalkCostRates {
+  inputAudioUsdPerMinute?: number;
+  outputAudioUsdPerMinute?: number;
+  toolCallUsd?: number;
 }
 
 /**
@@ -102,14 +124,20 @@ export class TurnMetricsTracker {
   private turnEndedAt?: number;
   private trailingSilenceMs = 0;
   private firstAudioAt?: number;
+  private firstTranscriptAt?: number;
+  private firstAssistantTextAt?: number;
   private lastAudioAt?: number;
   private sawUserTranscript = false;
   private interrupted = false;
   private stayedSilent = false;
   private crowded = false;
   private audioBytes = 0;
+  private inputAudioBytes = 0;
+  private inputAudioSampleRate = 16000;
   private audioSampleRate = 24000;
   private chunks = 0;
+  private toolLatencyMs = 0;
+  private readonly toolStartedAt = new Map<string, number>();
   /** Un turno abierto por el gate pero aún no cerrado. */
   private open = false;
 
@@ -124,9 +152,15 @@ export class TurnMetricsTracker {
     videoRestarts: 0,
     searches: 0,
     echoSuppressed: 0,
+    inputAudioSeconds: 0,
+    assistantAudioSeconds: 0,
+    toolCalls: 0,
   };
 
-  constructor(now: () => number = () => Date.now()) {
+  constructor(
+    now: () => number = () => Date.now(),
+    private readonly costRates: StartTalkCostRates = {},
+  ) {
     this.now = now;
   }
 
@@ -141,6 +175,13 @@ export class TurnMetricsTracker {
   onUserTranscript(text: string): void {
     if (String(text ?? "").trim()) {
       this.sawUserTranscript = true;
+      this.firstTranscriptAt ??= this.now();
+    }
+  }
+
+  onAssistantTranscript(text: string): void {
+    if (String(text ?? "").trim()) {
+      this.firstAssistantTextAt ??= this.now();
     }
   }
 
@@ -157,6 +198,14 @@ export class TurnMetricsTracker {
     this.crowded = crowded;
   }
 
+  /** Audio that passed VAD, excluding silence/echo discarded locally. */
+  onUserAudio(byteLength: number, sampleRate = 16000): void {
+    this.inputAudioBytes += Math.max(0, byteLength);
+    this.inputAudioSampleRate = sampleRate || this.inputAudioSampleRate;
+    this.totals.inputAudioSeconds +=
+      Math.max(0, byteLength) / 2 / (sampleRate || 16000);
+  }
+
   /** Fragmento de audio de Lumina. */
   onAssistantAudio(byteLength: number, sampleRate: number): void {
     const at = this.now();
@@ -167,6 +216,24 @@ export class TurnMetricsTracker {
     this.audioBytes += byteLength;
     this.audioSampleRate = sampleRate || this.audioSampleRate;
     this.chunks += 1;
+    this.totals.assistantAudioSeconds +=
+      Math.max(0, byteLength) / 2 / (sampleRate || 24000);
+  }
+
+  onToolCall(id?: string): void {
+    this.totals.toolCalls += 1;
+    if (id) {
+      this.toolStartedAt.set(id, this.now());
+    }
+  }
+
+  onToolResult(id: string): void {
+    const startedAt = this.toolStartedAt.get(id);
+    if (startedAt === undefined) {
+      return;
+    }
+    this.toolStartedAt.delete(id);
+    this.toolLatencyMs += Math.max(0, this.now() - startedAt);
   }
 
   onInterrupted(): void {
@@ -205,6 +272,16 @@ export class TurnMetricsTracker {
 
     const assistantAudioSeconds =
       this.audioBytes / 2 / (this.audioSampleRate || 24000);
+    const inputAudioSeconds =
+      this.inputAudioBytes / 2 / (this.inputAudioSampleRate || 16000);
+    const sttFirstPartialMs =
+      this.turnStartedAt !== undefined && this.firstTranscriptAt !== undefined
+        ? Math.max(0, this.firstTranscriptAt - this.turnStartedAt)
+        : undefined;
+    const llmFirstTokenMs =
+      this.turnEndedAt !== undefined && this.firstAssistantTextAt !== undefined
+        ? Math.max(0, this.firstAssistantTextAt - this.turnEndedAt)
+        : undefined;
 
     let responseLatencyMs: number | undefined;
     let serverResponseLatencyMs: number | undefined;
@@ -258,6 +335,10 @@ export class TurnMetricsTracker {
       falseStart,
       stayedSilent: this.stayedSilent,
       crowded: this.crowded,
+      inputAudioSeconds: Number(inputAudioSeconds.toFixed(2)),
+      ...(sttFirstPartialMs !== undefined ? { sttFirstPartialMs } : {}),
+      ...(llmFirstTokenMs !== undefined ? { llmFirstTokenMs } : {}),
+      ...(this.toolLatencyMs > 0 ? { toolLatencyMs: this.toolLatencyMs } : {}),
     };
 
     this.totals.turns += 1;
@@ -298,8 +379,19 @@ export class TurnMetricsTracker {
           )
         : undefined;
 
+    const estimatedCostUsd =
+      (this.totals.inputAudioSeconds / 60) *
+        Math.max(0, this.costRates.inputAudioUsdPerMinute ?? 0) +
+      (this.totals.assistantAudioSeconds / 60) *
+        Math.max(0, this.costRates.outputAudioUsdPerMinute ?? 0) +
+      this.totals.toolCalls * Math.max(0, this.costRates.toolCallUsd ?? 0);
+
     return {
       ...this.totals,
+      inputAudioSeconds: Number(this.totals.inputAudioSeconds.toFixed(2)),
+      assistantAudioSeconds: Number(
+        this.totals.assistantAudioSeconds.toFixed(2),
+      ),
       ...(percentile(this.latencies, 0.5) !== undefined
         ? { medianResponseLatencyMs: percentile(this.latencies, 0.5) }
         : {}),
@@ -307,6 +399,9 @@ export class TurnMetricsTracker {
         ? { p90ResponseLatencyMs: percentile(this.latencies, 0.9) }
         : {}),
       ...(meanDeliveryRate !== undefined ? { meanDeliveryRate } : {}),
+      ...(estimatedCostUsd > 0
+        ? { estimatedCostUsd: Number(estimatedCostUsd.toFixed(6)) }
+        : {}),
     };
   }
 
@@ -316,11 +411,16 @@ export class TurnMetricsTracker {
     this.turnEndedAt = undefined;
     this.trailingSilenceMs = 0;
     this.firstAudioAt = undefined;
+    this.firstTranscriptAt = undefined;
+    this.firstAssistantTextAt = undefined;
     this.lastAudioAt = undefined;
     this.sawUserTranscript = false;
     this.interrupted = false;
     this.stayedSilent = false;
     this.audioBytes = 0;
+    this.inputAudioBytes = 0;
     this.chunks = 0;
+    this.toolLatencyMs = 0;
+    this.toolStartedAt.clear();
   }
 }

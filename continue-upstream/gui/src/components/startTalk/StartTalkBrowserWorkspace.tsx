@@ -17,6 +17,7 @@ import styled, { css, keyframes } from "styled-components";
 
 import { LuminaEnergyCore } from "./LuminaEnergyCore";
 import { safeSearchSourceUrl } from "./WebSearchActivityCard";
+import type { VoiceRuntimeState } from "core/startTalk";
 import type {
   StartTalkStatus,
   StartTalkToolActivity,
@@ -28,6 +29,7 @@ type WorkspaceProps = {
   micLevel: number;
   onOpenUrl: (url: string) => void;
   status: StartTalkStatus;
+  runtimeState?: VoiceRuntimeState;
   toolActivities: StartTalkToolActivity[];
   transcriptEntries: StartTalkTranscriptItem[];
   userTranscript: string;
@@ -776,21 +778,42 @@ function ActivityRow({ activity }: { activity: StartTalkToolActivity }) {
   );
 }
 
-function fallbackActivity(status: StartTalkStatus): StartTalkToolActivity {
+function fallbackActivity(
+  status: StartTalkStatus,
+  runtimeState?: VoiceRuntimeState,
+): StartTalkToolActivity {
   const listening = status === "listening" || status === "connected";
   const speaking = status === "speaking";
+  const phase = runtimeState ?? (speaking ? "ASSISTANT_SPEAKING" : undefined);
+  const labels: Partial<Record<VoiceRuntimeState, [string, string]>> = {
+    USER_SPEAKING: ["Entendiendo solicitud", "Transcripción parcial en curso."],
+    THINKING: ["Preparando respuesta", "El modelo está razonando en tiempo real."],
+    TOOL_EXECUTION: [
+      "Ejecutando herramientas",
+      "Consultando las fuentes y servicios necesarios.",
+    ],
+    RECONNECTING: [
+      "Recuperando la sesión",
+      "Reconectando sin perder el estado válido de la conversación.",
+    ],
+    INTERRUPTED: [
+      "Interrupción detectada",
+      "Se canceló la respuesta anterior y se abrió un turno nuevo.",
+    ],
+  };
+  const phaseCopy = phase ? labels[phase] : undefined;
   return {
     id: "voice-session-state",
-    label: speaking
+    label: phaseCopy?.[0] ?? (speaking
       ? "Generando respuesta"
       : listening
         ? "Escuchando tu conversación"
-        : "Preparando Lumina Live",
-    detail: speaking
+        : "Preparando Lumina Live"),
+    detail: phaseCopy?.[1] ?? (speaking
       ? "Start Talk está generando texto y audio en tiempo real."
       : listening
         ? "Lista para comprender, investigar y responder."
-        : "Conectando voz, micrófono y herramientas.",
+        : "Conectando voz, micrófono y herramientas."),
     status:
       status === "error"
         ? "error"
@@ -807,6 +830,7 @@ export function StartTalkBrowserWorkspace({
   micLevel,
   onOpenUrl,
   status,
+  runtimeState,
   toolActivities,
   transcriptEntries,
   userTranscript,
@@ -832,7 +856,7 @@ export function StartTalkBrowserWorkspace({
   );
   const visibleActivities = activities.length
     ? activities.slice(-7)
-    : [fallbackActivity(status)];
+    : [fallbackActivity(status, runtimeState)];
   const displayedActivities = actionsExpanded
     ? visibleActivities
     : visibleActivities.slice(-4);
