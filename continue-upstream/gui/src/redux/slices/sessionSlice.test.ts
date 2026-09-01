@@ -206,6 +206,108 @@ describe("sessionSlice streamUpdate", () => {
     });
   });
 
+  describe("Tool Call Alongside Content", () => {
+    // Ollama devuelve el mensaje entero de una vez, sin streaming, así que
+    // cuando el modelo antecede sus llamadas con una frase el mismo mensaje
+    // trae texto Y tool calls. Tratarlos como excluyentes hacía que se
+    // perdieran las llamadas: el turno acababa sin herramientas y el agente
+    // se paraba justo después de anunciar lo que iba a hacer.
+    it("keeps the tool calls when the message also carries content", () => {
+      const initialState = createInitialState();
+      const action = {
+        type: "session/streamUpdate",
+        payload: [
+          {
+            role: "assistant" as const,
+            content: "Voy a revisar estos archivos:",
+            toolCalls: [
+              {
+                id: "call-1",
+                type: "function" as const,
+                function: {
+                  name: "builtin_read_file",
+                  arguments: '{"filepath":"a.ts"}',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const newState = sessionSlice.reducer(initialState, action);
+
+      expect(newState.history).toHaveLength(2);
+      expect(newState.history[1].message.content).toBe(
+        "Voy a revisar estos archivos:",
+      );
+      expect(newState.history[1].toolCallStates).toHaveLength(1);
+      expect(newState.history[1].toolCallStates?.[0]?.toolCallId).toBe(
+        "call-1",
+      );
+    });
+
+    it("keeps every parallel tool call sent with the content", () => {
+      const initialState = createInitialState();
+      const action = {
+        type: "session/streamUpdate",
+        payload: [
+          {
+            role: "assistant" as const,
+            content: "Voy a leer varios componentes en paralelo:",
+            toolCalls: [
+              {
+                id: "call-1",
+                type: "function" as const,
+                function: {
+                  name: "builtin_read_file",
+                  arguments: '{"filepath":"a.ts"}',
+                },
+              },
+              {
+                id: "call-2",
+                type: "function" as const,
+                function: {
+                  name: "builtin_read_file",
+                  arguments: '{"filepath":"b.ts"}',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const newState = sessionSlice.reducer(initialState, action);
+
+      expect(newState.history[1].toolCallStates).toHaveLength(2);
+      expect(
+        newState.history[1].toolCallStates?.map((s) => s.toolCallId),
+      ).toEqual(["call-1", "call-2"]);
+    });
+
+    it("does not drop later messages of the same batch after a thinking split", () => {
+      // El camino de `<think>` cortaba con `return` dentro del bucle del lote,
+      // así que un `[thinking, assistant]` perdía el segundo mensaje.
+      const initialState = createInitialState();
+      const action = {
+        type: "session/streamUpdate",
+        payload: [
+          {
+            role: "assistant" as const,
+            content: "<think>Lo pienso.</think>Respondo.",
+          },
+          {
+            role: "assistant" as const,
+            content: " Y sigo.",
+          },
+        ],
+      };
+
+      const newState = sessionSlice.reducer(initialState, action);
+
+      expect(newState.history[1].message.content).toBe("Respondo. Y sigo.");
+    });
+  });
+
   describe("Tool Call With Streaming Response", () => {
     it("should handle streaming assistant response after tool call", () => {
       const initialState = createInitialState();

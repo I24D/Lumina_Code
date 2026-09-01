@@ -583,7 +583,11 @@ export const sessionSlice = createSlice({
 
               handleToolCallsInMessage(message, lastItem);
 
-              return;
+              // `continue`, no `return`: esto vive dentro del bucle que recorre
+              // el lote de mensajes. Cortando aquí se descartaban los mensajes
+              // restantes del mismo lote —Ollama envía `[thinking, assistant]`
+              // junto, así que se perdía el que traía las tool calls.
+              continue;
             }
           }
 
@@ -645,7 +649,17 @@ export const sessionSlice = createSlice({
             if (lastMessage.role === "thinking") {
               lastMessage.signature = message.signature;
             }
-          } else if (
+          }
+
+          // Las tool calls van FUERA de la cadena anterior a propósito: un mismo
+          // mensaje puede traer texto y llamadas a la vez. Ollama es el caso
+          // claro —devuelve el objeto entero de una sola vez, sin streaming (ver
+          // `Ollama.ts`)—, así que cuando el modelo antecede sus llamadas con una
+          // frase ("voy a revisar estos archivos:") el mensaje lleva ambas cosas.
+          // Encadenado como `else if`, ganaba el texto y las llamadas se perdían
+          // en silencio: el turno terminaba sin herramientas y el agente parecía
+          // pararse en seco justo después de anunciar lo que iba a hacer.
+          if (
             message.role === "assistant" &&
             message.toolCalls?.length &&
             lastMessage.role === "assistant"
