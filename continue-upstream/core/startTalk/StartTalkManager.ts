@@ -644,7 +644,7 @@ function normalizeForEcho(value: string): string {
  * acababa de decir por los altavoces?
  *
  * Sin esta comprobación cualquier eco entraba al transcript como turno del
- * usuario, y de ahí a `/api/memory/learn`: quedaba guardado para siempre como
+ * usuario, y de ahí a la memoria persistente: quedaba guardado para siempre como
  * algo que él dijo y volvía inyectado en el system prompt de cada sesión
  * posterior. Así es como aparecen "preguntas" que nadie hizo nunca.
  */
@@ -816,7 +816,7 @@ type SessionState = {
   lastConnectionError?: string;
   // Memoria persistente: userId canónico compartido con el backend, bloque de
   // memoria precargado (se inyecta en el systemInstruction) y transcript
-  // acumulado de la sesión (se envía a /api/memory/learn al cerrar).
+  // acumulado de la sesión (se envía a la memoria de Supabase al cerrar).
   memoryUserId?: string;
   memoryBlock?: string;
   transcript: VoiceTranscriptEntry[];
@@ -1717,7 +1717,7 @@ export class StartTalkManager {
     state.session?.close();
 
     // Aprendizaje al cerrar (best-effort, fire-and-forget): manda el transcript
-    // de la sesión a /api/memory/learn para extraer hechos durables. No
+    // de la sesión a la memoria de Supabase para extraer hechos durables. No
     // bloquea el cierre ni propaga errores.
     const transcript = state.transcript.slice();
     if (transcript.length >= 2) {
@@ -3587,7 +3587,7 @@ export class StartTalkManager {
       });
     }
     // Acumulamos SOLO la transcripción final (no la interina) para el
-    // aprendizaje al cerrar la sesión (/api/memory/learn).
+    // aprendizaje al cerrar la sesión (ver `learnFromVoiceTranscript`).
     if (serverContent.inputTranscription?.text && !echoed) {
       this.appendTranscript(
         state,
