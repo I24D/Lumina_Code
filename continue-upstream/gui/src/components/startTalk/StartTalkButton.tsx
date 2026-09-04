@@ -16,9 +16,9 @@ export function StartTalkButton() {
           className="text-description flex items-center gap-1 !rounded-full px-1.5"
           onClick={(event) => {
             event.stopPropagation();
-            // Abre Start Talk en una pestaña del navegador (fuera de VS Code),
-            // no como overlay dentro del panel. El comando arranca el puente y
-            // sirve la MISMA UI. Ver extension/startTalkOrb.ts.
+            // Punto de entrada a Lumina Start Talk. La UI de voz anterior
+            // (la pestaña servida por el puente) está retirada; este comando
+            // queda pendiente de conectar con la app de Lumina Start Talk.
             ideMessenger.post("startTalk/launchOrb", undefined);
           }}
           aria-label="Start talk"

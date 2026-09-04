@@ -11,7 +11,9 @@
               "-ExecutionPolicy",
               "Bypass",
               "-File",
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/on-response.ps1"
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/on-response.ps1",
+              "-Source",
+              "Claude Code"
             ],
             "timeout": 15
           }

@@ -1,7 +1,6 @@
 import { Navigate, RouterProvider, createMemoryRouter } from "react-router-dom";
 import Layout from "./components/Layout";
 import { MainEditorProvider } from "./components/mainInput/TipTapEditor";
-import { LiveConversationOverlay } from "./components/startTalk/LiveConversationOverlay";
 import { LuminaVoiceDelegationBridge } from "./components/startTalk/LuminaVoiceDelegationBridge";
 import { ScheduledTaskBridge } from "./components/scheduler/ScheduledTaskBridge";
 import { SubmenuContextProvidersProvider } from "./context/SubmenuContextProviders";
@@ -145,50 +144,12 @@ const router = createMemoryRouter([
   },
 ]);
 
-function closeOrbWindow() {
-  // El orbe es una pestaña del navegador: cerrar Start Talk cierra la pestaña.
-  // Los navegadores solo permiten `close()` en pestañas abiertas por script, así
-  // que cuando lo deniegan la pestaña simplemente se queda y la cierra el
-  // usuario; no hay nada más honesto que podamos hacer aquí.
-  try {
-    window.close();
-  } catch {
-    // Cierre denegado por el navegador.
-  }
-}
-
-/**
- * Modo orbe: la pestaña del navegador monta SOLO el overlay de Start Talk (no
- * todo el chat de Lumina Code), reutilizando los mismos providers y
- * `ParallelListeners` (que carga la config desde core). La activa el flag
- * `window.luminaOrbAutostart`, que inyecta el arranque servido por el puente
- * (ver `extension/orbBootstrap.ts`).
- */
-function OrbApp() {
-  return (
-    <VscThemeProvider>
-      <MainEditorProvider>
-        <SubmenuContextProvidersProvider>
-          <LiveConversationOverlay isOpen onClose={closeOrbWindow} />
-        </SubmenuContextProvidersProvider>
-      </MainEditorProvider>
-      <ParallelListeners />
-    </VscThemeProvider>
-  );
-}
 
 /*
   ParallelListeners prevents entire app from rerendering on any change in the listeners,
   most of which interact with redux etc.
 */
 function App() {
-  const isOrbDesignPreview =
-    import.meta.env.DEV &&
-    new URLSearchParams(window.location.search).has("luminaOrbPreview");
-  if ((window as any).luminaOrbAutostart || isOrbDesignPreview) {
-    return <OrbApp />;
-  }
-
   return (
     <VscThemeProvider>
       <MainEditorProvider>

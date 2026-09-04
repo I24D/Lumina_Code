@@ -37,7 +37,6 @@ import { ContinueConsoleWebviewViewProvider } from "./ContinueConsoleWebviewView
 import { ContinueGUIWebviewViewProvider } from "./ContinueGUIWebviewViewProvider";
 import { processDiff } from "./diff/processDiff";
 import { VerticalDiffManager } from "./diff/vertical/manager";
-import { launchStartTalkOrb } from "./extension/startTalkOrb";
 import EditDecorationManager from "./quickEdit/EditDecorationManager";
 import { QuickEdit, QuickEditShowParams } from "./quickEdit/QuickEditQuickPick";
 import {
@@ -171,8 +170,14 @@ const getCommandsMap: (
   }
 
   return {
+    // La UI antigua de Start Talk (la pestaña servida por OrbBridgeServer) está
+    // retirada. El motor de voz de core/startTalk sigue intacto: lo que se ha
+    // cortado es la interfaz, no la maquinaria. Pendiente de reconectar este
+    // comando a Lumina Start Talk.
     "lumina.startTalkOrb": async () => {
-      await launchStartTalkOrb(extensionContext, sidebar.webviewProtocol);
+      void vscode.window.showInformationMessage(
+        "Start Talk: la interfaz anterior se ha retirado. La nueva Lumina Start Talk todavía no está conectada a este botón.",
+      );
     },
     "continue.acceptDiff": async (newFileUri?: string, streamId?: string) => {
       void processDiff(

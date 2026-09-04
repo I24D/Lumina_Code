@@ -135,6 +135,9 @@ interface ClaudeVoiceItem {
   id: string;
   text: string;
   createdAt: number;
+  // Qué agente terminó. Claude Code y Codex ejecutan el MISMO hook, así que sin
+  // esto la voz no puede decir cuál de los dos ha respondido.
+  source?: string;
 }
 const claudeVoiceQueue: ClaudeVoiceItem[] = [];
 const CLAUDE_VOICE_MAX_QUEUE = 20;
@@ -2065,7 +2068,11 @@ function handleVoiceClaudeEnqueue(body: JsonRecord): JsonRecord {
     typeof body.requestId === "string" && body.requestId.trim()
       ? body.requestId.trim().slice(0, 120)
       : `claude:${Date.now()}:${claudeVoiceSeq}`;
-  claudeVoiceQueue.push({ id, text, createdAt: Date.now() });
+  const source =
+    typeof body.source === "string" && body.source.trim()
+      ? body.source.trim().slice(0, 60)
+      : undefined;
+  claudeVoiceQueue.push({ id, text, createdAt: Date.now(), source });
   while (claudeVoiceQueue.length > CLAUDE_VOICE_MAX_QUEUE) {
     claudeVoiceQueue.shift();
   }
@@ -2081,7 +2088,12 @@ function handleVoiceClaudePending(): JsonRecord {
   const fresh: JsonValue[] = [];
   for (const item of claudeVoiceQueue) {
     if (now - item.createdAt <= CLAUDE_VOICE_TTL_MS) {
-      fresh.push({ id: item.id, text: item.text, createdAt: item.createdAt });
+      fresh.push({
+        id: item.id,
+        text: item.text,
+        createdAt: item.createdAt,
+        source: item.source ?? null,
+      });
     }
   }
   claudeVoiceQueue.length = 0;

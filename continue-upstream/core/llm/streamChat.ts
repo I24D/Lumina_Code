@@ -3,6 +3,7 @@ import { ChatMessage, IDE, PromptLog } from "..";
 import { ConfigHandler } from "../config/ConfigHandler";
 import { FromCoreProtocol, ToCoreProtocol } from "../protocol";
 import { IMessenger, Message } from "../protocol/messenger";
+import { announceAssistantResponse } from "../util/luminaVoiceBridge";
 
 export async function* llmStreamChat(
   configHandler: ConfigHandler,
@@ -112,6 +113,11 @@ export async function* llmStreamChat(
         messageOptions,
       );
       let next = await gen.next();
+      // En modo agente esta función se ejecuta una vez por ronda del modelo, y
+      // las rondas intermedias sólo piden herramientas. Anunciar cada una sería
+      // narrar el trabajo en vez de dar el resultado, así que sólo se lee en voz
+      // alta el turno que no pide nada más: ese es la respuesta de verdad.
+      let requestedTools = false;
       while (!next.done) {
         if (abortController.signal.aborted) {
           next = await gen.return(errorPromptLog);
@@ -119,12 +125,19 @@ export async function* llmStreamChat(
         }
 
         const chunk = next.value;
+        if (chunk.role === "assistant" && chunk.toolCalls?.length) {
+          requestedTools = true;
+        }
 
         yield chunk;
         next = await gen.next();
       }
       if (!next.done) {
         throw new Error("Will never happen");
+      }
+
+      if (!requestedTools && !abortController.signal.aborted) {
+        announceAssistantResponse(next.value.completion);
       }
 
       return next.value;

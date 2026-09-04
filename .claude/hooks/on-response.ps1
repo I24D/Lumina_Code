@@ -1,7 +1,12 @@
 # Reads the Stop-hook JSON payload from stdin (Claude Code or Codex — both
 # expose `last_assistant_message` on this event) and hands the finished
-# response text to the Lumina Windows Bridge so Start Talk can read it aloud.
-# Fire-and-forget: never blocks or fails the CLI, even if the bridge is down.
+# response text to Lumina Start Talk so she can read it aloud.
+# Fire-and-forget: never blocks or fails the CLI, even if nothing is listening.
+#
+# -Source is what Lumina announces ("Claude Code ha terminado..."). Both CLIs
+# run this same file, so whoever registers the hook says which one it is.
+param([string] $Source = "Claude Code")
+
 $ErrorActionPreference = "SilentlyContinue"
 
 try {
@@ -18,7 +23,7 @@ try {
         $bridgeBase = "http://127.0.0.1:$port"
     }
 
-    $body = @{ text = $text } | ConvertTo-Json -Compress
+    $body = @{ text = $text; source = $Source } | ConvertTo-Json -Compress
     Invoke-RestMethod -Uri "$bridgeBase/voice/claude-response" -Method Post `
         -ContentType "application/json" -Body $body -TimeoutSec 5 | Out-Null
 }

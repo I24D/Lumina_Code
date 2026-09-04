@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 
 import { startLuminaRuntime } from "../extension/backendLifecycle";
 import { startLuminaMcpBridge } from "../extension/luminaMcpBridge";
-import { restoreStartTalkOrb } from "../extension/startTalkOrb";
 import { VsCodeExtension } from "../extension/VsCodeExtension";
 import { isUnsupportedPlatform } from "../util/util";
 
@@ -45,9 +44,6 @@ export async function activateExtension(context: vscode.ExtensionContext) {
   // Publish the local WS surface so the Lumina MCP Gateway (used by the Claude
   // app connector) can drive the Lumina Code chat and agent.
   startLuminaMcpBridge(context, vscodeExtension);
-  void vscodeExtension.webviewProtocolPromise.then((webviewProtocol) =>
-    restoreStartTalkOrb(context, webviewProtocol),
-  );
 
   // Load Continue configuration
   if (!context.globalState.get("hasBeenInstalled")) {
